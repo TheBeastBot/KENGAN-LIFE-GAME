@@ -30,6 +30,14 @@ export const TECHNIQUE_TRACKS = {
 };
 
 const DEFAULT_TECHNIQUES = { striking: 0, grappling: 0, defense: 0 };
+const DEVIL_GENE_CLAN_NAME = 'Mishime';
+const DEVIL_GENE_PITY_REROLLS = 1500;
+const DEFAULT_CLAN_AWAKENING = {
+  stage: 0,
+  control: 50,
+  corruption: 0,
+  lastAwakeningMonth: null,
+};
 
 function clanPasswordHint(progress = 0) {
   const revealed = clamp(Math.floor(progress), 0, SECRET_CLAN_PASSWORD.length);
@@ -39,9 +47,31 @@ function clanPasswordHint(progress = 0) {
     .join(' ');
 }
 
+function isMishimeClan(clan) {
+  return clan?.name === DEVIL_GENE_CLAN_NAME;
+}
+
+function normalizeClanAwakening(life) {
+  if (!isMishimeClan(life?.clan)) return null;
+  const awakening = life.clanAwakening ?? {};
+  return {
+    stage: clamp(awakening.stage ?? DEFAULT_CLAN_AWAKENING.stage, 0, 3),
+    control: clamp(awakening.control ?? DEFAULT_CLAN_AWAKENING.control),
+    corruption: clamp(awakening.corruption ?? DEFAULT_CLAN_AWAKENING.corruption),
+    lastAwakeningMonth: awakening.lastAwakeningMonth ?? null,
+  };
+}
+
+function withNormalizedClanAwakening(life) {
+  return {
+    ...life,
+    clanAwakening: normalizeClanAwakening(life),
+  };
+}
+
 export const CLANS = [
   {
-    name: 'Sekiba Family',
+    name: 'Sekiba',
     rarity: 'Common',
     bonuses: { durability: 6, willpower: 4, strength: 2 },
     traits: ['Labor-built frame', 'Steady grit'],
@@ -52,7 +82,7 @@ export const CLANS = [
     description: 'A grounded working-family line built around grip strength, pain tolerance, and long shifts.',
   },
   {
-    name: 'Cosmoe Line',
+    name: 'Cosmoe',
     rarity: 'Uncommon',
     bonuses: { speed: 5, control: 4, flexibility: 2 },
     traits: ['Adaptable footwork', 'No inherited leash'],
@@ -63,7 +93,7 @@ export const CLANS = [
     description: 'A wandering surname line with no famous school, but excellent mobility and self-made growth.',
   },
   {
-    name: 'Doppoe House',
+    name: 'Doppoe',
     rarity: 'Epic',
     bonuses: { durability: 12, willpower: 7, strength: 5 },
     traits: ['Iron body drills', 'Pain tolerance'],
@@ -74,7 +104,7 @@ export const CLANS = [
     description: 'A conditioning clan inspired by tank-like arena fighters who win by refusing to break.',
   },
   {
-    name: 'Ryukoo Clan',
+    name: 'Ryukoo',
     rarity: 'Rare',
     bonuses: { speed: 10, technique: 6, aggression: 5, reflexes: 3 },
     traits: ['Dirty angles', 'Evasion instinct'],
@@ -85,7 +115,7 @@ export const CLANS = [
     description: 'A snake-like surname clan that favors feints, cheap angles, and ugly wins.',
   },
   {
-    name: 'Nikoo Style Line',
+    name: 'Nikoo',
     rarity: 'Mythic',
     bonuses: { technique: 16, fightIq: 14, reflexes: 8, control: 4 },
     traits: ['Formless transitions', 'Redirection instinct'],
@@ -96,7 +126,7 @@ export const CLANS = [
     description: 'A close-variant style line inspired by secret technique systems, redirection, and adaptive martial forms.',
   },
   {
-    name: 'Kuri Clan',
+    name: 'Kuri',
     rarity: 'Legendary',
     bonuses: { strength: 14, speed: 10, aggression: 10, reflexes: 8, reputation: 8 },
     traits: ['Removal-like burst', 'Assassin family instincts'],
@@ -107,7 +137,7 @@ export const CLANS = [
     description: 'A close-variant assassin clan inspired by inherited killer instincts and explosive body release.',
   },
   {
-    name: 'Reihitoo Clan',
+    name: 'Reihitoo',
     rarity: 'Epic',
     bonuses: { speed: 13, reflexes: 12, technique: 6, control: 3 },
     traits: ['Silent entries', 'Range deception'],
@@ -118,7 +148,7 @@ export const CLANS = [
     description: 'A footwork clan inspired by vanishing-step specialists and evasive counter fighters.',
   },
   {
-    name: 'Hanmo Bloodline',
+    name: 'Hanmo',
     rarity: 'Mythic',
     bonuses: { strength: 28, aggression: 22, durability: 16, willpower: 10, reflexes: 6 },
     traits: ['Demon-frame pressure', 'Predator aura'],
@@ -129,7 +159,7 @@ export const CLANS = [
     description: 'A close-variant monster bloodline inspired by demon-back myths, predator instinct, and violent genetics.',
   },
   {
-    name: 'Shibukawae House',
+    name: 'Shibukawae',
     rarity: 'Epic',
     bonuses: { technique: 20, flexibility: 16, fightIq: 10, control: 6 },
     traits: ['Joint control', 'Soft-style counters'],
@@ -140,7 +170,7 @@ export const CLANS = [
     description: 'A soft-style house built around joint locks, counters, and leverage over raw mass.',
   },
   {
-    name: 'Agitoo Dynasty',
+    name: 'Agitoo',
     rarity: 'Legendary',
     bonuses: { strength: 22, speed: 22, durability: 22, technique: 18, fightIq: 18, reflexes: 10 },
     traits: ['Evolution instinct', 'Elite growth ceiling'],
@@ -151,7 +181,7 @@ export const CLANS = [
     description: 'A close-variant champion dynasty inspired by evolving all-rounders and corporate arena kings.',
   },
   {
-    name: 'Bakiya Clan',
+    name: 'Bakiya',
     rarity: 'Mythic',
     bonuses: { strength: 26, willpower: 16, aggression: 14, control: 8, durability: 8 },
     traits: ['Finisher instinct', 'Crushing pressure'],
@@ -162,7 +192,7 @@ export const CLANS = [
     description: 'A dragon-name clan built around finishing instincts, pressure, and terrifying one-shot openings.',
   },
   {
-    name: 'Orochiya Bloodline',
+    name: 'Orochiya',
     rarity: 'Mythic',
     bonuses: { strength: 38, speed: 32, durability: 36, reflexes: 24, willpower: 20, aggression: 20 },
     traits: ['Ancient monster state', 'Mythic growth'],
@@ -173,7 +203,7 @@ export const CLANS = [
     description: 'A close-variant mythic bloodline inspired by impossible monster families, cursed talent, and final-boss genetics.',
   },
   {
-    name: 'THE ASHURA',
+    name: 'Ashura',
     rarity: 'Secret',
     bonuses: {
       strength: 58,
@@ -194,6 +224,29 @@ export const CLANS = [
     drawbacks: ['Hidden-world factions stop treating you like a rumor'],
     options: ['Enter Ashura state', 'Break the bracket'],
     description: 'A secret clan spoken about like a bad omen: complete combat adaptation, violent composure, and a ceiling that should not exist.',
+  },
+  {
+    name: 'Mishime',
+    rarity: 'Secret',
+    bonuses: {
+      strength: 62,
+      speed: 48,
+      durability: 54,
+      technique: 44,
+      fightIq: 42,
+      willpower: 64,
+      reflexes: 50,
+      flexibility: 24,
+      aggression: 60,
+      control: 30,
+      reputation: 45,
+    },
+    traits: ['Devil gene', 'Cursed rage inheritance'],
+    passive: { name: 'Devil Gene Pressure', effect: 'Pressure and Special exchanges gain damage when health or stamina is already low.' },
+    special: { name: 'Devil Gene Awakening', effect: 'A cursed burst that pushes Strength, Willpower, Aggression, and Reflexes far past normal limits for one exchange.' },
+    drawbacks: ['Family wars and hidden labs hunt the bloodline'],
+    options: ['Awaken devil gene', 'Resist the blood feud'],
+    description: 'A secret cursed bloodline inspired by inherited devil power, family betrayal, and rage that turns survival into violence.',
   },
 ];
 
@@ -1735,6 +1788,17 @@ const CLAN_SPECIAL_FLAVOR = {
     ],
     form: 'Ashura State makes the exchange feel pre-read before it happens.',
   },
+  'Devil Gene Awakening': {
+    text: [
+      'Devil Gene Awakening: the cursed bloodline surges and turns the exchange into a violent family omen.',
+      'Devil Gene Awakening: your output spikes with ugly precision, as if rage and timing learned to share one body.',
+    ],
+    finish: [
+      'Devil Gene Awakening finish: the last opening is torn wide before they can understand what changed.',
+      'Devil Gene Awakening finish: the cursed burst peaks, and the fight ends under pressure that feels inherited.',
+    ],
+    form: 'Devil Gene Awakening makes the exchange heavier, faster, and crueler for one decisive beat.',
+  },
 };
 
 function clanSpecialFlavor(name) {
@@ -1758,6 +1822,12 @@ export const SPECIAL_FIGHT_IDS = [
   'rolonDonairee',
   'jakkuHanmoe',
   'katsumiOrochino',
+  'jinnKazame',
+  'kazuroMishime',
+  'heihaMishime',
+  'kinggJaguar',
+  'paulPheonixx',
+  'yoshiMitsuo',
 ];
 
 const SPECIAL_FIGHT_REACTIONS = {
@@ -1826,6 +1896,36 @@ const SPECIAL_FIGHT_REACTIONS = {
     'Katsumi snaps into the opening with karate speed that seems to arrive before the thought.',
     'Katsumi layers precision over courage and makes the exchange sting twice.',
     'Katsumi attacks the gap with young monster confidence.',
+  ],
+  'Jinn Kazame': [
+    'Jinn keeps the stance compact, then lets cursed pressure leak into a clean karate line.',
+    'Jinn answers the special with discipline first and bloodline violence second.',
+    'Jinn shifts from Mishime-style power to sharper karate before the exchange settles.',
+  ],
+  'Kazuro Mishime': [
+    'Kazuro smiles like the exchange already belongs to the family curse.',
+    'Kazuro steps in with electric pressure, forcing the pocket to become dangerous immediately.',
+    'Kazuro turns the read into a blood-feud argument and throws through it.',
+  ],
+  'Heiha Mishime': [
+    'Heiha plants his feet and dares the exchange to prove it can move him.',
+    'Heiha answers with old monster timing, every counter carrying family-war spite.',
+    'Heiha tests the special with a grin and a fist that refuses to age politely.',
+  ],
+  'Kingg Jaguar': [
+    'Kingg lowers his base and turns the exchange into a masked wrestling problem.',
+    'Kingg eats the first beat to get hands connected, then starts hunting the throw.',
+    'Kingg roars through the setup and makes every reset feel like a suplex threat.',
+  ],
+  'Paul Pheonixx': [
+    'Paul loads the right hand like subtlety owes him money.',
+    'Paul crashes forward with biker-pride timing and turns the exchange into one huge bet.',
+    'Paul swings through the read, confident one clean hit can rewrite the round.',
+  ],
+  'Yoshi Mitsuo': [
+    'Yoshi changes rhythm oddly, cutting the exchange into angles that feel half sword, half trick.',
+    'Yoshi vanishes off the obvious line and returns where the guard is least organized.',
+    'Yoshi makes the special read strange, forcing you to solve timing before damage.',
   ],
 };
 
@@ -2531,6 +2631,96 @@ export const OPPONENTS = {
     skillReward: 'interceptKnee',
     requirements: { hiddenWorld: true, reputation: 70, wins: 5, age: 17 },
   },
+  jinnKazame: {
+    name: 'Jinn Kazame',
+    style: 'Devil Blood Karate',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1380,
+    temperament: 'patient counter-striker',
+    strengths: ['cursed karate', 'Mishime pressure', 'rage control'],
+    weakness: 'discipline cracks when the bloodline is baited',
+    reward: 235000,
+    rep: 430,
+    risk: 82,
+    skillReward: 'interceptKnee',
+    requirements: { hiddenWorld: true, reputation: 90, wins: 7, age: 18 },
+  },
+  kazuroMishime: {
+    name: 'Kazuro Mishime',
+    style: 'Devil Gene Mishime Karate',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1580,
+    temperament: 'reckless pressure',
+    strengths: ['electric pressure', 'devil gene burst', 'family-war counters'],
+    weakness: 'pride keeps him inside dangerous exchanges',
+    reward: 295000,
+    rep: 500,
+    risk: 91,
+    skillReward: 'demonPressure',
+    requirements: { hiddenWorld: true, reputation: 110, wins: 9, age: 20 },
+  },
+  heihaMishime: {
+    name: 'Heiha Mishime',
+    style: 'Iron Mishime Karate',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1500,
+    temperament: 'defensive grinder',
+    strengths: ['old monster durability', 'electric counters', 'ruthless timing'],
+    weakness: 'will over-test his toughness to prove dominance',
+    reward: 275000,
+    rep: 470,
+    risk: 88,
+    skillReward: 'highGuardCrash',
+    requirements: { hiddenWorld: true, reputation: 100, wins: 8, age: 20 },
+  },
+  kinggJaguar: {
+    name: 'Kingg Jaguar',
+    style: 'Jaguar Mask Pro Wrestling',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1220,
+    temperament: 'defensive grinder',
+    strengths: ['chain throws', 'mask roar pressure', 'suplex traps'],
+    weakness: 'must connect grips before the monster offense starts',
+    reward: 195000,
+    rep: 370,
+    risk: 72,
+    skillReward: 'bodyLockTrip',
+    requirements: { hiddenWorld: true, reputation: 75, wins: 6, age: 18 },
+  },
+  paulPheonixx: {
+    name: 'Paul Pheonixx',
+    style: 'Biker Deathfist Karate',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1160,
+    temperament: 'reckless pressure',
+    strengths: ['one-shot right hand', 'stubborn rushes', 'wild comeback nerve'],
+    weakness: 'big swings can be timed and redirected',
+    reward: 175000,
+    rep: 350,
+    risk: 68,
+    skillReward: 'bodyShot',
+    requirements: { hiddenWorld: true, reputation: 70, wins: 5, age: 18 },
+  },
+  yoshiMitsuo: {
+    name: 'Yoshi Mitsuo',
+    style: 'Trick Blade Ninjutsu',
+    threat: 'Special Boss',
+    tier: 'Special Fight',
+    power: 1260,
+    temperament: 'patient counter-striker',
+    strengths: ['odd rhythm', 'blade feints', 'vanishing angles'],
+    weakness: 'unusual timing can be crowded before it unfolds',
+    reward: 205000,
+    rep: 390,
+    risk: 75,
+    skillReward: 'voidStep',
+    requirements: { hiddenWorld: true, reputation: 82, wins: 6, age: 18 },
+  },
 };
 
 const FIRST_NAMES = ['Ren', 'Mika', 'Arlo', 'Sena', 'Niko', 'Juno', 'Vale', 'Kira'];
@@ -2937,7 +3127,14 @@ function weightedRarity(rng) {
 function rollClan(rng) {
   const rarity = weightedRarity(rng);
   const pool = CLANS.filter((clan) => clan.rarity === rarity);
+  if (rarity === 'Secret') {
+    return clone(CLANS.find((clan) => clan.name === DEVIL_GENE_CLAN_NAME) ?? pick(pool, rng));
+  }
   return clone(pick(pool, rng));
+}
+
+function devilGeneClan() {
+  return clone(CLANS.find((clan) => clan.name === DEVIL_GENE_CLAN_NAME));
 }
 
 function rollClanByRarity(rng, rarity) {
@@ -3175,6 +3372,8 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     tournament: null,
     clanPasswordProgress: 0,
     clanPasswordHint: clanPasswordHint(0),
+    clanRerollPity: 0,
+    clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     world: {
       hiddenWorld: false,
       league: 'None',
@@ -3196,7 +3395,9 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
 export function rerollClan(life) {
   if (life.resources.clanRerolls <= 0) return addLog(life, 'No Clan Rerolls remain.', 'clan');
   const rng = createRng(life.rngSeed + life.resources.clanRerolls * 97);
-  const clan = rollClan(rng);
+  const nextPity = Math.max(0, Math.floor(life.clanRerollPity ?? 0)) + 1;
+  const pityHit = nextPity >= DEVIL_GENE_PITY_REROLLS;
+  const clan = pityHit ? devilGeneClan() : rollClan(rng);
   const base = clone(life);
   const trainedStats = removeClanBonuses(base.stats, base.clan);
   const next = {
@@ -3204,6 +3405,8 @@ export function rerollClan(life) {
     rngSeed: Math.floor(rng() * 999999999),
     identity: renameForClan(base, clan),
     clan,
+    clanRerollPity: clan.name === DEVIL_GENE_CLAN_NAME ? 0 : nextPity,
+    clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     baseStats: trainedStats,
     stats: applyClanBonuses(trainedStats, clan),
     injuries: base.injuries,
@@ -3228,7 +3431,7 @@ export function redeemClanPassword(life, password) {
     return addLog(life, 'Clan password rejected.', 'clan');
   }
   const rng = createRng(life.rngSeed + 210021);
-  const clan = clone(CLANS.find((item) => item.name === 'THE ASHURA') ?? rollClanByRarity(rng, 'Secret'));
+  const clan = clone(CLANS.find((item) => item.name === 'Ashura') ?? rollClanByRarity(rng, 'Secret'));
   const base = clone(life);
   const trainedStats = removeClanBonuses(base.stats, base.clan);
   const next = {
@@ -3236,6 +3439,7 @@ export function redeemClanPassword(life, password) {
     rngSeed: Math.floor(rng() * 999999999),
     identity: renameForClan(base, clan),
     clan,
+    clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     baseStats: trainedStats,
     stats: applyClanBonuses(trainedStats, clan),
     injuries: base.injuries,
@@ -4706,6 +4910,36 @@ function opponentDodgeResult(life, opponent, tactic, opponentTactic, fight, swin
 function clanSpecialBoosts(life, tactic) {
   if (tactic !== 'special') return null;
   const specialName = life.clan.special?.name;
+  const awakening = normalizeClanAwakening(life);
+  if (specialName === 'Devil Gene Awakening') {
+    const stage = awakening?.stage ?? 0;
+    if (stage >= 3) {
+      return {
+        label: 'Devil Form',
+        strength: Math.max(life.stats.strength ?? 0, STAT_CAP + 230),
+        willpower: Math.max(life.stats.willpower ?? 0, STAT_CAP + 205),
+        aggression: Math.max(life.stats.aggression ?? 0, STAT_CAP + 210),
+        reflexes: Math.max(life.stats.reflexes ?? 0, STAT_CAP + 170),
+        speed: Math.max(life.stats.speed ?? 0, STAT_CAP + 135),
+      };
+    }
+    if (stage >= 2) {
+      return {
+        label: 'Stage 2 Devil Gene',
+        strength: Math.max(life.stats.strength ?? 0, STAT_CAP + 150),
+        willpower: Math.max(life.stats.willpower ?? 0, STAT_CAP + 135),
+        aggression: Math.max(life.stats.aggression ?? 0, STAT_CAP + 145),
+        reflexes: Math.max(life.stats.reflexes ?? 0, STAT_CAP + 95),
+      };
+    }
+    return {
+      label: 'Devil Gene Awakening',
+      strength: Math.max(life.stats.strength ?? 0, STAT_CAP + 95),
+      willpower: Math.max(life.stats.willpower ?? 0, STAT_CAP + 85),
+      aggression: Math.max(life.stats.aggression ?? 0, STAT_CAP + 85),
+      reflexes: Math.max(life.stats.reflexes ?? 0, STAT_CAP + 55),
+    };
+  }
   const boosts = {
     'Overtime Crush': { label: 'Overtime Crush', durability: 80, strength: 35, willpower: 25 },
     'Open Road Feint': { label: 'Open Road Feint', speed: 65, control: 45, reflexes: 25 },
@@ -4761,6 +4995,13 @@ function clanSpecialModifier(life, tactic, fight) {
     modifier.scoreBonus += 28;
     modifier.damageBonus += 16;
     modifier.incomingReduction += 6;
+  }
+  if (specialName === 'Devil Gene Awakening') {
+    const awakening = normalizeClanAwakening(life);
+    const stage = awakening?.stage ?? 0;
+    modifier.scoreBonus += 18 + stage * 7;
+    modifier.damageBonus += 9 + stage * 5;
+    modifier.incomingReduction += stage >= 2 ? 4 : 1;
   }
   return modifier;
 }
@@ -4827,6 +5068,17 @@ function clanCombatModifier(life, tactic, opponentTactic, fight) {
     modifier.scoreBonus = Math.max(modifier.scoreBonus, 8);
     modifier.damageBonus += fight.meters.momentum >= 0 ? 5 : 2;
     if (['counter', 'defend'].includes(tactic)) modifier.incomingReduction += 2;
+  }
+  if (passive === 'Devil Gene Pressure') {
+    const awakening = normalizeClanAwakening(life);
+    const stage = awakening?.stage ?? 0;
+    const lifeHealth = life.resources?.health ?? 100;
+    if (stage >= 1 && (fight.meters.playerHealth <= 60 || lifeHealth <= 60 || fight.meters.playerStamina <= 45)) {
+      modifier.scoreBonus += 5 + stage * 3;
+      modifier.damageBonus += 6 + stage * 4;
+      modifier.staminaCostDelta += stage >= 2 ? 2 : 0;
+      if (stage >= 3) modifier.incomingReduction += 3;
+    }
   }
 
   if (modifier.scoreBonus || modifier.damageBonus || modifier.incomingReduction || modifier.opponentStaminaDamage || modifier.staminaCostDelta) {
@@ -5649,6 +5901,7 @@ function createActiveFight(life, opponentId) {
 }
 
 export function startFight(life, opponentId) {
+  life = withNormalizedClanAwakening(life);
   const opponent = opponentId === 'rival' ? rivalAsOpponent(life) : OPPONENTS[opponentId];
   if (!opponent) return life;
   const lockReasons = unmetFightRequirements(life, opponent, opponentId);
@@ -5968,6 +6221,7 @@ function resolveBottomConserveExchange({ life, opponent, fight, move, playerScor
 
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
+  life = withNormalizedClanAwakening(life);
   const opponent = getAdaptedOpponent(life, life.activeFight.opponentId);
   if (!opponent) return life;
   const existingGrappling = normalizeGrapplingState(life.activeFight);
@@ -6102,6 +6356,16 @@ export function takeFightTurn(life, tactic = 'pressure') {
   }
   fight.moveCooldowns[move.id] = tactic === 'special' ? 2 : 1;
   if (tactic === 'special') fight.specialCharges = Math.max(0, (fight.specialCharges ?? 1) - 1);
+  if (tactic === 'special' && isMishimeClan(next.clan) && (next.clanAwakening?.stage ?? 0) >= 3) {
+    next.clanAwakening = {
+      ...next.clanAwakening,
+      corruption: clamp((next.clanAwakening.corruption ?? 0) + 8),
+    };
+    next.world = {
+      ...next.world,
+      heat: clamp((next.world?.heat ?? 0) + 6, 0, 100),
+    };
+  }
 
   fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - (tactic === 'grapple' ? 16 : 9) - (weakMoveHit ? 5 : 0) - passive.opponentStaminaDamage - optimalBoost.opponentStaminaDamage - (enemyMove.staminaCost ?? 0), 0, 100);
@@ -6982,6 +7246,7 @@ function findTriggeredEvent(life, trigger, context) {
       title: 'Someone Recognizes the Blood',
       body: `A quiet spectator watches your footwork for too long. After practice, they ask whether ${life.clan.name} is your real family line or just a name you hide behind.`,
       trigger: trigger === 'ageUp' &&
+        !isMishimeClan(life.clan) &&
         ['Legendary', 'Mythic', 'Secret'].includes(life.clan.rarity) &&
         life.identity.age >= 16 &&
         !flags.bloodlineSpotter,
@@ -6997,6 +7262,98 @@ function findTriggeredEvent(life, trigger, context) {
           label: 'Let them see',
           result: 'You let one exchange slip. The room understands your bloodline is not normal.',
           effects: { resources: { reputation: 12, clanRerolls: 1 }, stats: { aggression: 2 }, world: { heat: 10 } },
+        },
+      ],
+    },
+    {
+      id: 'mishime-first-surge',
+      flag: 'mishimeFirstSurge',
+      title: 'The Devil Gene Moves',
+      body: 'The Mishime bloodline wakes during a hard week. Your pulse turns violent before your thoughts catch up, and for one second the room feels breakable.',
+      trigger: isMishimeClan(life.clan) &&
+        (normalizeClanAwakening(life)?.stage ?? 0) < 1 &&
+        ((trigger === 'ageUp' && life.identity.age >= 14) || (trigger === 'fight' && life.world.hiddenWorld)) &&
+        !flags.mishimeFirstSurge,
+      choices: [
+        {
+          id: 'restrain-devil-gene',
+          label: 'Restrain it',
+          result: 'You forced the surge down and learned the shape of it. The power stays, but it has to ask permission.',
+          effects: { clanAwakening: { stage: 1, control: 18, corruption: 2, markMonth: true }, stats: { control: 4, fightIq: 3 }, resources: { mood: 2 }, world: { heat: -4 } },
+        },
+        {
+          id: 'use-devil-surge',
+          label: 'Use it',
+          result: 'You let the bloodline hit the room first. Everyone saw the violence before you named it.',
+          effects: { clanAwakening: { stage: 1, control: -4, corruption: 14, markMonth: true }, stats: { strength: 5, aggression: 4 }, resources: { reputation: 8 }, world: { heat: 10 } },
+        },
+        {
+          id: 'study-devil-surge',
+          label: 'Master the feeling',
+          result: 'You treated the surge like a technique instead of a mood. That made it slower to explode and harder to waste.',
+          effects: { clanAwakening: { stage: 1, control: 10, corruption: 6, markMonth: true }, stats: { willpower: 3, technique: 3, control: 2 }, resources: { reputation: 3 }, world: { heat: 3 } },
+        },
+      ],
+    },
+    {
+      id: 'mishime-pressure-deepens',
+      flag: 'mishimePressureDeepens',
+      title: 'Devil Pressure Deepens',
+      body: 'The first surge was not the end. Mishime pressure starts arriving earlier in your rounds, turning fear, pride, and damage into one ugly rhythm.',
+      trigger: isMishimeClan(life.clan) &&
+        (normalizeClanAwakening(life)?.stage ?? 0) === 1 &&
+        trigger === 'ageUp' &&
+        (life.record.wins >= 5 || life.resources.health <= 55 || life.world.heat >= 35) &&
+        !flags.mishimePressureDeepens,
+      choices: [
+        {
+          id: 'discipline-devil-pressure',
+          label: 'Discipline it',
+          result: 'You built rules around the pressure. The devil gets stronger, but your hands stay yours.',
+          effects: { clanAwakening: { stage: 2, control: 14, corruption: 6, markMonth: true }, stats: { control: 4, fightIq: 4, willpower: 2 }, world: { heat: -2 } },
+        },
+        {
+          id: 'use-devil-pressure',
+          label: 'Feed it',
+          result: 'You fed the pressure and it answered beautifully. The room remembers the damage and the look in your eyes.',
+          effects: { clanAwakening: { stage: 2, control: -8, corruption: 18, markMonth: true }, stats: { strength: 6, aggression: 6, reflexes: 3 }, resources: { reputation: 12 }, world: { heat: 8 } },
+        },
+        {
+          id: 'master-devil-pressure',
+          label: 'Master the pressure',
+          result: 'You made the pressure serve the read instead of drowning it. That balance scares people who understand fighting.',
+          effects: { clanAwakening: { stage: 2, control: 8, corruption: 10, markMonth: true }, stats: { technique: 4, willpower: 4, aggression: 2 }, resources: { reputation: 6 }, world: { heat: 4 } },
+        },
+      ],
+    },
+    {
+      id: 'mishime-full-awakening',
+      flag: 'mishimeFullAwakening',
+      title: 'Devil Form Awakening',
+      body: 'The Mishime bloodline stops feeling like a hidden tool. It stands at the edge of every exchange now, waiting to become the whole fight.',
+      trigger: isMishimeClan(life.clan) &&
+        (normalizeClanAwakening(life)?.stage ?? 0) === 2 &&
+        trigger === 'ageUp' &&
+        ((life.defeatedSpecialFights ?? []).length > 0 || life.tournament?.champion || life.world.heat >= 75) &&
+        !flags.mishimeFullAwakening,
+      choices: [
+        {
+          id: 'seal-devil-form',
+          label: 'Seal the form',
+          result: 'You kept the full form behind a locked door. It still exists, but now it has to break through your discipline first.',
+          effects: { clanAwakening: { stage: 3, control: 18, corruption: 4, markMonth: true }, stats: { control: 6, fightIq: 5, willpower: 3 }, world: { heat: -5 } },
+        },
+        {
+          id: 'unleash-devil-form',
+          label: 'Unleash it',
+          result: 'You let Devil Form arrive without apology. Power answers immediately; consequences start taking notes.',
+          effects: { clanAwakening: { stage: 3, control: -10, corruption: 24, markMonth: true }, stats: { strength: 8, aggression: 8, reflexes: 5 }, resources: { reputation: 18 }, world: { heat: 14 } },
+        },
+        {
+          id: 'master-devil-form',
+          label: 'Master Devil Form',
+          result: 'You turned the full form into a weapon instead of a possession. It is still dangerous. It is finally pointed.',
+          effects: { clanAwakening: { stage: 3, control: 8, corruption: 8, markMonth: true }, stats: { strength: 4, technique: 4, willpower: 4, control: 3 }, resources: { reputation: 10 }, world: { heat: 6 } },
         },
       ],
     },
@@ -7195,6 +7552,15 @@ function applyEventEffects(life, effects = {}) {
   }
   if (effects.association) {
     life.association = effects.association;
+  }
+  if (effects.clanAwakening) {
+    const current = normalizeClanAwakening(life) ?? { ...DEFAULT_CLAN_AWAKENING };
+    life.clanAwakening = {
+      stage: Math.max(current.stage, effects.clanAwakening.stage ?? current.stage),
+      control: clamp(current.control + (effects.clanAwakening.control ?? 0)),
+      corruption: clamp(current.corruption + (effects.clanAwakening.corruption ?? 0)),
+      lastAwakeningMonth: effects.clanAwakening.markMonth ? lifeMonth(life) : current.lastAwakeningMonth,
+    };
   }
   if (effects.injury) {
     addOrUpgradeInjury(life, withInjuryTier({ name: effects.injury, text: `${effects.injury} needs recovery before harder fights.` }, 'Mild'));

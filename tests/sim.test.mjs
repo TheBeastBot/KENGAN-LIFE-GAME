@@ -188,10 +188,10 @@ test('correct clan password forces the secret Ashura clan without spending rerol
 
   const next = redeemClanPassword(life, 'BUCKY21');
 
-  assert.equal(next.clan.name, 'THE ASHURA');
+  assert.equal(next.clan.name, 'Ashura');
   assert.equal(next.clan.rarity, 'Secret');
-  assert.equal(next.identity.lastName, 'THE ASHURA');
-  assert.equal(next.identity.name, `${next.identity.firstName} THE ASHURA`);
+  assert.equal(next.identity.lastName, 'Ashura');
+  assert.equal(next.identity.name, `${next.identity.firstName} Ashura`);
   assert.equal(next.resources.health, 47);
   assert.equal(next.resources.energy, 33);
   assert.equal(next.resources.clanRerolls, 4);
@@ -214,6 +214,139 @@ test('secret clan has a natural 0.1 percent rarity weight', () => {
 
   assert.ok(secret);
   assert.equal(secret.weight / total, 0.001);
+});
+
+test('devil gene clan is the natural secret clan roll and has pity after 1500 rerolls', () => {
+  const devilClan = CLANS.find((clan) => clan.name === 'Mishime');
+  assert.ok(devilClan);
+  assert.equal(devilClan.rarity, 'Secret');
+
+  let naturalSecret = null;
+  for (let seed = 1; seed < 5000 && !naturalSecret; seed += 1) {
+    const life = createNewLife({ gender: 'Male', seed });
+    if (life.clan.rarity === 'Secret') naturalSecret = life.clan;
+  }
+
+  assert.ok(naturalSecret);
+  assert.equal(naturalSecret.name, 'Mishime');
+
+  const base = createNewLife({ gender: 'Male', firstName: 'Jinn', seed: 42 });
+  const pitied = rerollClan({
+    ...base,
+    resources: { ...base.resources, clanRerolls: 1 },
+    clanRerollPity: 1499,
+  });
+
+  assert.equal(pitied.clan.name, 'Mishime');
+  assert.equal(pitied.clanRerollPity, 0);
+  assert.equal(pitied.identity.name, 'Jinn Mishime');
+});
+
+test('Mishime lives initialize awakening state while other clans do not', () => {
+  const mishime = CLANS.find((clan) => clan.name === 'Mishime');
+  const normal = createNewLife({ gender: 'Female', seed: 42 });
+  const life = {
+    ...normal,
+    clan: mishime,
+  };
+  const rerolled = rerollClan({
+    ...normal,
+    resources: { ...normal.resources, clanRerolls: 1 },
+    clanRerollPity: 1499,
+  });
+
+  assert.equal(normal.clanAwakening, null);
+  assert.deepEqual(rerolled.clanAwakening, {
+    stage: 0,
+    control: 50,
+    corruption: 0,
+    lastAwakeningMonth: null,
+  });
+  assert.deepEqual(startFight(life, 'localBrawler').clanAwakening, {
+    stage: 0,
+    control: 50,
+    corruption: 0,
+    lastAwakeningMonth: null,
+  });
+});
+
+test('Mishime awakening events progress by player choice', () => {
+  const mishime = CLANS.find((clan) => clan.name === 'Mishime');
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 66 }),
+    clan: mishime,
+    identity: { ...createNewLife({ gender: 'Male', seed: 66 }).identity, age: 14 },
+    eventFlags: { coachNotice: true },
+  };
+
+  life = ageUp(life);
+  assert.equal(life.pendingEvent.id, 'mishime-first-surge');
+  life = resolveEventChoice(life, 'restrain-devil-gene');
+  assert.equal(life.clanAwakening.stage, 1);
+  assert.ok(life.clanAwakening.control > 50);
+  assert.ok(life.world.heat <= 10);
+
+  life = {
+    ...life,
+    pendingEvent: null,
+    identity: { ...life.identity, age: 18 },
+    record: { wins: 5, losses: 0, kos: 3 },
+    resources: { ...life.resources, reputation: 80 },
+    world: { ...life.world, hiddenWorld: true, heat: 35 },
+  };
+  life = ageUp(life);
+  assert.equal(life.pendingEvent.id, 'mishime-pressure-deepens');
+  life = resolveEventChoice(life, 'use-devil-pressure');
+  assert.equal(life.clanAwakening.stage, 2);
+  assert.ok(life.clanAwakening.corruption >= 18);
+  assert.ok(life.world.heat >= 43);
+
+  life = {
+    ...life,
+    pendingEvent: null,
+    defeatedSpecialFights: ['jinnKazame'],
+    record: { wins: 12, losses: 0, kos: 8 },
+    clanAwakening: { ...life.clanAwakening, control: 70 },
+  };
+  life = ageUp(life);
+  assert.equal(life.pendingEvent.id, 'mishime-full-awakening');
+  life = resolveEventChoice(life, 'master-devil-form');
+  assert.equal(life.clanAwakening.stage, 3);
+  assert.ok(life.clanAwakening.control >= 75);
+  assert.ok(life.clanAwakening.corruption >= 20);
+});
+
+test('Mishime awakening scales combat and stage 3 devil form has a cost', () => {
+  const mishime = CLANS.find((clan) => clan.name === 'Mishime');
+  const base = {
+    ...createNewLife({ gender: 'Male', seed: 528 }),
+    clan: mishime,
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 528 }).stats,
+      strength: 220,
+      speed: 190,
+      aggression: 210,
+      willpower: 200,
+      reflexes: 180,
+      technique: 150,
+    },
+    resources: { ...createNewLife({ gender: 'Male', seed: 528 }).resources, health: 45, energy: 100 },
+    world: { ...createNewLife({ gender: 'Male', seed: 528 }).world, heat: 10 },
+  };
+  const stage0 = takeFightTurn(startFight({ ...base, clanAwakening: { stage: 0, control: 50, corruption: 0, lastAwakeningMonth: null } }, 'localBrawler'), 'pressure').activeFight.exchanges[0];
+  const stage1 = takeFightTurn(startFight({ ...base, clanAwakening: { stage: 1, control: 60, corruption: 8, lastAwakeningMonth: null } }, 'localBrawler'), 'pressure').activeFight.exchanges[0];
+  const stage2 = takeFightTurn(startFight({ ...base, clanAwakening: { stage: 2, control: 55, corruption: 25, lastAwakeningMonth: null } }, 'localBrawler'), 'special').activeFight.exchanges[0];
+  const stage3 = takeFightTurn(startFight({ ...base, clanAwakening: { stage: 3, control: 70, corruption: 30, lastAwakeningMonth: null } }, 'localBrawler'), 'special');
+  const stage3Exchange = stage3.activeFight.exchanges[0];
+
+  assert.ok(stage1.playerDamage > stage0.playerDamage);
+  assert.ok(stage1.text.includes('Devil Gene Pressure'));
+  assert.ok(stage2.playerDamage > stage1.playerDamage);
+  assert.ok(stage2.text.includes('Stage 2'));
+  assert.equal(stage3Exchange.specialBoosts.label, 'Devil Form');
+  assert.ok(stage3Exchange.specialBoosts.strength > stage2.specialBoosts.strength);
+  assert.ok(stage3.clanAwakening.corruption > 30);
+  assert.ok(stage3.world.heat > 10);
 });
 
 test('rarity tiers are ordered by stronger power multiplier', () => {
@@ -443,7 +576,7 @@ test('stat caps scale strongly with age and clan strength', () => {
     ...young,
     identity: { ...young.identity, age: 20, month: 0 },
   };
-  const mythicClan = CLANS.find((clan) => clan.name === 'Hanmo Bloodline');
+  const mythicClan = CLANS.find((clan) => clan.name === 'Hanmo');
   const mythicAdult = {
     ...adult,
     clan: mythicClan,
@@ -1149,7 +1282,7 @@ test('every clan has visible benefits for the clan reference', () => {
   assert.ok(CLANS.every((clan) => clan.special?.name && clan.special?.effect));
 });
 
-test('clans use inspired surname bloodline names instead of placeholder labels', () => {
+test('clans use short clan names without generic suffixes', () => {
   const oldNames = [
     'Harbor Worker Blood',
     'Open Road Kin',
@@ -1160,11 +1293,17 @@ test('clans use inspired surname bloodline names instead of placeholder labels',
     'Hanegami Bloodline',
     'Amahisa House',
     'Tokunaga Dynasty',
+    'Kuri Clan',
+    'Nikoo Style Line',
+    'Hanmo Bloodline',
+    'Orochiya Bloodline',
+    'Mishime Devil Bloodline',
+    'THE ASHURA',
   ];
-  const closeVariantNames = ['Kuri Clan', 'Nikoo Style Line', 'Hanmo Bloodline', 'Orochiya Bloodline'];
+  const closeVariantNames = ['Kuri', 'Nikoo', 'Hanmo', 'Orochiya', 'Ashura', 'Mishime'];
   const names = CLANS.map((clan) => clan.name);
 
-  assert.ok(names.every((name) => name === 'THE ASHURA' || /(House|Line|Family|Clan|Bloodline|Dynasty)$/.test(name)));
+  assert.ok(names.every((name) => !/\b(House|Line|Family|Clan|Bloodline|Dynasty)\b/.test(name)));
   assert.ok(closeVariantNames.every((name) => names.includes(name)));
   assert.ok(oldNames.every((name) => !names.includes(name)));
 });
@@ -1172,17 +1311,18 @@ test('clans use inspired surname bloodline names instead of placeholder labels',
 test('clan rarities match counterpart strength and significance', () => {
   const rarityByClan = Object.fromEntries(CLANS.map((clan) => [clan.name, clan.rarity]));
 
-  assert.equal(rarityByClan['Nikoo Style Line'], 'Mythic');
-  assert.equal(rarityByClan['Hanmo Bloodline'], 'Mythic');
-  assert.equal(rarityByClan['Bakiya Clan'], 'Mythic');
-  assert.equal(rarityByClan['Orochiya Bloodline'], 'Mythic');
-  assert.equal(rarityByClan['THE ASHURA'], 'Secret');
-  assert.equal(rarityByClan['Kuri Clan'], 'Legendary');
-  assert.equal(rarityByClan['Agitoo Dynasty'], 'Legendary');
-  assert.equal(rarityByClan['Shibukawae House'], 'Epic');
-  assert.equal(rarityByClan['Doppoe House'], 'Epic');
-  assert.equal(rarityByClan['Reihitoo Clan'], 'Epic');
-  assert.equal(rarityByClan['Ryukoo Clan'], 'Rare');
+  assert.equal(rarityByClan['Nikoo'], 'Mythic');
+  assert.equal(rarityByClan['Hanmo'], 'Mythic');
+  assert.equal(rarityByClan['Bakiya'], 'Mythic');
+  assert.equal(rarityByClan['Orochiya'], 'Mythic');
+  assert.equal(rarityByClan['Ashura'], 'Secret');
+  assert.equal(rarityByClan['Mishime'], 'Secret');
+  assert.equal(rarityByClan['Kuri'], 'Legendary');
+  assert.equal(rarityByClan['Agitoo'], 'Legendary');
+  assert.equal(rarityByClan['Shibukawae'], 'Epic');
+  assert.equal(rarityByClan['Doppoe'], 'Epic');
+  assert.equal(rarityByClan['Reihitoo'], 'Epic');
+  assert.equal(rarityByClan['Ryukoo'], 'Rare');
 });
 
 test('new lives have several local fights available immediately', () => {
@@ -1286,6 +1426,24 @@ test('special fight roster has a larger rotating boss pool', () => {
   assert.ok(fights.length >= 10);
   assert.ok(fights.some((fight) => fight.opponent.name.includes('Kuroki')));
   assert.ok(fights.some((fight) => fight.opponent.name.includes('Jakku')));
+  assert.ok(fights.some((fight) => fight.opponent.name.includes('Kazuro')));
+  assert.ok(fights.some((fight) => fight.opponent.name.includes('Kingg')));
+});
+
+test('tekken-inspired special fighters follow the existing special fight format', () => {
+  const ids = ['jinnKazame', 'kazuroMishime', 'heihaMishime', 'kinggJaguar', 'paulPheonixx', 'yoshiMitsuo'];
+
+  for (const id of ids) {
+    const opponent = OPPONENTS[id];
+    assert.ok(SPECIAL_FIGHT_IDS.includes(id));
+    assert.ok(opponent);
+    assert.equal(opponent.tier, 'Special Fight');
+    assert.ok(opponent.power >= 900);
+    assert.ok(opponent.skillReward);
+    assert.ok(opponent.requirements.hiddenWorld);
+    assert.ok(opponent.strengths.length >= 3);
+    assert.ok(opponent.weakness);
+  }
 });
 
 test('startFight refuses opponents who are still recovering for a rematch', () => {
@@ -2622,7 +2780,7 @@ test('low speed is less likely to dodge incoming pressure', () => {
 
 test('clan passives create visible combat effects', () => {
   const base = createNewLife({ gender: 'Female', seed: 521 });
-  const reihitoo = CLANS.find((clan) => clan.name === 'Reihitoo Clan');
+  const reihitoo = CLANS.find((clan) => clan.name === 'Reihitoo');
   const clanless = {
     name: 'No Passive Clan',
     rarity: 'Common',
@@ -2656,7 +2814,7 @@ test('clan passives create visible combat effects', () => {
 
 test('special tactic text uses the clan special label', () => {
   const base = createNewLife({ gender: 'Male', seed: 54 });
-  const clan = CLANS.find((item) => item.name === 'Kuri Clan');
+  const clan = CLANS.find((item) => item.name === 'Kuri');
   const life = startFight({ ...base, clan }, 'alleyScrapper');
   const next = takeFightTurn(life, 'special');
 
@@ -2718,7 +2876,7 @@ test('unlocked combat skills can be used as fight moves', () => {
 
 test('Bakiya Demon Back special uses over-limit combat stats without permanently raising capped stats', () => {
   const base = createNewLife({ gender: 'Male', seed: 528 });
-  const clan = CLANS.find((item) => item.name === 'Bakiya Clan');
+  const clan = CLANS.find((item) => item.name === 'Bakiya');
   const life = startFight({
     ...base,
     clan,
@@ -2741,7 +2899,7 @@ test('Bakiya Demon Back special uses over-limit combat stats without permanently
 
 test('Kuri Release Limiter special applies a temporary form boost', () => {
   const base = createNewLife({ gender: 'Male', seed: 529 });
-  const clan = CLANS.find((item) => item.name === 'Kuri Clan');
+  const clan = CLANS.find((item) => item.name === 'Kuri');
   const life = startFight({
     ...base,
     clan,

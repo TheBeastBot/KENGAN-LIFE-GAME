@@ -58,6 +58,13 @@ import {
 const STORAGE_KEY = 'underground-life-sim-save-v1';
 const LOG_LIMIT = 8;
 const AUTO_ROUTINE_INTERVAL_MS = 1000;
+const DEVIL_GENE_CLAN_NAME = 'Mishime';
+const DEFAULT_CLAN_AWAKENING = {
+  stage: 0,
+  control: 50,
+  corruption: 0,
+  lastAwakeningMonth: null,
+};
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
   bodyShot: 'assets/icons/body-shot.png',
@@ -141,6 +148,15 @@ const BAKI_FIGHTER_IDS = new Set([
   'katsumiOrochino',
 ]);
 
+const TEKKEN_FIGHTER_IDS = new Set([
+  'jinnKazame',
+  'kazuroMishime',
+  'heihaMishime',
+  'kinggJaguar',
+  'paulPheonixx',
+  'yoshiMitsuo',
+]);
+
 let state = loadGame();
 let selectedGender = 'Male';
 let selectedFirstName = '';
@@ -191,6 +207,7 @@ function normalizeSave(save) {
       month: save.identity?.month ?? 0,
     },
     clan: migratedClan,
+    clanAwakening: normalizeClanAwakening(save.clanAwakening, migratedClan),
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
@@ -227,6 +244,17 @@ function normalizeSave(save) {
     tournament: save.tournament ?? null,
     clanPasswordProgress: save.clanPasswordProgress ?? 0,
     clanPasswordHint: save.clanPasswordHint ?? passwordHint(save.clanPasswordProgress ?? 0),
+    clanRerollPity: save.clanRerollPity ?? 0,
+  };
+}
+
+function normalizeClanAwakening(awakening, clan) {
+  if (clan?.name !== DEVIL_GENE_CLAN_NAME) return null;
+  return {
+    stage: Math.max(0, Math.min(3, awakening?.stage ?? DEFAULT_CLAN_AWAKENING.stage)),
+    control: Math.max(0, Math.min(100, awakening?.control ?? DEFAULT_CLAN_AWAKENING.control)),
+    corruption: Math.max(0, Math.min(100, awakening?.corruption ?? DEFAULT_CLAN_AWAKENING.corruption)),
+    lastAwakeningMonth: awakening?.lastAwakeningMonth ?? DEFAULT_CLAN_AWAKENING.lastAwakeningMonth,
   };
 }
 
@@ -300,30 +328,44 @@ function normalizeGrapplingUi(grappling = {}) {
 
 function migrateClan(clan) {
   const renamed = {
-    'Harbor Worker Blood': 'Sekiba Family',
-    'Kaizumi Family': 'Sekiba Family',
-    'Open Road Kin': 'Cosmoe Line',
-    'Mizuhara Line': 'Cosmoe Line',
-    'Iron Vein Clan': 'Doppoe House',
-    'Tetsugawa Clan': 'Doppoe House',
-    'Serpent School Clan': 'Ryukoo Clan',
-    'Jakurai Clan': 'Ryukoo Clan',
-    'Mirror Fist Lineage': 'Nikoo Style Line',
-    'Kanemori Line': 'Nikoo Style Line',
-    'Red Lantern Family': 'Kuri Clan',
-    'Kurebayashi Family': 'Kuri Clan',
-    'Ghost Step Clan': 'Reihitoo Clan',
-    'Shiranami Clan': 'Reihitoo Clan',
-    'Oniwake Bloodline': 'Hanmo Bloodline',
-    'Hanegami Bloodline': 'Hanmo Bloodline',
-    'Empty Bone Sect': 'Shibukawae House',
-    'Amahisa House': 'Shibukawae House',
-    'Apex Vessel Line': 'Agitoo Dynasty',
-    'Tokunaga Dynasty': 'Agitoo Dynasty',
-    'Dragon Maw Clan': 'Bakiya Clan',
-    'Ryuzaki Clan': 'Bakiya Clan',
-    'First Monster Descendant': 'Orochiya Bloodline',
-    'Orogami Bloodline': 'Orochiya Bloodline',
+    'Harbor Worker Blood': 'Sekiba',
+    'Kaizumi Family': 'Sekiba',
+    'Sekiba Family': 'Sekiba',
+    'Open Road Kin': 'Cosmoe',
+    'Mizuhara Line': 'Cosmoe',
+    'Cosmoe Line': 'Cosmoe',
+    'Iron Vein Clan': 'Doppoe',
+    'Tetsugawa Clan': 'Doppoe',
+    'Doppoe House': 'Doppoe',
+    'Serpent School Clan': 'Ryukoo',
+    'Jakurai Clan': 'Ryukoo',
+    'Ryukoo Clan': 'Ryukoo',
+    'Mirror Fist Lineage': 'Nikoo',
+    'Kanemori Line': 'Nikoo',
+    'Nikoo Style Line': 'Nikoo',
+    'Red Lantern Family': 'Kuri',
+    'Kurebayashi Family': 'Kuri',
+    'Kuri Clan': 'Kuri',
+    'Ghost Step Clan': 'Reihitoo',
+    'Shiranami Clan': 'Reihitoo',
+    'Reihitoo Clan': 'Reihitoo',
+    'Oniwake Bloodline': 'Hanmo',
+    'Hanegami Bloodline': 'Hanmo',
+    'Hanmo Bloodline': 'Hanmo',
+    'Empty Bone Sect': 'Shibukawae',
+    'Amahisa House': 'Shibukawae',
+    'Shibukawae House': 'Shibukawae',
+    'Apex Vessel Line': 'Agitoo',
+    'Tokunaga Dynasty': 'Agitoo',
+    'Agitoo Dynasty': 'Agitoo',
+    'Dragon Maw Clan': 'Bakiya',
+    'Ryuzaki Clan': 'Bakiya',
+    'Bakiya Clan': 'Bakiya',
+    'First Monster Descendant': 'Orochiya',
+    'Orogami Bloodline': 'Orochiya',
+    'Orochiya Bloodline': 'Orochiya',
+    'THE ASHURA': 'Ashura',
+    'Mishime Devil Bloodline': 'Mishime',
   };
   const nextName = renamed[clan?.name];
   if (!nextName) return clan;
@@ -708,11 +750,22 @@ function renderCurrentClanDetails() {
         <p><strong>Bonuses</strong><span>${formatClanBonuses(clan)}</span></p>
         <p><strong>Passive</strong><span>${formatClanPassive(clan)}</span></p>
         <p><strong>Special</strong><span>${formatClanSpecial(clan)}</span></p>
+        ${renderCurrentClanAwakeningDetails()}
         <p><strong>Traits</strong><span>${clan.traits.join(', ')}</span></p>
         <p><strong>Options</strong><span>${clan.options.join(', ')}</span></p>
         <p><strong>Drawbacks</strong><span>${clan.drawbacks.join(', ')}</span></p>
       </div>
     </article>
+  `;
+}
+
+function renderCurrentClanAwakeningDetails() {
+  const awakening = normalizeClanAwakening(state.clanAwakening, state.clan);
+  if (!awakening) return '';
+  return `
+    <p><strong>Awakening Stage</strong><span>${awakening.stage} / 3</span></p>
+    <p><strong>Control</strong><span>${awakening.control} / 100</span></p>
+    <p><strong>Corruption</strong><span>${awakening.corruption} / 100</span></p>
   `;
 }
 
@@ -883,7 +936,8 @@ function renderFight() {
   const specialFights = getSpecialFights(state);
   const kenganFights = specialFights.filter(({ id }) => KENGAN_FIGHTER_IDS.has(id));
   const bakiFights = specialFights.filter(({ id }) => BAKI_FIGHTER_IDS.has(id));
-  const otherSpecialFights = specialFights.filter(({ id }) => !KENGAN_FIGHTER_IDS.has(id) && !BAKI_FIGHTER_IDS.has(id));
+  const tekkenFights = specialFights.filter(({ id }) => TEKKEN_FIGHTER_IDS.has(id));
+  const otherSpecialFights = specialFights.filter(({ id }) => !KENGAN_FIGHTER_IDS.has(id) && !BAKI_FIGHTER_IDS.has(id) && !TEKKEN_FIGHTER_IDS.has(id));
 
   return `
     <section class="stack">
@@ -909,6 +963,12 @@ function renderFight() {
         subtitle: 'Arena nightmare bosses built around freak bodies, old-school killers, and monster pride.',
         count: bakiFights.length,
         body: renderSpecialFightRoster(bakiFights),
+      })}
+      ${renderFightRosterGroup({
+        title: 'Tekken Fighters',
+        subtitle: 'Blood-feud arcade bosses with Mishime pressure, cursed bloodlines, throws, and strange weapons.',
+        count: tekkenFights.length,
+        body: renderSpecialFightRoster(tekkenFights),
       })}
       ${otherSpecialFights.length ? renderFightRosterGroup({
         title: 'Other Special Fighters',
@@ -1445,12 +1505,20 @@ function renderClanReference(clan) {
         <p><strong>Bonuses</strong><span>${formatClanBonuses(clan)}</span></p>
         <p><strong>Passive</strong><span>${formatClanPassive(clan)}</span></p>
         <p><strong>Special</strong><span>${formatClanSpecial(clan)}</span></p>
+        ${renderClanAwakeningReference(clan)}
         <p><strong>Traits</strong><span>${clan.traits.join(', ')}</span></p>
         <p><strong>Options</strong><span>${clan.options.join(', ')}</span></p>
         <p><strong>Drawbacks</strong><span>${clan.drawbacks.join(', ')}</span></p>
       </div>
       <span class="badge ${rarity.color}">${clan.rarity}</span>
     </article>
+  `;
+}
+
+function renderClanAwakeningReference(clan) {
+  if (clan.name !== DEVIL_GENE_CLAN_NAME) return '';
+  return `
+    <p><strong>Awakening</strong><span>Choice-driven Devil Gene stages unlock low-health pressure, stronger Stage 2 special damage, and Devil Form at Stage 3.</span></p>
   `;
 }
 
