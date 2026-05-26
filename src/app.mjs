@@ -166,6 +166,7 @@ let selectedFightCategory = null;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
+let pendingMobileScroll = null;
 let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
@@ -379,8 +380,57 @@ function setState(next, options = {}) {
   saveGame();
   render();
   applyPendingCoachScroll();
+  applyPendingMobileScroll();
   scheduleFeedbackClear();
   if (!options.skipAutoRoutine) scheduleAutoRoutine();
+}
+
+function isMobileViewport() {
+  return window.matchMedia?.('(max-width: 560px)').matches ?? window.innerWidth <= 560;
+}
+
+function shouldPreserveMobileScroll(action) {
+  if (!isMobileViewport()) return false;
+  if (!state) return false;
+  if (action === 'new-life' || action === 'reset') return false;
+  if (action === 'close-fight' || action.startsWith('start-fight-') || action === 'start-rival-fight') return false;
+  if (action === 'join-tournament' || action === 'start-tournament-fight') return false;
+  if (action.startsWith('event-') || action.startsWith('fight-turn-')) return false;
+  return true;
+}
+
+function queueMobileScroll(action, source = null) {
+  if (!shouldPreserveMobileScroll(action)) {
+    pendingMobileScroll = null;
+    return;
+  }
+  const rect = source?.getBoundingClientRect?.();
+  pendingMobileScroll = {
+    activeTab,
+    scrollY: window.scrollY,
+    docHeight: document.documentElement.scrollHeight,
+    viewportHeight: window.innerHeight,
+    sourceTop: rect?.top ?? null,
+  };
+}
+
+function applyPendingMobileScroll() {
+  if (!pendingMobileScroll) return;
+  const pending = pendingMobileScroll;
+  pendingMobileScroll = null;
+  if (!isMobileViewport() || pending.activeTab !== activeTab) return;
+  window.requestAnimationFrame(() => {
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const heightDelta = document.documentElement.scrollHeight - pending.docHeight;
+    const target = Math.min(maxScroll, Math.max(0, pending.scrollY + Math.min(0, heightDelta)));
+    window.scrollTo({ top: target, behavior: 'auto' });
+
+    if (pending.sourceTop === null) return;
+    window.requestAnimationFrame(() => {
+      const drift = Math.abs(window.scrollY - target);
+      if (drift > 2) window.scrollTo({ top: Math.min(maxScroll, Math.max(0, target)), behavior: 'auto' });
+    });
+  });
 }
 
 function queueCoachScroll() {
@@ -401,7 +451,9 @@ function scheduleFeedbackClear() {
   if (!uiFeedback.toast && !Object.keys(uiFeedback.changed ?? {}).length && !uiFeedback.latestExchangeKey) return;
   feedbackTimer = window.setTimeout(() => {
     uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
+    queueMobileScroll('feedback-clear');
     render();
+    applyPendingMobileScroll();
   }, 1200);
 }
 
@@ -413,7 +465,9 @@ function triggerMoveIconBurst(moveId) {
   if (moveIconBurstTimer) window.clearTimeout(moveIconBurstTimer);
   moveIconBurstTimer = window.setTimeout(() => {
     moveIconBurst = null;
+    queueMobileScroll('move-burst-clear');
     render();
+    applyPendingMobileScroll();
   }, MOVE_ICON_BURST_DURATION_MS);
 }
 
@@ -424,7 +478,9 @@ function dismissMoveIconBurst() {
     window.clearTimeout(moveIconBurstTimer);
     moveIconBurstTimer = null;
   }
+  queueMobileScroll('move-burst-dismiss');
   render();
+  applyPendingMobileScroll();
 }
 
 function scheduleAutoRoutine() {
@@ -2114,6 +2170,7 @@ function handleAction(action, source = null) {
   if (action === 'toggle-current-clan') {
     currentClanExpanded = !currentClanExpanded;
     render();
+    applyPendingMobileScroll();
     return;
   }
   if (action === 'age-up') setState(ageUp(state));
@@ -2258,10 +2315,12 @@ function handleAction(action, source = null) {
   if (action.startsWith('open-tactic-')) {
     selectedFightCategory = action.replace('open-tactic-', '');
     render();
+    applyPendingMobileScroll();
   }
   if (action === 'close-tactic-menu') {
     selectedFightCategory = null;
     render();
+    applyPendingMobileScroll();
   }
   if (action.startsWith('fight-turn-')) {
     const moveId = action.replace('fight-turn-', '');
@@ -2327,7 +2386,10 @@ document.addEventListener('click', (event) => {
   }
 
   const action = event.target.closest('[data-action]');
-  if (action) handleAction(action.dataset.action, action);
+  if (action) {
+    queueMobileScroll(action.dataset.action, action);
+    handleAction(action.dataset.action, action);
+  }
 });
 
 document.addEventListener('pointerdown', (event) => {

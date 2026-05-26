@@ -33,6 +33,11 @@ body {
   touch-action: manipulation;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
 button {
   min-height: 44px;
   border: 1px solid var(--line);
@@ -1682,13 +1687,15 @@ select:focus {
 }
 
 @supports (content-visibility: auto) {
-  .option-card,
-  .clan-ref-card,
-  .locked-card,
-  .exchange-log article,
-  .log p {
-    content-visibility: auto;
-    contain-intrinsic-size: 96px;
+  @media (min-width: 561px) {
+    .option-card,
+    .clan-ref-card,
+    .locked-card,
+    .exchange-log article,
+    .log p {
+      content-visibility: auto;
+      contain-intrinsic-size: 96px;
+    }
   }
 }
 
@@ -2320,7 +2327,7 @@ button:active,
 
 @media (max-width: 560px) {
   .game-shell {
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
   button:active,
@@ -2397,7 +2404,10 @@ button:active,
     overflow-x: auto;
     overflow-y: hidden;
     backdrop-filter: none;
-    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
   }
 
   .action-toast {
