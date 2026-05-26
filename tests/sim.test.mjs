@@ -70,6 +70,22 @@ test('new life starts with chosen gender, random conditions, and 10 clan rerolls
   assert.equal(life.mentor.id, 'tiredCoach');
 });
 
+test('new life uses the chosen first name and current clan as last name', () => {
+  const life = createNewLife({ gender: 'Male', firstName: 'Kazuo', seed: 42 });
+
+  assert.equal(life.identity.firstName, 'Kazuo');
+  assert.equal(life.identity.lastName, life.clan.name);
+  assert.equal(life.identity.name, `Kazuo ${life.clan.name}`);
+});
+
+test('blank custom first name falls back to a generated first name', () => {
+  const life = createNewLife({ gender: 'Male', firstName: '   ', seed: 42 });
+
+  assert.ok(life.identity.firstName);
+  assert.equal(life.identity.lastName, life.clan.name);
+  assert.equal(life.identity.name, `${life.identity.firstName} ${life.clan.name}`);
+});
+
 test('clan reroll spends one reroll and changes only clan result', () => {
   const life = createNewLife({ gender: 'Male', seed: 7 });
   const originalBackground = structuredClone(life.background);
@@ -80,6 +96,16 @@ test('clan reroll spends one reroll and changes only clan result', () => {
   assert.equal(next.resources.clanRerolls, 9);
   assert.deepEqual(next.background, originalBackground);
   assert.equal(next.resources.money, originalMoney);
+});
+
+test('clan reroll changes the character last name to the new clan', () => {
+  const life = createNewLife({ gender: 'Male', firstName: 'Ohma', seed: 7 });
+
+  const next = rerollClan(life);
+
+  assert.equal(next.identity.firstName, 'Ohma');
+  assert.equal(next.identity.lastName, next.clan.name);
+  assert.equal(next.identity.name, `Ohma ${next.clan.name}`);
 });
 
 test('clan reroll preserves current health, energy, injuries, and active fight meters', () => {
@@ -164,6 +190,8 @@ test('correct clan password forces the secret Ashura clan without spending rerol
 
   assert.equal(next.clan.name, 'THE ASHURA');
   assert.equal(next.clan.rarity, 'Secret');
+  assert.equal(next.identity.lastName, 'THE ASHURA');
+  assert.equal(next.identity.name, `${next.identity.firstName} THE ASHURA`);
   assert.equal(next.resources.health, 47);
   assert.equal(next.resources.energy, 33);
   assert.equal(next.resources.clanRerolls, 4);

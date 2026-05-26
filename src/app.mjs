@@ -143,6 +143,7 @@ const BAKI_FIGHTER_IDS = new Set([
 
 let state = loadGame();
 let selectedGender = 'Male';
+let selectedFirstName = '';
 let activeTab = 'life';
 let currentClanExpanded = false;
 let selectedFightCategory = null;
@@ -180,10 +181,13 @@ function loadGame() {
 
 function normalizeSave(save) {
   const migratedClan = migrateClan(save.clan);
+  const identity = normalizeIdentity(save.identity, migratedClan);
   return {
     ...save,
     identity: {
-      ...save.identity,
+      ...identity,
+      gender: save.identity?.gender ?? 'Male',
+      age: save.identity?.age ?? 12,
       month: save.identity?.month ?? 0,
     },
     clan: migratedClan,
@@ -223,6 +227,17 @@ function normalizeSave(save) {
     tournament: save.tournament ?? null,
     clanPasswordProgress: save.clanPasswordProgress ?? 0,
     clanPasswordHint: save.clanPasswordHint ?? passwordHint(save.clanPasswordProgress ?? 0),
+  };
+}
+
+function normalizeIdentity(identity = {}, clan = {}) {
+  const firstName = String(identity.firstName ?? identity.name?.split(' ')[0] ?? 'Ren').replace(/\s+/g, ' ').trim() || 'Ren';
+  const lastName = clan?.name ?? identity.lastName ?? '';
+  return {
+    ...identity,
+    firstName,
+    lastName,
+    name: `${firstName} ${lastName}`.trim(),
   };
 }
 
@@ -494,6 +509,10 @@ function renderStart() {
         <p class="eyebrow">Underground Life Sim</p>
         <h1>Born normal. Built into a legend.</h1>
         <p class="subcopy">Choose gender, roll your life, chase a stronger clan, and survive the fight world behind ordinary society.</p>
+        <label class="name-field" for="first-name-input">
+          <span>First Name</span>
+          <input id="first-name-input" type="text" autocomplete="given-name" maxlength="24" placeholder="Enter first name" value="${escapeHtml(selectedFirstName)}" />
+        </label>
         <div class="gender-grid">
           ${['Male', 'Female', 'Nonbinary'].map((gender) => `
             <button class="gender-btn ${selectedGender === gender ? 'selected' : ''}" data-gender="${gender}">${gender}</button>
@@ -554,9 +573,9 @@ function renderEndedLife() {
     <main class="shell start-shell">
       <section class="hero-panel legacy-panel">
         <p class="eyebrow">Legacy Summary</p>
-        <h1>${state.legacySummary?.title ?? state.identity.name}</h1>
+        <h1>${escapeHtml(state.legacySummary?.title ?? state.identity.name)}</h1>
         <div class="legacy-lines">
-          ${(state.legacySummary?.lines ?? []).map((line) => `<p>${line}</p>`).join('')}
+          ${(state.legacySummary?.lines ?? []).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}
         </div>
         <div class="action-grid">
           <button class="primary" data-action="new-life">New Life</button>
@@ -573,7 +592,7 @@ function renderHeader() {
     <header class="top-card fighter-passport">
       <div class="fighter-id">
         <p class="eyebrow">${state.phase} / ${state.rank}</p>
-        <h1>${state.identity.name}</h1>
+        <h1>${escapeHtml(state.identity.name)}</h1>
         <p class="muted">Age ${ageLabel(state.identity)} / ${state.identity.gender} / ${state.background.neighborhood}</p>
       </div>
       <div class="header-actions">
@@ -1038,8 +1057,9 @@ function renderTournament() {
 
 function renderTournamentBracket(tournament, active) {
   const current = tournament.roundIndex ?? 0;
-  const championName = tournament.champion ? state.identity.name : 'Champion';
-  const playerSlot = (label = 'You') => `<div class="bracket-slot player ${tournament.eliminated ? 'lost' : 'won'}"><span>${state.identity.name}</span><em>${label}</em></div>`;
+  const playerName = escapeHtml(state.identity.name);
+  const championName = tournament.champion ? playerName : 'Champion';
+  const playerSlot = (label = 'You') => `<div class="bracket-slot player ${tournament.eliminated ? 'lost' : 'won'}"><span>${playerName}</span><em>${label}</em></div>`;
   const slot = (index) => {
     const opponent = OPPONENTS[tournament.entrants[index]];
     const status = tournament.complete && tournament.champion ? 'cleared' : index < current ? 'won' : index === current && active ? 'next' : 'waiting';
@@ -1047,7 +1067,7 @@ function renderTournamentBracket(tournament, active) {
   };
   const winner = (indexes, label) => {
     const cleared = Math.min(...indexes) < current;
-    const name = cleared ? state.identity.name : label;
+    const name = cleared ? playerName : label;
     return `<div class="bracket-slot winner ${cleared ? 'won' : 'waiting'}"><span>${name}</span></div>`;
   };
   return `
@@ -1080,7 +1100,7 @@ function renderTournamentBracket(tournament, active) {
         </div>
       </div>
     </div>
-    ${active ? `<p class="muted bracket-next">Current bracket match: ${state.identity.name} vs ${OPPONENTS[tournament.entrants[current]]?.name ?? 'TBD'}</p>` : ''}
+    ${active ? `<p class="muted bracket-next">Current bracket match: ${playerName} vs ${escapeHtml(OPPONENTS[tournament.entrants[current]]?.name ?? 'TBD')}</p>` : ''}
   `;
 }
 
@@ -1123,7 +1143,7 @@ function renderActiveFight() {
         ${renderSpecialPortrait(fight.opponentId, opponent, true)}
         <div>
           <p class="eyebrow">${fight.finished ? 'Fight Report' : `Round ${Math.ceil(fight.round / (fight.exchangesPerRound ?? 5))} / ${Math.ceil(fight.maxRounds / (fight.exchangesPerRound ?? 5))} · Exchange ${fight.round} / ${fight.maxRounds}`}</p>
-          <h2>${state.identity.name} vs ${opponent.name}</h2>
+          <h2>${escapeHtml(state.identity.name)} vs ${escapeHtml(opponent.name)}</h2>
           <p class="muted">${opponent.style} / ${opponent.threat} threat</p>
         </div>
         <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Win' : 'Loss') : 'Live'}</span>
@@ -2015,7 +2035,9 @@ function flashSocialPostCard(source) {
 function handleAction(action, source = null) {
   source?.blur?.();
   if (action === 'new-life') {
-    setState(createNewLife({ gender: selectedGender }));
+    const firstNameInput = document.querySelector('#first-name-input');
+    selectedFirstName = firstNameInput?.value ?? '';
+    setState(createNewLife({ gender: selectedGender, firstName: selectedFirstName }));
     activeTab = 'life';
     selectedFightCategory = null;
     return;
@@ -2248,8 +2270,17 @@ document.addEventListener('pointerdown', (event) => {
 }, { capture: true });
 
 document.addEventListener('change', (event) => {
+  if (event.target?.id === 'first-name-input') {
+    selectedFirstName = event.target.value;
+    return;
+  }
+
   const coachFightSelect = event.target.closest('[data-coach-fight-select]');
   if (coachFightSelect) updateCoachBookingPreview(coachFightSelect);
+});
+
+document.addEventListener('input', (event) => {
+  if (event.target?.id === 'first-name-input') selectedFirstName = event.target.value;
 });
 
 preloadMoveIcons();

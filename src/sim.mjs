@@ -2559,6 +2559,28 @@ function pick(list, rng) {
   return list[Math.floor(rng() * list.length)];
 }
 
+function cleanFirstName(firstName) {
+  const cleaned = String(firstName ?? '').replace(/\s+/g, ' ').trim();
+  return cleaned.slice(0, 24);
+}
+
+function identityFor(firstName, clan) {
+  const chosenFirstName = cleanFirstName(firstName);
+  const lastName = clan?.name ?? '';
+  return {
+    firstName: chosenFirstName,
+    lastName,
+    name: `${chosenFirstName} ${lastName}`.trim(),
+  };
+}
+
+function renameForClan(life, clan) {
+  return {
+    ...life.identity,
+    ...identityFor(life.identity?.firstName ?? life.identity?.name, clan),
+  };
+}
+
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
@@ -3066,7 +3088,7 @@ function rivalAsOpponent(life) {
   };
 }
 
-export function createNewLife({ gender = 'Male', seed = Date.now() } = {}) {
+export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now() } = {}) {
   const rng = createRng(seed);
   const clan = rollClan(rng);
   const rolledBaseStats = baseStats(rng);
@@ -3079,13 +3101,15 @@ export function createNewLife({ gender = 'Male', seed = Date.now() } = {}) {
     comfortable: 1200,
     wealthy: 3200,
   };
-  const name = `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`;
+  const fallbackFirstName = pick(FIRST_NAMES, rng);
+  pick(LAST_NAMES, rng);
+  const identity = identityFor(cleanFirstName(firstName) || fallbackFirstName, clan);
 
   return {
     version: 1,
     rngSeed: Math.floor(rng() * 999999999),
     identity: {
-      name,
+      ...identity,
       gender,
       age: 12,
       month: 0,
@@ -3178,6 +3202,7 @@ export function rerollClan(life) {
   const next = {
     ...base,
     rngSeed: Math.floor(rng() * 999999999),
+    identity: renameForClan(base, clan),
     clan,
     baseStats: trainedStats,
     stats: applyClanBonuses(trainedStats, clan),
@@ -3209,6 +3234,7 @@ export function redeemClanPassword(life, password) {
   const next = {
     ...base,
     rngSeed: Math.floor(rng() * 999999999),
+    identity: renameForClan(base, clan),
     clan,
     baseStats: trainedStats,
     stats: applyClanBonuses(trainedStats, clan),
