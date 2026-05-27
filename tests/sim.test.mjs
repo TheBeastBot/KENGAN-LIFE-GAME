@@ -5,6 +5,7 @@ import {
   CLAN_RARITIES,
   CLANS,
   BASIC_FIGHT_MOVE_IDS,
+  buySystemItem,
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
@@ -36,13 +37,19 @@ import {
   getUnlockedFightMoves,
   joinTournament,
   redeemClanPassword,
+  redeemHunterPassword,
   rerollClan,
   recover,
   recoverCoachedFighter,
   recruitCoachedFighter,
   releaseCoachedFighter,
+  runHunterDailyQuest,
   resolveEventChoice,
+  clearHunterGate,
   spendMoneyAction,
+  spendHunterStatPoint,
+  enterHunterGate,
+  extractShadow,
   startFight,
   startRivalFight,
   startTournamentFight,
@@ -56,6 +63,7 @@ import {
   train,
   simulateFight,
   useSocialAction,
+  visitHunterAssociation,
   ageUp,
 } from '../src/sim.mjs';
 
@@ -76,6 +84,227 @@ test('new life uses the chosen first name and current clan as last name', () => 
   assert.equal(life.identity.firstName, 'Kazuo');
   assert.equal(life.identity.lastName, life.clan.name);
   assert.equal(life.identity.name, `Kazuo ${life.clan.name}`);
+});
+
+test('new life starts with locked hunter world state', () => {
+  const life = createNewLife({ gender: 'Male', seed: 142 });
+
+  assert.equal(life.hunterWorld.unlocked, false);
+  assert.equal(life.hunterWorld.playerAwakened, false);
+  assert.equal(life.hunterWorld.rank, 'E');
+  assert.equal(life.hunterWorld.level, 1);
+  assert.equal(life.hunterWorld.statPoints, 0);
+  assert.deepEqual(life.hunterWorld.shadowArmy, []);
+});
+
+test('high danger adult age up can trigger the system awakening event', () => {
+  const life = {
+    ...createNewLife({ gender: 'Female', seed: 88 }),
+    identity: { ...createNewLife({ gender: 'Female', seed: 88 }).identity, age: 18, month: 0 },
+    resources: { ...createNewLife({ gender: 'Female', seed: 88 }).resources, health: 12, reputation: 220 },
+    record: { wins: 14, losses: 0, kos: 8 },
+    defeatedSpecialFights: ['ohmoTokitoo'],
+    world: {
+      ...createNewLife({ gender: 'Female', seed: 88 }).world,
+      hiddenWorld: true,
+      heat: 95,
+    },
+  };
+
+  const next = ageUp(life);
+
+  assert.equal(next.pendingEvent?.id, 'system-awakening');
+  assert.equal(next.pendingEvent.choices[0].id, 'enter-the-gate');
+});
+
+test('accepting the system awakening unlocks player hunter state', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 89 }),
+    pendingEvent: {
+      id: 'system-awakening',
+      choices: [
+        {
+          id: 'enter-the-gate',
+          label: 'Enter the Gate',
+          result: 'The System recognizes you as the Player.',
+          effects: { hunterWorld: { unlock: true, firstGate: 'eGate' }, world: { heat: 8 } },
+        },
+      ],
+    },
+  };
+
+  const next = resolveEventChoice(life, 'enter-the-gate');
+
+  assert.equal(next.hunterWorld.unlocked, true);
+  assert.equal(next.hunterWorld.playerAwakened, true);
+  assert.equal(next.hunterWorld.rank, 'E');
+  assert.equal(next.hunterWorld.level, 1);
+  assert.equal(next.hunterWorld.activeGate.id, 'eGate');
+  assert.ok(next.world.rumors[0].includes('Gates'));
+});
+
+test('running from the system awakening delays the hunter event without unlocking it', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 90 }),
+    identity: { ...createNewLife({ gender: 'Male', seed: 90 }).identity, age: 19, month: 3 },
+    pendingEvent: {
+      id: 'system-awakening',
+      choices: [
+        {
+          id: 'run-from-it',
+          label: 'Run From It',
+          result: 'You escape before the blue window can finish loading.',
+          effects: { resources: { mood: -4, reputation: -2 }, hunterWorld: { delayMonths: 6 } },
+        },
+      ],
+    },
+  };
+
+  const next = resolveEventChoice(life, 'run-from-it');
+
+  assert.equal(next.hunterWorld.unlocked, false);
+  assert.ok(next.hunterWorld.rejectedUntilMonth > 0);
+  assert.equal(next.pendingEvent, null);
+});
+
+test('SOLO21 password triggers hunter awakening only past age 18', () => {
+  const youth = createNewLife({ gender: 'Male', seed: 901 });
+  const rejected = redeemHunterPassword(youth, 'SOLO21');
+
+  assert.equal(rejected.pendingEvent, null);
+  assert.ok(rejected.log[0].text.includes('past age 18'));
+
+  const adult = {
+    ...createNewLife({ gender: 'Male', seed: 902 }),
+    identity: { ...createNewLife({ gender: 'Male', seed: 902 }).identity, age: 18, month: 0 },
+  };
+  const accepted = redeemHunterPassword(adult, ' solo21 ');
+
+  assert.equal(accepted.pendingEvent?.id, 'system-awakening');
+  assert.equal(accepted.pendingEvent.choices[0].id, 'enter-the-gate');
+  assert.equal(accepted.hunterWorld.unlocked, false);
+});
+
+test('wrong hunter password does not trigger hunter awakening', () => {
+  const adult = {
+    ...createNewLife({ gender: 'Female', seed: 903 }),
+    identity: { ...createNewLife({ gender: 'Female', seed: 903 }).identity, age: 21, month: 2 },
+  };
+
+  const next = redeemHunterPassword(adult, 'WRONG');
+
+  assert.equal(next.pendingEvent, null);
+  assert.ok(next.log[0].text.includes('Hunter password rejected'));
+});
+
+test('hunter daily quests grant xp and cost energy', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 91 }),
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 91 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+
+  const next = runHunterDailyQuest(life);
+
+  assert.ok(next.hunterWorld.xp > life.hunterWorld.xp);
+  assert.equal(next.hunterWorld.dailyQuestsCompleted, 1);
+  assert.ok(next.resources.energy < life.resources.energy);
+  assert.ok(next.stats.durability > life.stats.durability);
+});
+
+test('hunter gates reward progression and can injure tired players', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 92 }),
+    resources: { ...createNewLife({ gender: 'Female', seed: 92 }).resources, energy: 18, health: 45 },
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 92 }).hunterWorld, unlocked: true, playerAwakened: true, level: 4 },
+  };
+
+  life = enterHunterGate(life, 'dGate');
+  const next = clearHunterGate(life, 'reckless');
+
+  assert.equal(next.hunterWorld.activeGate, null);
+  assert.equal(next.hunterWorld.gatesCleared, 1);
+  assert.ok(next.hunterWorld.xp > life.hunterWorld.xp);
+  assert.ok(next.resources.money > life.resources.money);
+  assert.ok(next.resources.health < life.resources.health);
+});
+
+test('hunter xp levels grant stat points that improve main stats', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 93 }),
+    hunterWorld: {
+      ...createNewLife({ gender: 'Male', seed: 93 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      xp: 95,
+      level: 1,
+    },
+  };
+
+  life = runHunterDailyQuest(life);
+  const beforeStrength = life.stats.strength;
+  const next = spendHunterStatPoint(life, 'strength');
+
+  assert.ok(life.hunterWorld.level > 1);
+  assert.ok(life.hunterWorld.statPoints > 0);
+  assert.equal(next.hunterWorld.statPoints, life.hunterWorld.statPoints - 1);
+  assert.ok(next.stats.strength > beforeStrength);
+});
+
+test('hunter association can promote ranks after enough gates and power', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 94 }),
+    stats: Object.fromEntries(Object.entries(createNewLife({ gender: 'Male', seed: 94 }).stats).map(([stat, value]) => [stat, value + 160])),
+    hunterWorld: {
+      ...createNewLife({ gender: 'Male', seed: 94 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 8,
+      gatesCleared: 6,
+    },
+  };
+
+  const next = visitHunterAssociation(life);
+
+  assert.equal(next.hunterWorld.rank, 'D');
+  assert.ok(next.resources.reputation > life.resources.reputation);
+});
+
+test('system shop trades money for hunter recovery supplies', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 941 }),
+    resources: { ...createNewLife({ gender: 'Male', seed: 941 }).resources, money: 1000, health: 60, energy: 45 },
+    hunterWorld: {
+      ...createNewLife({ gender: 'Male', seed: 941 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+    },
+  };
+
+  const next = buySystemItem(life);
+
+  assert.equal(next.resources.money, 600);
+  assert.ok(next.resources.health > life.resources.health);
+  assert.ok(next.resources.energy > life.resources.energy);
+  assert.deepEqual(next.hunterWorld.inventory, ['recoveryPotion']);
+});
+
+test('shadow extraction requires boss gate clearance and adds a shadow ally', () => {
+  const life = {
+    ...createNewLife({ gender: 'Female', seed: 95 }),
+    hunterWorld: {
+      ...createNewLife({ gender: 'Female', seed: 95 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 12,
+      lastBossCleared: 'steel-knight',
+    },
+  };
+
+  const next = extractShadow(life);
+
+  assert.equal(next.hunterWorld.shadowArmy.length, 1);
+  assert.equal(next.hunterWorld.lastBossCleared, null);
+  assert.ok(next.stats.control > life.stats.control);
 });
 
 test('blank custom first name falls back to a generated first name', () => {
@@ -3912,6 +4141,128 @@ test('submissions from stronger positions can finish better than weaker position
 
   assert.ok(strong.activeFight.exchanges[0].playerDamage >= weak.activeFight.exchanges[0].playerDamage);
   assert.ok(strong.activeFight.exchanges[0].submissionFinishChance > weak.activeFight.exchanges[0].submissionFinishChance);
+});
+
+test('special fighters resist submissions better than normal opponents', () => {
+  const base = createNewLife({ gender: 'Male', seed: 12033 });
+  const fighter = {
+    ...base,
+    identity: { ...base.identity, age: 24 },
+    world: { ...base.world, hiddenWorld: true },
+    record: { wins: 12, losses: 0, kos: 8 },
+    resources: { ...base.resources, energy: 100, reputation: 300 },
+    stats: {
+      strength: 700,
+      speed: 700,
+      durability: 700,
+      technique: 900,
+      fightIq: 760,
+      willpower: 720,
+      reflexes: 700,
+      flexibility: 900,
+      aggression: 450,
+      control: 920,
+    },
+    techniques: { striking: 0, grappling: 900, defense: 0 },
+    unlockedSkills: [...Object.keys(FIGHT_MOVES)],
+  };
+  const normal = startFight(fighter, 'warehouseChamp');
+  normal.activeFight.grappling = {
+    phase: 'ground',
+    top: 'player',
+    position: 'backControl',
+    lastTransition: 'Takedown: test top.',
+  };
+  normal.activeFight.meters.opponentHealth = Math.round(normal.activeFight.meters.maxOpponentHealth * 0.35);
+  const special = startFight(fighter, 'gokiShibukawae');
+  special.activeFight.grappling = {
+    phase: 'ground',
+    top: 'player',
+    position: 'backControl',
+    lastTransition: 'Takedown: test top.',
+  };
+  special.activeFight.meters.opponentHealth = Math.round(special.activeFight.meters.maxOpponentHealth * 0.35);
+
+  const normalExchange = takeFightTurn(normal, 'rearNakedChoke').activeFight.exchanges[0];
+  const specialExchange = takeFightTurn(special, 'rearNakedChoke').activeFight.exchanges[0];
+
+  assert.ok(specialExchange.submissionFinishChance < normalExchange.submissionFinishChance);
+  assert.ok(specialExchange.submissionFinishChance <= 0.55);
+});
+
+test('strong grapplers can scramble out even without rolling an escape move', () => {
+  const base = createNewLife({ gender: 'Male', seed: 12034 });
+  const fighter = {
+    ...base,
+    identity: { ...base.identity, age: 22 },
+    world: { ...base.world, hiddenWorld: true },
+    record: { wins: 10, losses: 0, kos: 5 },
+    resources: { ...base.resources, energy: 100, reputation: 120 },
+    stats: {
+      strength: 360,
+      speed: 340,
+      durability: 360,
+      technique: 360,
+      fightIq: 320,
+      willpower: 340,
+      reflexes: 310,
+      flexibility: 340,
+      aggression: 240,
+      control: 360,
+    },
+    techniques: { striking: 0, grappling: 360, defense: 0 },
+    unlockedSkills: [...Object.keys(FIGHT_MOVES)],
+  };
+  const life = startFight(fighter, 'gokiShibukawae');
+  life.activeFight.grappling = {
+    phase: 'ground',
+    top: 'player',
+    position: 'mount',
+    lastTransition: 'Takedown: test top.',
+  };
+
+  const next = takeFightTurn(life, 'armTriangle');
+  const transition = next.activeFight.exchanges[0].groundTransition;
+
+  assert.match(transition, /Enemy (reversal|get up|scramble):/);
+  assert.notEqual(next.activeFight.grappling.top, 'player');
+});
+
+test('ground-and-pound needs a bigger margin to climb against strong grapplers', () => {
+  const base = createNewLife({ gender: 'Male', seed: 12035 });
+  const fighter = {
+    ...base,
+    identity: { ...base.identity, age: 22 },
+    world: { ...base.world, hiddenWorld: true },
+    record: { wins: 8, losses: 0, kos: 4 },
+    resources: { ...base.resources, energy: 100, reputation: 140 },
+    stats: {
+      strength: 900,
+      speed: 650,
+      durability: 760,
+      technique: 760,
+      fightIq: 680,
+      willpower: 680,
+      reflexes: 620,
+      flexibility: 700,
+      aggression: 850,
+      control: 780,
+    },
+    techniques: { striking: 0, grappling: 720, defense: 0 },
+    unlockedSkills: [...Object.keys(FIGHT_MOVES)],
+  };
+  const life = startFight(fighter, 'gokiShibukawae');
+  life.activeFight.grappling = {
+    phase: 'ground',
+    top: 'player',
+    position: 'halfGuard',
+    lastTransition: 'Takedown: test top.',
+  };
+
+  const next = takeFightTurn(life, 'posturedHammerfists');
+  const transition = next.activeFight.exchanges[0].groundTransition;
+
+  assert.doesNotMatch(transition, /lets you climb/);
 });
 
 test('enemy grapplers can reverse or stand up when trapped on bottom', () => {

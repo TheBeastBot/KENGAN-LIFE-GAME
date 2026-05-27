@@ -10,6 +10,7 @@ export const CLAN_RARITIES = [
 
 export const STAT_CAP = 500;
 export const SECRET_CLAN_PASSWORD = 'BUCKY21';
+export const HUNTER_EVENT_PASSWORD = 'SOLO21';
 
 export const TECHNIQUE_TRACKS = {
   striking: {
@@ -37,6 +38,35 @@ const DEFAULT_CLAN_AWAKENING = {
   control: 50,
   corruption: 0,
   lastAwakeningMonth: null,
+};
+const DEFAULT_HUNTER_WORLD = {
+  unlocked: false,
+  playerAwakened: false,
+  rank: 'E',
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  gatesCleared: 0,
+  dailyQuestsCompleted: 0,
+  systemFatigue: 0,
+  shadowArmy: [],
+  inventory: [],
+  activeGate: null,
+  lastGateMonth: null,
+};
+const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
+const HUNTER_RANK_REQUIREMENTS = {
+  D: { level: 5, gatesCleared: 3, power: 135 },
+  C: { level: 10, gatesCleared: 8, power: 205 },
+  B: { level: 18, gatesCleared: 16, power: 310 },
+  A: { level: 28, gatesCleared: 30, power: 455 },
+  S: { level: 42, gatesCleared: 50, power: 650 },
+};
+const HUNTER_GATES = {
+  eGate: { id: 'eGate', name: 'E-Rank Dungeon Gate', rank: 'E', danger: 24, xp: 48, money: 180, reputation: 3, heat: 2, boss: null },
+  dGate: { id: 'dGate', name: 'D-Rank Dungeon Gate', rank: 'D', danger: 55, xp: 90, money: 520, reputation: 6, heat: 5, boss: 'steel-knight' },
+  cGate: { id: 'cGate', name: 'C-Rank Party Raid', rank: 'C', danger: 105, xp: 165, money: 1400, reputation: 11, heat: 8, boss: 'blood-ogre' },
+  redGate: { id: 'redGate', name: 'Red Gate Emergency', rank: 'B', danger: 165, xp: 260, money: 3200, reputation: 18, heat: 15, boss: 'frost-warden' },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -66,6 +96,36 @@ function withNormalizedClanAwakening(life) {
   return {
     ...life,
     clanAwakening: normalizeClanAwakening(life),
+  };
+}
+
+function defaultHunterWorld() {
+  return clone(DEFAULT_HUNTER_WORLD);
+}
+
+function normalizeHunterWorld(hunterWorld = {}) {
+  const rank = HUNTER_RANKS.includes(hunterWorld.rank) ? hunterWorld.rank : DEFAULT_HUNTER_WORLD.rank;
+  const activeGate = hunterWorld.activeGate
+    ? { ...(HUNTER_GATES[hunterWorld.activeGate.id] ?? hunterWorld.activeGate) }
+    : null;
+  return {
+    ...defaultHunterWorld(),
+    ...hunterWorld,
+    unlocked: Boolean(hunterWorld.unlocked),
+    playerAwakened: Boolean(hunterWorld.playerAwakened),
+    rank,
+    xp: Math.max(0, Math.floor(hunterWorld.xp ?? 0)),
+    level: Math.max(1, Math.floor(hunterWorld.level ?? 1)),
+    statPoints: Math.max(0, Math.floor(hunterWorld.statPoints ?? 0)),
+    gatesCleared: Math.max(0, Math.floor(hunterWorld.gatesCleared ?? 0)),
+    dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld.dailyQuestsCompleted ?? 0)),
+    systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
+    shadowArmy: Array.isArray(hunterWorld.shadowArmy) ? hunterWorld.shadowArmy : [],
+    inventory: Array.isArray(hunterWorld.inventory) ? hunterWorld.inventory : [],
+    activeGate,
+    lastGateMonth: hunterWorld.lastGateMonth ?? null,
+    rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
+    lastBossCleared: hunterWorld.lastBossCleared ?? null,
   };
 }
 
@@ -2754,6 +2814,13 @@ function cleanFirstName(firstName) {
   return cleaned.slice(0, 24);
 }
 
+function labelFromId(value) {
+  return String(value ?? '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+}
+
 function identityFor(firstName, clan) {
   const chosenFirstName = cleanFirstName(firstName);
   const lastName = clan?.name ?? '';
@@ -2800,6 +2867,100 @@ function applyFollowerAgeUpIncome(life) {
   const followerIncome = Math.max(0, Math.floor(life.social.followers));
   if (followerIncome > 0) life.resources.money += followerIncome;
   return followerIncome;
+}
+
+function hunterPower(life) {
+  const stats = life.stats ?? {};
+  const statPower = (
+    (stats.strength ?? 0) +
+    (stats.speed ?? 0) +
+    (stats.durability ?? 0) +
+    (stats.technique ?? 0) +
+    (stats.fightIq ?? 0) +
+    (stats.willpower ?? 0) +
+    (stats.reflexes ?? 0) +
+    (stats.control ?? 0)
+  ) / 8;
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const shadowPower = hunter.shadowArmy.length * 18;
+  return Math.round(statPower + hunter.level * 8 + shadowPower);
+}
+
+function hunterXpForNextLevel(level) {
+  return 100 + Math.max(1, level) * 35;
+}
+
+function grantHunterXp(life, amount) {
+  life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  life.hunterWorld.xp += Math.max(0, Math.floor(amount));
+  while (life.hunterWorld.xp >= hunterXpForNextLevel(life.hunterWorld.level)) {
+    life.hunterWorld.xp -= hunterXpForNextLevel(life.hunterWorld.level);
+    life.hunterWorld.level += 1;
+    life.hunterWorld.statPoints += 2;
+  }
+}
+
+function unlockHunterWorld(life, { firstGate = 'eGate', protectCivilians = false } = {}) {
+  life.hunterWorld = {
+    ...normalizeHunterWorld(life.hunterWorld),
+    unlocked: true,
+    playerAwakened: true,
+    rank: 'E',
+    level: Math.max(1, life.hunterWorld?.level ?? 1),
+    activeGate: { ...(HUNTER_GATES[firstGate] ?? HUNTER_GATES.eGate) },
+    lastGateMonth: lifeMonth(life),
+  };
+  life.world.rumors = [
+    protectCivilians
+      ? 'Gates opened downtown, and witnesses say you pulled civilians out before the hunters arrived.'
+      : 'Gates are opening across the city, and a blue System window has marked you as the Player.',
+    ...(life.world.rumors ?? []),
+  ].slice(0, 8);
+}
+
+function hunterAwakeningChance(life, context = {}) {
+  if (life.identity.age < 18) return 0;
+  if (normalizeHunterWorld(life.hunterWorld).unlocked) return 0;
+  if (normalizeHunterWorld(life.hunterWorld).rejectedUntilMonth > lifeMonth(life)) return 0;
+  if (isMishimeClan(life.clan) && (normalizeClanAwakening(life)?.stage ?? 0) < 3) return 0;
+  let chance = 0.015;
+  if (life.world?.hiddenWorld) chance += 0.18;
+  if ((life.world?.heat ?? 0) >= 70) chance += 0.24;
+  if ((life.resources?.health ?? 100) <= 25) chance += 0.2;
+  if ((life.defeatedSpecialFights?.length ?? 0) > 0) chance += 0.2;
+  if ((life.record?.wins ?? 0) >= 10) chance += 0.12;
+  if (life.tournament?.wins >= 2) chance += 0.1;
+  if (context.challengeRoll <= 0.02) chance += 0.2;
+  return Math.min(0.95, chance);
+}
+
+function systemAwakeningEvent(life) {
+  return {
+    id: 'system-awakening',
+    flag: `systemAwakening-${lifeMonth(life)}`,
+    title: 'The Gate Opens',
+    body: 'A tear in the street hangs like a black doorway. Civilians freeze, hunters panic, and a blue System window asks whether you will enter.',
+    choices: [
+      {
+        id: 'enter-the-gate',
+        label: 'Enter the Gate',
+        result: 'The System recognizes you as the Player. E-rank gates, daily quests, and impossible growth are now part of your life.',
+        effects: { hunterWorld: { unlock: true, firstGate: 'eGate' }, world: { heat: 8 }, resources: { reputation: 4 } },
+      },
+      {
+        id: 'protect-civilians',
+        label: 'Protect Civilians',
+        result: 'You hold the line until the civilians escape. The System still chooses you, but the first Gate is nastier.',
+        effects: { hunterWorld: { unlock: true, firstGate: 'dGate', protectCivilians: true }, world: { heat: 12 }, resources: { reputation: 8 }, relationships: { family: 6 } },
+      },
+      {
+        id: 'run-from-it',
+        label: 'Run From It',
+        result: 'You escape before the blue window can finish loading. The Gates keep appearing in your dreams.',
+        effects: { hunterWorld: { delayMonths: 6 }, resources: { mood: -4, reputation: -2 } },
+      },
+    ],
+  };
 }
 
 function followerTierBonus(followers = 0) {
@@ -3381,6 +3542,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     clanPasswordHint: clanPasswordHint(0),
     clanRerollPity: 0,
     clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
+    hunterWorld: defaultHunterWorld(),
     world: {
       hiddenWorld: false,
       league: 'None',
@@ -3460,6 +3622,30 @@ export function redeemClanPassword(life, password) {
     },
   };
   return addLog(next, `Clan password accepted: ${clan.name} [${clan.rarity}] awakened.`, 'clan');
+}
+
+export function redeemHunterPassword(life, password) {
+  if ((password ?? '').trim().toUpperCase() !== HUNTER_EVENT_PASSWORD) {
+    return addLog(life, 'Hunter password rejected.', 'world');
+  }
+  if (life.identity.age < 18) {
+    return addLog(life, 'Hunter password locked: you can only enter SOLO21 past age 18.', 'world');
+  }
+  const hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  if (hunterWorld.unlocked) {
+    return addLog(life, 'Hunter Gates are already unlocked.', 'world');
+  }
+  if (life.pendingEvent) {
+    return addLog(life, 'Finish the current event before using the Hunter password.', 'world');
+  }
+  const next = clone(life);
+  const event = systemAwakeningEvent(next);
+  next.pendingEvent = event;
+  next.eventFlags = {
+    ...next.eventFlags,
+    [event.flag]: true,
+  };
+  return addLog(next, 'Hunter password accepted: the Gate event is opening.', 'world');
 }
 
 export function useSocialAction(life, actionId) {
@@ -5808,8 +5994,8 @@ function opponentGrapplingSkill(opponent, role = 'takedown') {
   const roleBias = {
     takedown: stats.strength * 0.3 + stats.speed * 0.2,
     submission: stats.control * 0.34 + stats.flexibility * 0.2,
-    reversal: stats.flexibility * 0.28 + stats.reflexes * 0.22,
-    getUp: stats.speed * 0.25 + stats.willpower * 0.18,
+    reversal: stats.flexibility * 0.34 + stats.reflexes * 0.26 + stats.control * 0.12,
+    getUp: stats.speed * 0.3 + stats.willpower * 0.22 + stats.fightIq * 0.08,
   }[role] ?? 0;
   return (
     stats.technique * 0.84 +
@@ -5817,8 +6003,48 @@ function opponentGrapplingSkill(opponent, role = 'takedown') {
     stats.flexibility * 0.4 +
     stats.fightIq * 0.28 +
     roleBias +
-    opponentTacticStat(stats, 'grapple') * 0.18
+    opponentTacticStat(stats, 'grapple') * 0.24
   );
+}
+
+function opponentGroundDefenseBonus(opponent, role = 'reversal') {
+  const stats = getOpponentStats(opponent);
+  const style = `${opponent.style} ${opponent.temperament} ${(opponent.strengths ?? []).join(' ')}`.toLowerCase();
+  const styleBonus = /(grappl|wrestl|judo|lock|clinch|submission|joint|throw|ground)/.test(style) ? 34 : 0;
+  const specialBonus = opponent.tier === 'Special Fight'
+    ? clamp(48 + (opponent.power ?? 0) / 18 + opponentTacticStat(stats, 'grapple') * 0.18, 70, 190)
+    : opponent.tier === 'Association Tournament'
+      ? 28
+      : 0;
+  const roleBonus = role === 'getUp'
+    ? stats.speed * 0.08 + stats.willpower * 0.05
+    : stats.flexibility * 0.07 + stats.control * 0.06;
+  return styleBonus + specialBonus + roleBonus;
+}
+
+function opponentSubmissionDefense(opponent, fight) {
+  return (
+    opponentGrapplingSkill(opponent, 'reversal') * 0.72 +
+    opponentGrapplingSkill(opponent, 'getUp') * 0.34 +
+    fight.meters.opponentStamina * 0.92 +
+    opponentGroundDefenseBonus(opponent, 'reversal') * 0.85
+  );
+}
+
+function opponentGroundEscapeRole(opponent, fight, enemyMove) {
+  const enemyRole = enemyMove.groundRole ?? '';
+  if (enemyRole === 'reversal' || enemyRole === 'getUp') return enemyRole;
+  const style = `${opponent.style} ${opponent.temperament} ${(opponent.strengths ?? []).join(' ')}`.toLowerCase();
+  const reversalBias = /(grappl|wrestl|judo|lock|clinch|submission|joint|throw|soft)/.test(style) ? 0.68 : 0.38;
+  const roll = deterministicRoll(fight.opponentId, fight.round, fight.exchanges.length, opponent.name, 'ground-escape-role');
+  return roll < reversalBias ? 'reversal' : 'getUp';
+}
+
+function opponentGroundEscapeScore({ opponent, fight, enemyMove, playerScore, enemyScore, margin, role }) {
+  const moveIsEscape = ['reversal', 'getUp'].includes(enemyMove.groundRole ?? '');
+  const roleScore = opponentGrapplingSkill(opponent, role);
+  const baseScore = moveIsEscape ? enemyScore - playerScore : (enemyScore - playerScore) * 0.45;
+  return baseScore + roleScore * 0.08 + fight.meters.opponentStamina * 0.18 + opponentGroundDefenseBonus(opponent, role) * 0.42 + Math.max(0, -margin) * 0.35;
 }
 
 function groundPositionFromMargin(margin, top = 'player') {
@@ -6025,15 +6251,20 @@ function resolveGroundExchange({ life, opponent, fight, move, enemyMove, playerS
   }
 
   if (role === 'submission') {
-    const margin = (playerGrapplingSkill(life, 'submission') * positionBonus + fight.meters.playerStamina * 1.25) - (opponentGrapplingSkill(opponent, 'reversal') + fight.meters.opponentStamina * 0.82);
+    const playerSubmission = playerGrapplingSkill(life, 'submission') * positionBonus + fight.meters.playerStamina * 1.18;
+    const defense = opponentSubmissionDefense(opponent, fight);
+    const margin = playerSubmission - defense;
     const healthPressure = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
-    const positionFinishCap = clampFloat(0.42 + positionBonus * 0.25, 0.45, 0.9);
-    result.submissionFinishChance = clampFloat(0.05 + margin / 900 + (positionBonus - 0.78) * 0.2 + healthPressure * 0.006, 0.03, positionFinishCap);
+    const specialCap = opponent.tier === 'Special Fight'
+      ? (margin >= 560 ? 0.68 : 0.55)
+      : 0.9;
+    const positionFinishCap = Math.min(specialCap, clampFloat(0.38 + positionBonus * 0.22, 0.4, 0.84));
+    result.submissionFinishChance = clampFloat(0.035 + margin / 1050 + (positionBonus - 0.78) * 0.17 + healthPressure * 0.0048, 0.025, positionFinishCap);
     const finishRoll = deterministicRoll(rollSeed, 'submission-finish');
     result.playerDamage = Math.max(1, Math.round(playerDamage * (0.82 + positionBonus * 0.42) + Math.max(0, margin) / 55 + (positionBonus - 0.75) * 10));
     result.enemyDamage = Math.max(0, Math.round(enemyDamage * 0.55));
-    const enemyEscapeRole = enemyMove.groundRole ?? '';
-    const enemyEscapeMargin = enemyScore - playerScore;
+    const enemyEscapeRole = opponentGroundEscapeRole(opponent, fight, enemyMove);
+    const enemyEscapeMargin = opponentGroundEscapeScore({ opponent, fight, enemyMove, playerScore, enemyScore, margin, role: enemyEscapeRole });
     if (finishRoll < result.submissionFinishChance) {
       result.playerDamage = Math.max(result.playerDamage, fight.meters.opponentHealth);
       result.submissionFinished = true;
@@ -6041,7 +6272,7 @@ function resolveGroundExchange({ life, opponent, fight, move, enemyMove, playerS
         ...grappling,
         lastTransition: `Submission: ${move.label} tightens from ${GRAPPLING_POSITION_LABELS[position]} and forces the finish.`,
       };
-    } else if (['reversal', 'getUp'].includes(enemyEscapeRole) && (enemyEscapeMargin > 18 || margin < -55)) {
+    } else if (enemyEscapeMargin > 18 || margin < -40) {
       if (enemyEscapeRole === 'getUp') {
         setStandingGrappling(fight, `Enemy get up: ${opponent.name}'s ${enemyMove.label} clears your top control and resets the fight.`);
       } else {
@@ -6075,13 +6306,16 @@ function resolveGroundExchange({ life, opponent, fight, move, enemyMove, playerS
 
   if (role === 'groundPound') {
     const topControl = playerGrapplingSkill(life, 'submission') * (0.76 + positionBonus * 0.34) + fight.meters.playerStamina * 1.02;
-    const bottomDefense = opponentGrapplingSkill(opponent, 'reversal') + fight.meters.opponentStamina * 0.74;
+    const bottomDefense = opponentGrapplingSkill(opponent, 'reversal') * 0.72 +
+      opponentGrapplingSkill(opponent, 'getUp') * 0.28 +
+      fight.meters.opponentStamina * 0.84 +
+      opponentGroundDefenseBonus(opponent, 'reversal') * 0.72;
     const margin = topControl - bottomDefense + swing * 0.34;
-    const enemyEscapeRole = enemyMove.groundRole ?? '';
-    const enemyEscapeMargin = enemyScore - playerScore;
+    const enemyEscapeRole = opponentGroundEscapeRole(opponent, fight, enemyMove);
+    const enemyEscapeMargin = opponentGroundEscapeScore({ opponent, fight, enemyMove, playerScore, enemyScore, margin, role: enemyEscapeRole });
     result.playerDamage = Math.max(1, Math.round(playerDamage * (0.95 + positionBonus * 0.36) + Math.max(0, margin) / 65 + 3));
     result.enemyDamage = Math.max(0, Math.round(enemyDamage * 0.64));
-    if (['reversal', 'getUp'].includes(enemyEscapeRole) && (enemyEscapeMargin > 25 || margin < -65)) {
+    if (enemyEscapeMargin > 24 || margin < -48) {
       if (enemyEscapeRole === 'getUp') {
         setStandingGrappling(fight, `Enemy get up: ${opponent.name}'s ${enemyMove.label} survives the ground-and-pound and resets the fight.`);
       } else {
@@ -6095,7 +6329,7 @@ function resolveGroundExchange({ life, opponent, fight, move, enemyMove, playerS
       }
       result.playerDamage = Math.max(0, Math.round(result.playerDamage * 0.42));
       result.enemyDamage = Math.max(1, Math.round(enemyDamage * 1.02 + 1));
-    } else if (margin > 95 && position !== 'backControl') {
+    } else if (margin > 135 && position !== 'backControl') {
       const better = betterGroundPosition(position);
       fight.grappling = {
         phase: 'ground',
@@ -7017,6 +7251,128 @@ export function spendLifeChoice(life, choice) {
   return next;
 }
 
+export function runHunterDailyQuest(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'No System daily quest is active yet.', 'world');
+  const fatigue = next.hunterWorld.systemFatigue;
+  next.resources.energy = clamp(next.resources.energy - (14 + Math.floor(fatigue / 12)));
+  next.resources.mood = clamp(next.resources.mood - 1);
+  next.stats.durability = clampLifeStat(next, 'durability', next.stats.durability + 2);
+  next.stats.willpower = clampLifeStat(next, 'willpower', next.stats.willpower + 1);
+  next.stats.control = clampLifeStat(next, 'control', next.stats.control + 1);
+  next.hunterWorld.dailyQuestsCompleted += 1;
+  next.hunterWorld.systemFatigue = clamp(fatigue + 4);
+  grantHunterXp(next, 42 + next.hunterWorld.level * 4);
+  return addLog(next, 'System Daily Quest complete: the body hurts, the numbers rise, and the blue window approves.', 'world');
+}
+
+export function enterHunterGate(life, gateId = 'eGate') {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate menu is still locked.', 'world');
+  const gate = HUNTER_GATES[gateId] ?? HUNTER_GATES.eGate;
+  next.hunterWorld.activeGate = { ...gate };
+  next.hunterWorld.lastGateMonth = lifeMonth(next);
+  return addLog(next, `You entered ${gate.name}. The System marks danger ${gate.danger}.`, 'world');
+}
+
+export function clearHunterGate(life, approach = 'balanced') {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'No Gate is available yet.', 'world');
+  const gate = next.hunterWorld.activeGate ?? HUNTER_GATES.eGate;
+  const approachRisk = approach === 'reckless' ? 1.3 : approach === 'cautious' ? 0.78 : 1;
+  const power = hunterPower(next);
+  const margin = power - gate.danger;
+  const injuryRisk = Math.max(0, gate.danger * approachRisk - power * 0.62);
+  const healthCost = Math.max(3, Math.round(gate.danger * 0.08 * approachRisk + Math.max(0, -margin) * 0.13 + (next.resources.energy < 25 ? 10 : 0)));
+  const energyCost = Math.max(10, Math.round(gate.danger * 0.22 * approachRisk));
+  next.resources.health = clamp(next.resources.health - healthCost);
+  next.resources.energy = clamp(next.resources.energy - energyCost);
+  next.resources.money += Math.round(gate.money * (approach === 'reckless' ? 1.12 : 1));
+  next.resources.reputation = clamp(next.resources.reputation + gate.reputation, 0, 999);
+  next.world.heat = clamp((next.world.heat ?? 0) + gate.heat);
+  next.stats.technique = clampLifeStat(next, 'technique', next.stats.technique + (approach === 'cautious' ? 2 : 1));
+  next.stats.reflexes = clampLifeStat(next, 'reflexes', next.stats.reflexes + 1);
+  next.hunterWorld.gatesCleared += 1;
+  next.hunterWorld.activeGate = null;
+  next.hunterWorld.lastGateMonth = lifeMonth(next);
+  if (gate.boss && margin >= -30) next.hunterWorld.lastBossCleared = gate.boss;
+  if (injuryRisk >= 25 || next.resources.health <= 20) {
+    addOrUpgradeInjury(next, withInjuryTier({ name: 'gate rupture bruising', text: 'A Gate fight left rupture bruising across your ribs.' }, injuryRisk >= 55 ? 'Severe' : 'Mild'));
+  }
+  grantHunterXp(next, Math.round(gate.xp * (approach === 'reckless' ? 1.1 : 1)));
+  return addLog(next, `Gate cleared: ${gate.name}. XP, money, reputation, and danger all followed you home.`, 'world');
+}
+
+export function spendHunterStatPoint(life, stat) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked || next.hunterWorld.statPoints <= 0 || !(stat in next.stats)) {
+    return addLog(next, 'No Hunter stat point can be spent there.', 'world');
+  }
+  next.hunterWorld.statPoints -= 1;
+  next.stats[stat] = clampLifeStat(next, stat, next.stats[stat] + 5);
+  return addLog(next, `System stat point spent: ${stat} increased.`, 'world');
+}
+
+export function visitHunterAssociation(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The Hunter Association has not contacted you yet.', 'world');
+  const currentIndex = HUNTER_RANKS.indexOf(next.hunterWorld.rank);
+  const nextRank = HUNTER_RANKS[currentIndex + 1];
+  const requirement = HUNTER_RANK_REQUIREMENTS[nextRank];
+  if (requirement &&
+    next.hunterWorld.level >= requirement.level &&
+    next.hunterWorld.gatesCleared >= requirement.gatesCleared &&
+    hunterPower(next) >= requirement.power) {
+    next.hunterWorld.rank = nextRank;
+    next.resources.reputation = clamp(next.resources.reputation + 10 + currentIndex * 4, 0, 999);
+    next.resources.money += 750 * (currentIndex + 1);
+    return addLog(next, `Hunter Association rank reassessment: promoted to ${nextRank}-rank.`, 'world');
+  }
+  next.resources.mood = clamp(next.resources.mood + 2);
+  return addLog(next, 'Hunter Association review complete. They say your file is growing, but not enough for promotion yet.', 'world');
+}
+
+export function buySystemItem(life, itemId = 'recoveryPotion') {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The System Shop is still locked.', 'world');
+  const cost = itemId === 'fatigueCleanse' ? 650 : 400;
+  if (next.resources.money < cost) return addLog(next, 'Not enough money for the System Shop.', 'world');
+  next.resources.money -= cost;
+  next.hunterWorld.inventory = [...next.hunterWorld.inventory, itemId];
+  if (itemId === 'fatigueCleanse') {
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue - 22);
+    next.resources.mood = clamp(next.resources.mood + 4);
+  } else {
+    next.resources.health = clamp(next.resources.health + 18);
+    next.resources.energy = clamp(next.resources.energy + 12);
+  }
+  return addLog(next, `System Shop purchase: ${labelFromId(itemId)}.`, 'world');
+}
+
+export function extractShadow(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked || !next.hunterWorld.lastBossCleared || next.hunterWorld.level < 10) {
+    return addLog(next, 'Shadow Extraction failed. The System needs a stronger boss echo.', 'world');
+  }
+  const shadow = {
+    id: `${next.hunterWorld.lastBossCleared}-${next.hunterWorld.shadowArmy.length + 1}`,
+    name: `${labelFromId(next.hunterWorld.lastBossCleared)} Shadow`,
+    power: 18 + next.hunterWorld.level * 2,
+  };
+  next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
+  next.hunterWorld.lastBossCleared = null;
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 10);
+  next.stats.control = clampLifeStat(next, 'control', next.stats.control + 3);
+  return addLog(next, `Shadow Extraction succeeded: ${shadow.name} joins your army.`, 'world');
+}
+
 function queueTriggeredEvents(life, trigger, context = {}) {
   if (life.pendingEvent) {
     if (trigger === 'train' && life.pendingEvent.id === 'training-injury') {
@@ -7046,6 +7402,7 @@ function queueTriggeredEvents(life, trigger, context = {}) {
 
 function findTriggeredEvent(life, trigger, context) {
   const flags = life.eventFlags ?? {};
+  const systemAwakeningFlag = `systemAwakening-${lifeMonth(life)}`;
   const events = [
     {
       id: 'debt-collector-notice',
@@ -7149,7 +7506,7 @@ function findTriggeredEvent(life, trigger, context) {
       flag: 'coachNotice',
       title: 'The Coach Notices',
       body: 'A tired coach watches you move after practice. He says your stance is rough, but your timing is not normal.',
-      trigger: trigger === 'ageUp' && life.identity.age >= 14 && !flags.coachNotice,
+      trigger: trigger === 'ageUp' && life.identity.age >= 14 && life.identity.age < 18 && !flags.coachNotice,
       choices: [
         {
           id: 'accept-drills',
@@ -7164,6 +7521,13 @@ function findTriggeredEvent(life, trigger, context) {
           effects: { stats: { willpower: 2 }, resources: { mood: 2 } },
         },
       ],
+    },
+    {
+      ...systemAwakeningEvent(life),
+      trigger: trigger === 'ageUp' &&
+        life.identity.age >= 18 &&
+        !flags[systemAwakeningFlag] &&
+        deterministicRoll(life.rngSeed, life.identity.age, life.identity.month ?? 0, 'system-awakening') <= hunterAwakeningChance(life, context),
     },
     {
       id: 'overtraining-warning',
@@ -7572,6 +7936,15 @@ function applyEventEffects(life, effects = {}) {
       corruption: clamp(current.corruption + (effects.clanAwakening.corruption ?? 0)),
       lastAwakeningMonth: effects.clanAwakening.markMonth ? lifeMonth(life) : current.lastAwakeningMonth,
     };
+  }
+  if (effects.hunterWorld) {
+    life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+    if (effects.hunterWorld.unlock) {
+      unlockHunterWorld(life, effects.hunterWorld);
+    }
+    if (effects.hunterWorld.delayMonths) {
+      life.hunterWorld.rejectedUntilMonth = lifeMonth(life) + effects.hunterWorld.delayMonths;
+    }
   }
   if (effects.injury) {
     addOrUpgradeInjury(life, withInjuryTier({ name: effects.injury, text: `${effects.injury} needs recovery before harder fights.` }, 'Mild'));

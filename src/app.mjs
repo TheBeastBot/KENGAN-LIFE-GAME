@@ -15,6 +15,7 @@ import {
   acceptClan,
   ageUp,
   createNewLife,
+  buySystemItem,
   endLife,
   getAvailableFights,
   getAdaptedOpponent,
@@ -33,6 +34,7 @@ import {
   joinTournament,
   recover,
   redeemClanPassword,
+  redeemHunterPassword,
   rerollClan,
   resolveEventChoice,
   spendLifeChoice,
@@ -49,13 +51,21 @@ import {
   recoverCoachedFighter,
   recruitCoachedFighter,
   releaseCoachedFighter,
+  runHunterDailyQuest,
   scheduleCoachedFight,
+  clearHunterGate,
   toggleAutoRecovery,
   toggleAutoTraining,
   useSocialAction,
+  spendHunterStatPoint,
+  enterHunterGate,
+  extractShadow,
+  visitHunterAssociation,
 } from './sim.mjs';
+import { createDropdownStateController } from './ui-state.mjs';
 
 const STORAGE_KEY = 'underground-life-sim-save-v1';
+const DROPDOWN_STORAGE_KEY = 'underground-life-sim-dropdowns-v1';
 const LOG_LIMIT = 8;
 const AUTO_ROUTINE_INTERVAL_MS = 1000;
 const DEVIL_GENE_CLAN_NAME = 'Mishime';
@@ -64,6 +74,21 @@ const DEFAULT_CLAN_AWAKENING = {
   control: 50,
   corruption: 0,
   lastAwakeningMonth: null,
+};
+const DEFAULT_HUNTER_WORLD = {
+  unlocked: false,
+  playerAwakened: false,
+  rank: 'E',
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  gatesCleared: 0,
+  dailyQuestsCompleted: 0,
+  systemFatigue: 0,
+  shadowArmy: [],
+  inventory: [],
+  activeGate: null,
+  lastGateMonth: null,
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -161,7 +186,6 @@ let state = loadGame();
 let selectedGender = 'Male';
 let selectedFirstName = '';
 let activeTab = 'life';
-let currentClanExpanded = false;
 let selectedFightCategory = null;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
@@ -173,6 +197,23 @@ let moveIconBurstTimer = null;
 const MOVE_ICON_BURST_DURATION_MS = 5000;
 
 const app = document.querySelector('#app');
+const dropdownState = createDropdownStateController({
+  storage: localStorage,
+  storageKey: DROPDOWN_STORAGE_KEY,
+  defaults: {
+    'train-core': true,
+    'recover-core': true,
+    'money-fight-prep': true,
+    'fight-normal': true,
+    'body-experience': true,
+    'body-techniques': true,
+    'coach-core': true,
+    'social-posts': true,
+    'hunter-core': true,
+    'hunter-actions': true,
+    'world-rumors': true,
+  },
+});
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -209,6 +250,7 @@ function normalizeSave(save) {
     },
     clan: migratedClan,
     clanAwakening: normalizeClanAwakening(save.clanAwakening, migratedClan),
+    hunterWorld: normalizeHunterWorld(save.hunterWorld),
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
@@ -256,6 +298,28 @@ function normalizeClanAwakening(awakening, clan) {
     control: Math.max(0, Math.min(100, awakening?.control ?? DEFAULT_CLAN_AWAKENING.control)),
     corruption: Math.max(0, Math.min(100, awakening?.corruption ?? DEFAULT_CLAN_AWAKENING.corruption)),
     lastAwakeningMonth: awakening?.lastAwakeningMonth ?? DEFAULT_CLAN_AWAKENING.lastAwakeningMonth,
+  };
+}
+
+function normalizeHunterWorld(hunterWorld = {}) {
+  return {
+    ...DEFAULT_HUNTER_WORLD,
+    ...hunterWorld,
+    unlocked: Boolean(hunterWorld?.unlocked),
+    playerAwakened: Boolean(hunterWorld?.playerAwakened),
+    rank: hunterWorld?.rank ?? DEFAULT_HUNTER_WORLD.rank,
+    xp: Math.max(0, Math.floor(hunterWorld?.xp ?? 0)),
+    level: Math.max(1, Math.floor(hunterWorld?.level ?? 1)),
+    statPoints: Math.max(0, Math.floor(hunterWorld?.statPoints ?? 0)),
+    gatesCleared: Math.max(0, Math.floor(hunterWorld?.gatesCleared ?? 0)),
+    dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld?.dailyQuestsCompleted ?? 0)),
+    systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
+    shadowArmy: Array.isArray(hunterWorld?.shadowArmy) ? hunterWorld.shadowArmy : [],
+    inventory: Array.isArray(hunterWorld?.inventory) ? hunterWorld.inventory : [],
+    activeGate: hunterWorld?.activeGate ?? null,
+    lastGateMonth: hunterWorld?.lastGateMonth ?? null,
+    rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
+    lastBossCleared: hunterWorld?.lastBossCleared ?? null,
   };
 }
 
@@ -600,6 +664,24 @@ function button(label, action, className = '') {
   return `<button class="${className}" data-action="${action}">${label}</button>`;
 }
 
+function renderCollapsibleSection({ id, title, subtitle = '', count = '', body = '', className = '' }) {
+  const open = dropdownState.isOpen(id);
+  return `
+    <details class="collapsible-section ${className}" data-dropdown-id="${id}" ${open ? 'open' : ''}>
+      <summary class="collapsible-summary">
+        <span>
+          <strong>${title}</strong>
+          ${subtitle ? `<em>${subtitle}</em>` : ''}
+        </span>
+        ${count !== '' ? `<b>${count}</b>` : ''}
+      </summary>
+      <div class="collapsible-body">
+        ${body}
+      </div>
+    </details>
+  `;
+}
+
 function renderStart() {
   app.innerHTML = `
     <main class="shell start-shell">
@@ -727,6 +809,7 @@ function renderTabs() {
     ['rival', 'Rival'],
     ['coach', 'Coach'],
     ['social', 'Social'],
+    ...(state.hunterWorld?.unlocked ? [['hunter', 'Hunter']] : []),
     ['world', 'World'],
   ];
   return `
@@ -746,6 +829,7 @@ function renderActiveTab() {
   if (activeTab === 'coach') return renderCoach();
   if (activeTab === 'body') return renderBody();
   if (activeTab === 'social') return renderSocial();
+  if (activeTab === 'hunter') return renderHunter();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -753,19 +837,14 @@ function renderActiveTab() {
 function renderLife() {
   return `
     <section class="stack">
-      <button class="clan-card clan-card-button ${currentClanExpanded ? 'expanded' : ''}" data-action="toggle-current-clan" aria-expanded="${currentClanExpanded}">
-        <div>
-          <p class="eyebrow">Current Clan</p>
-          <h2>${state.clan.name}</h2>
-          <p>${state.clan.description}</p>
-        </div>
-        <div class="reroll-box">
-          <strong>${state.resources.clanRerolls}</strong>
-          <span>Clan Rerolls</span>
-        </div>
-        <span class="clan-card-toggle">${currentClanExpanded ? 'Hide Benefits' : 'Show Benefits'}</span>
-      </button>
-      ${currentClanExpanded ? renderCurrentClanDetails() : ''}
+      ${renderCollapsibleSection({
+        id: 'life-current-clan',
+        title: state.clan.name,
+        subtitle: state.clan.description,
+        count: `${state.resources.clanRerolls} Rerolls`,
+        className: 'current-clan-dropdown',
+        body: renderCurrentClanDetails(),
+      })}
       <div class="action-grid">
         ${button('Age Up', 'age-up', 'primary')}
         ${button('Reroll Clan', 'reroll-clan')}
@@ -788,8 +867,30 @@ function renderLife() {
           <button class="primary" data-action="redeem-clan-password">Redeem</button>
         </div>
       </article>
-      ${renderMentorSummary()}
-      ${renderLog()}
+      <article class="clan-password-card hunter-password-card">
+        <div>
+          <p class="eyebrow">Hunter Password</p>
+          <h2>Gate Override</h2>
+          <p class="muted">Enter SOLO21 after age 18 to force the Hunter awakening event.</p>
+        </div>
+        <div class="password-row">
+          <input id="hunter-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
+          <button class="primary" data-action="redeem-hunter-password">Redeem</button>
+        </div>
+      </article>
+      ${renderCollapsibleSection({
+        id: 'life-mentor',
+        title: 'Mentor',
+        subtitle: state.mentor ? `${state.mentor.name} / ${state.mentor.title}` : 'No mentor known',
+        body: renderMentorSummary(),
+      })}
+      ${renderCollapsibleSection({
+        id: 'life-feed',
+        title: 'Life Feed',
+        subtitle: 'Recent life, event, fight, and world updates.',
+        count: state.log.length,
+        body: renderLog(),
+      })}
       <button class="danger" data-action="end-life">End Life</button>
       <button class="danger" data-action="reset">Reset Life</button>
     </section>
@@ -828,20 +929,20 @@ function renderCurrentClanAwakeningDetails() {
 function renderTrain() {
   return `
     <section class="stack">
-      <div class="section-heading">
-        <h2>Training</h2>
-        <p>Build power, technique, and risk. Auto runs every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds when your mentor can supervise it.</p>
-      </div>
-      <section class="card-list">
-        ${Object.entries(TRAINING_ACTIONS).map(([id, action]) => renderTrainingCard(id, action)).join('')}
-      </section>
-      <div class="section-heading">
-        <h2>Special Trainings</h2>
-        <p>Monthly ceiling work. These do not raise stats directly; they raise the cap those stats can reach.</p>
-      </div>
-      <section class="card-list">
-        ${Object.entries(SPECIAL_TRAINING_ACTIONS).map(([id, action]) => renderSpecialTrainingCard(id, action)).join('')}
-      </section>
+      ${renderCollapsibleSection({
+        id: 'train-core',
+        title: 'Training',
+        subtitle: `Build power, technique, and risk. Auto runs every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds.`,
+        count: Object.keys(TRAINING_ACTIONS).length,
+        body: `<section class="card-list">${Object.entries(TRAINING_ACTIONS).map(([id, action]) => renderTrainingCard(id, action)).join('')}</section>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'train-special',
+        title: 'Special Trainings',
+        subtitle: 'Monthly ceiling work that raises stat caps instead of direct stats.',
+        count: Object.keys(SPECIAL_TRAINING_ACTIONS).length,
+        body: `<section class="card-list">${Object.entries(SPECIAL_TRAINING_ACTIONS).map(([id, action]) => renderSpecialTrainingCard(id, action)).join('')}</section>`,
+      })}
     </section>
   `;
 }
@@ -890,13 +991,13 @@ function renderSpecialTrainingCard(id, action) {
 function renderRecover() {
   return `
     <section class="stack">
-      <div class="section-heading">
-        <h2>Recovery</h2>
-        <p>Recover health, energy, mood, and injuries before your body turns progress into debt. Auto checks every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds.</p>
-      </div>
-      <section class="card-list">
-        ${Object.entries(RECOVERY_ACTIONS).map(([id, action]) => renderRecoveryCard(id, action)).join('')}
-      </section>
+      ${renderCollapsibleSection({
+        id: 'recover-core',
+        title: 'Recovery',
+        subtitle: `Recover health, energy, mood, and injuries. Auto checks every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds.`,
+        count: Object.keys(RECOVERY_ACTIONS).length,
+        body: `<section class="card-list">${Object.entries(RECOVERY_ACTIONS).map(([id, action]) => renderRecoveryCard(id, action)).join('')}</section>`,
+      })}
     </section>
   `;
 }
@@ -931,20 +1032,26 @@ function renderMoney() {
         <span>${Object.keys(state.nextFightPrep ?? {}).length} fight prep / ${(state.ownedAssets ?? []).length} owned assets</span>
       </div>
       ${groups.map((group) => `
-        <section class="fight-tier">
-          <div class="section-heading">
-            <h2>${group}</h2>
-            <p>${moneyGroupDescription(group)}</p>
-          </div>
-          <div class="card-list">
+        ${renderCollapsibleSection({
+          id: `money-${group.toLowerCase().replaceAll(' ', '-')}`,
+          title: group,
+          subtitle: moneyGroupDescription(group),
+          count: Object.values(MONEY_ACTIONS).filter((action) => action.group === group).length,
+          className: 'fight-tier',
+          body: `<div class="card-list">
             ${Object.entries(MONEY_ACTIONS)
               .filter(([, action]) => action.group === group)
               .map(([id, action]) => renderMoneyAction(id, action))
               .join('')}
-          </div>
-        </section>
+          </div>`,
+        })}
       `).join('')}
-      ${renderLog('money')}
+      ${renderCollapsibleSection({
+        id: 'money-log',
+        title: 'Money Log',
+        subtitle: 'Recent spending and money events.',
+        body: renderLog('money'),
+      })}
     </section>
   `;
 }
@@ -1002,31 +1109,35 @@ function renderFight() {
         <span>${state.record.kos} finishes / ${getAvailableFights(state).length} normal fights / ${(state.unlockedSkills ?? []).length} skills</span>
       </div>
       ${renderFightRosterGroup({
+        id: 'fight-normal',
         title: 'Normal Fighters',
         subtitle: 'Local names, underground grinders, corporate contracts, and locked targets you can build toward.',
         count: Object.values(available).reduce((sum, fights) => sum + fights.length, 0),
-        open: true,
         body: renderNormalFightRoster(available, locked),
       })}
       ${renderFightRosterGroup({
+        id: 'fight-kengan',
         title: 'Kengan Fighters',
         subtitle: 'Association-style monsters with huge rewards, skills, adaptation, and rematch growth.',
         count: kenganFights.length,
         body: renderSpecialFightRoster(kenganFights),
       })}
       ${renderFightRosterGroup({
+        id: 'fight-baki',
         title: 'Baki Fighters',
         subtitle: 'Arena nightmare bosses built around freak bodies, old-school killers, and monster pride.',
         count: bakiFights.length,
         body: renderSpecialFightRoster(bakiFights),
       })}
       ${renderFightRosterGroup({
+        id: 'fight-tekken',
         title: 'Tekken Fighters',
         subtitle: 'Blood-feud arcade bosses with Mishime pressure, cursed bloodlines, throws, and strange weapons.',
         count: tekkenFights.length,
         body: renderSpecialFightRoster(tekkenFights),
       })}
       ${otherSpecialFights.length ? renderFightRosterGroup({
+        id: 'fight-other-special',
         title: 'Other Special Fighters',
         subtitle: 'Special bosses that do not belong to the main two files yet.',
         count: otherSpecialFights.length,
@@ -1036,21 +1147,15 @@ function renderFight() {
   `;
 }
 
-function renderFightRosterGroup({ title, subtitle, count, body, open = false }) {
-  return `
-    <details class="fight-roster-group" ${open ? 'open' : ''}>
-      <summary class="fight-roster-summary">
-        <span>
-          <strong>${title}</strong>
-          <em>${subtitle}</em>
-        </span>
-        <b>${count}</b>
-      </summary>
-      <div class="fight-roster-body">
-        ${body}
-      </div>
-    </details>
-  `;
+function renderFightRosterGroup({ id, title, subtitle, count, body }) {
+  return renderCollapsibleSection({
+    id,
+    title,
+    subtitle,
+    count,
+    className: 'fight-roster-group',
+    body,
+  });
 }
 
 function renderNormalFightRoster(available, locked) {
@@ -1066,13 +1171,13 @@ function renderNormalFightRoster(available, locked) {
     </section>
   `).join('');
 
-  const lockedMarkup = locked.length ? `
-    <section class="fight-tier">
-      <div class="section-heading compact-heading">
-        <h2>Locked Normal Fights</h2>
-        <p>Future smoke. These show what to chase next.</p>
-      </div>
-      <div class="locked-grid">
+  const lockedMarkup = locked.length ? renderCollapsibleSection({
+    id: 'fight-locked-normal',
+    title: 'Locked Normal Fights',
+    subtitle: 'Future smoke. These show what to chase next.',
+    count: locked.length,
+    className: 'fight-tier',
+    body: `<div class="locked-grid">
         ${locked.slice(0, 8).map(({ opponent, reasons }) => `
           <article class="locked-card">
             <div>
@@ -1083,9 +1188,8 @@ function renderNormalFightRoster(available, locked) {
             </div>
           </article>
         `).join('')}
-      </div>
-    </section>
-  ` : '';
+      </div>`,
+  }) : '';
 
   return availableMarkup || lockedMarkup
     ? `${availableMarkup}${lockedMarkup}`
@@ -1474,14 +1578,18 @@ function renderBody() {
   const experienceBoost = getExperienceBoost(state);
   return `
     <section class="stack">
-      <article class="option-card">
-        <div>
-          <h2>Experience Boost</h2>
-          <p>+${experienceBoost} max cap to every stat from ${totalFights}/100 fight mileage.</p>
-          <p class="muted">Wins build the boost faster. Losses still teach your body, but not as much.</p>
-        </div>
-      </article>
-      ${renderTechniques()}
+      ${renderCollapsibleSection({
+        id: 'body-experience',
+        title: 'Experience Boost',
+        subtitle: `${totalFights}/100 fight mileage / +${experienceBoost} max cap`,
+        body: `<article class="option-card"><div><p>+${experienceBoost} max cap to every stat from ${totalFights}/100 fight mileage.</p><p class="muted">Wins build the boost faster. Losses still teach your body, but not as much.</p></div></article>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'body-techniques',
+        title: 'Techniques',
+        subtitle: `Current archetype: ${getPlayerArchetype(state)}`,
+        body: renderTechniques(),
+      })}
       <div class="stats-grid">
         ${Object.entries(state.stats).map(([stat, value]) => `
           <div class="stat-row ${feedbackClass(`stat-${stat}`)}">
@@ -1491,31 +1599,26 @@ function renderBody() {
           </div>
         `).join('')}
       </div>
-      <article class="option-card injury-card">
-        <div>
-          <h2>Injury List</h2>
-          <p>${state.injuries.length ? state.injuries.map(formatInjury).join(', ') : 'No lasting injuries yet.'}</p>
-          <p class="muted">Training injuries can now trigger popup choices. Recovery and doctors can remove them.</p>
-        </div>
-      </article>
-      <article class="option-card">
-        <div>
-          <h2>${state.clan.name}</h2>
-          <p>Bonuses: ${formatClanBonuses(state.clan)}</p>
-          <p>Passive: ${formatClanPassive(state.clan)}</p>
-          <p>Special: ${formatClanSpecial(state.clan)}</p>
-          <p class="muted">Traits: ${state.clan.traits.join(' / ')}</p>
-          <p>Options: ${state.clan.options.join(', ')}</p>
-          <p>Drawbacks: ${state.clan.drawbacks.join(', ')}</p>
-        </div>
-      </article>
-      <section class="clan-reference">
-        <div class="section-heading">
-          <h2>Clan Benefits</h2>
-          <p>Use this before spending rerolls. Higher rarity clans are stronger.</p>
-        </div>
-        ${CLANS.map((clan) => renderClanReference(clan)).join('')}
-      </section>
+      ${renderCollapsibleSection({
+        id: 'body-injuries',
+        title: 'Injury List',
+        subtitle: state.injuries.length ? `${state.injuries.length} lasting injuries` : 'No lasting injuries yet.',
+        body: `<article class="option-card injury-card"><div><p>${state.injuries.length ? state.injuries.map(formatInjury).join(', ') : 'No lasting injuries yet.'}</p><p class="muted">Training injuries can now trigger popup choices. Recovery and doctors can remove them.</p></div></article>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'body-current-clan',
+        title: `${state.clan.name} Details`,
+        subtitle: `${state.clan.rarity} clan passives, special, traits, and drawbacks.`,
+        body: `<article class="option-card"><div><p>Bonuses: ${formatClanBonuses(state.clan)}</p><p>Passive: ${formatClanPassive(state.clan)}</p><p>Special: ${formatClanSpecial(state.clan)}</p><p class="muted">Traits: ${state.clan.traits.join(' / ')}</p><p>Options: ${state.clan.options.join(', ')}</p><p>Drawbacks: ${state.clan.drawbacks.join(', ')}</p></div></article>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'body-clan-benefits',
+        title: 'Clan Benefits',
+        subtitle: 'Use this before spending rerolls. Higher rarity clans are stronger.',
+        count: CLANS.length,
+        className: 'clan-reference',
+        body: CLANS.map((clan) => renderClanReference(clan)).join(''),
+      })}
     </section>
   `;
 }
@@ -1634,10 +1737,13 @@ function renderRival() {
           </div>
         `).join('')}
       </div>
-      <section class="log rival-feed">
-        <h2>Rival Feed</h2>
-        ${(rival.feed ?? []).slice(0, 12).map((item) => `<p><span>${item.type}</span>${item.text}</p>`).join('')}
-      </section>
+      ${renderCollapsibleSection({
+        id: 'rival-feed',
+        title: 'Rival Feed',
+        subtitle: 'Recent rival training, fights, and adaptations.',
+        count: (rival.feed ?? []).length,
+        body: `<section class="log rival-feed">${(rival.feed ?? []).slice(0, 12).map((item) => `<p><span>${item.type}</span>${item.text}</p>`).join('')}</section>`,
+      })}
     </section>
   `;
 }
@@ -1668,7 +1774,11 @@ function renderCoach() {
   const recruitCost = 2500 + (coach.fighters?.length ?? 0) * 1500;
   return `
     <section class="stack" data-coach-panel>
-      <article class="option-card full coach-hero-card">
+      ${renderCollapsibleSection({
+        id: 'coach-core',
+        title: 'Coach Stable',
+        subtitle: `${coach.fighters.length}/${slots} fighters / next recruit $${recruitCost}`,
+        body: `<article class="option-card full coach-hero-card">
         ${renderCoachImage('stable', 'Stable Office')}
         <div>
           <p class="eyebrow">Coach Stable</p>
@@ -1688,11 +1798,15 @@ function renderCoach() {
             </div>
           </article>
         `}
-      </section>
-      <section class="log rival-feed">
-        <h2>Stable Feed</h2>
-        ${(coach.feed ?? []).slice(0, 12).map((item) => `<p><span>${item.type}</span>${item.text}</p>`).join('') || '<p class="muted">No stable news yet.</p>'}
-      </section>
+      </section>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'coach-feed',
+        title: 'Stable Feed',
+        subtitle: 'Recent stable sessions, fights, and recovery notes.',
+        count: (coach.feed ?? []).length,
+        body: `<section class="log rival-feed">${(coach.feed ?? []).slice(0, 12).map((item) => `<p><span>${item.type}</span>${item.text}</p>`).join('') || '<p class="muted">No stable news yet.</p>'}</section>`,
+      })}
     </section>
   `;
 }
@@ -1830,9 +1944,13 @@ function renderSocial() {
           </div>
         </article>
       ` : ''}
-      <section class="money-group">
-        <h2>Social Media</h2>
-        <div class="money-grid">
+      ${renderCollapsibleSection({
+        id: 'social-posts',
+        title: 'Social Media',
+        subtitle: 'Post for followers, money, reputation, heat, and sponsor pressure.',
+        count: Object.keys(SOCIAL_ACTIONS).length,
+        className: 'money-group',
+        body: `<div class="money-grid">
           ${Object.entries(SOCIAL_ACTIONS).map(([id, action]) => `
             <article class="option-card social-post-card" data-social-card="${id}">
               ${renderSocialImage(id, action)}
@@ -1845,11 +1963,15 @@ function renderSocial() {
               <button data-action="social-${id}">Post</button>
             </article>
           `).join('')}
-        </div>
-      </section>
-      <section class="money-group">
-        <h2>Trash Talk Targets</h2>
-        <div class="money-grid">
+        </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'social-targets',
+        title: 'Trash Talk Targets',
+        subtitle: 'Call out fighters to turn hype into higher stakes.',
+        count: targets.length,
+        className: 'money-group',
+        body: `<div class="money-grid">
           ${targets.map(({ id, opponent }) => `
             <article class="option-card fight-card ${opponent.tier === 'Special Fight' ? 'special-fight-card' : ''}">
               <div>
@@ -1865,15 +1987,20 @@ function renderSocial() {
               </div>
             </article>
           `).join('')}
-        </div>
-      </section>
-      ${renderMentorSummary(true)}
-      <article class="option-card full">
-        <div>
-          <h2>Social Pressure</h2>
-          <p>Family keeps you human. Mentors boost focused training. Rivals sharpen you. Sponsors open doors and attach strings. Followers turn your fights into money, hype, heat, and consequences.</p>
-        </div>
-      </article>
+        </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'social-mentor',
+        title: 'Mentor Search',
+        subtitle: state.mentor ? `${state.mentor.name} / ${state.mentor.title}` : 'No mentor known',
+        body: renderMentorSummary(true),
+      })}
+      ${renderCollapsibleSection({
+        id: 'social-pressure',
+        title: 'Social Pressure',
+        subtitle: 'Relationships, followers, hype, and consequences.',
+        body: '<article class="option-card full"><div><p>Family keeps you human. Mentors boost focused training. Rivals sharpen you. Sponsors open doors and attach strings. Followers turn your fights into money, hype, heat, and consequences.</p></div></article>',
+      })}
     </section>
   `;
 }
@@ -1978,6 +2105,177 @@ function formatMentorAutoList(ids, catalog) {
   return ids.map((id) => catalog[id]?.name ?? labelize(id)).join(', ');
 }
 
+function hunterPowerUi() {
+  const stats = state.stats ?? {};
+  const statPower = (
+    (stats.strength ?? 0) +
+    (stats.speed ?? 0) +
+    (stats.durability ?? 0) +
+    (stats.technique ?? 0) +
+    (stats.fightIq ?? 0) +
+    (stats.willpower ?? 0) +
+    (stats.reflexes ?? 0) +
+    (stats.control ?? 0)
+  ) / 8;
+  const shadows = state.hunterWorld?.shadowArmy?.length ?? 0;
+  return Math.round(statPower + (state.hunterWorld?.level ?? 1) * 8 + shadows * 18);
+}
+
+function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '' }) {
+  return `
+    <article class="hunter-activity option-card ${locked ? 'locked' : ''} ${tone}">
+      <div class="hunter-icon" aria-hidden="true">${icon}</div>
+      <div>
+        <h2>${title}</h2>
+        <p>${subtitle}</p>
+        <span class="activity-meta">${meta}</span>
+      </div>
+      ${locked ? '<span class="lock-pill">Locked</span>' : button('Open', action, 'activity-open')}
+    </article>
+  `;
+}
+
+function renderHunterStatButtons() {
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  if (!hunter.statPoints) return '<p class="muted">No System stat points available.</p>';
+  return `
+    <div class="compact-action-grid">
+      ${['strength', 'speed', 'durability', 'technique', 'fightIq', 'willpower', 'reflexes', 'control'].map((stat) => button(labelize(stat), `hunter-stat-${stat}`)).join('')}
+    </div>
+  `;
+}
+
+function renderHunter() {
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  if (!hunter.unlocked) {
+    return `
+      <section class="stack">
+        <article class="option-card">
+          <div>
+            <p class="eyebrow">Hunter Gates</p>
+            <h2>Locked</h2>
+            <p>Gates have not opened in this life yet.</p>
+          </div>
+        </article>
+      </section>
+    `;
+  }
+  const activeGate = hunter.activeGate;
+  const canExtract = hunter.lastBossCleared && hunter.level >= 10;
+  return `
+    <section class="stack hunter-panel">
+      ${renderCollapsibleSection({
+        id: 'hunter-core',
+        title: 'System Player',
+        subtitle: activeGate ? `${activeGate.name} active` : 'No active Gate',
+        body: `<div class="hunter-header option-card">
+        <div>
+          <p class="eyebrow">System Player</p>
+          <h2>${state.identity.name}</h2>
+          <p>${activeGate ? `${activeGate.name} is active.` : 'No active Gate. Choose an activity below.'}</p>
+        </div>
+        <div class="world-grid">
+          ${metric('Rank', hunter.rank)}
+          ${metric('Level', hunter.level)}
+          ${metric('XP', hunter.xp)}
+          ${metric('Stat Pts', hunter.statPoints)}
+          ${metric('Hunter Power', hunterPowerUi())}
+          ${metric('Fatigue', hunter.systemFatigue)}
+        </div>
+      </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-actions',
+        title: 'Hunter Activities',
+        subtitle: 'Daily quests, Gates, association work, shop, and shadow growth.',
+        count: 8,
+        body: `<div class="activity-list">
+        ${renderHunterActivity({
+          icon: 'DQ',
+          title: 'Daily Quest',
+          subtitle: 'System conditioning that trades energy for XP, willpower, control, and durability.',
+          meta: `Completed ${hunter.dailyQuestsCompleted}`,
+          action: 'hunter-daily',
+          tone: 'daily',
+        })}
+        ${renderHunterActivity({
+          icon: 'GT',
+          title: activeGate ? 'Clear Active Gate' : 'Dungeon Gate',
+          subtitle: activeGate ? 'Resolve the active dungeon with a balanced approach.' : 'Open a low-rank dungeon and prepare to clear it.',
+          meta: activeGate ? `Danger ${activeGate.danger}` : 'E-rank gate',
+          action: activeGate ? 'hunter-clear-balanced' : 'hunter-enter-eGate',
+          tone: 'gate',
+        })}
+        ${renderHunterActivity({
+          icon: 'HA',
+          title: 'Hunter Association',
+          subtitle: 'Request rank reassessment and collect official hunter attention.',
+          meta: `Current ${hunter.rank}-rank`,
+          action: 'hunter-association',
+          tone: 'association',
+        })}
+        ${renderHunterActivity({
+          icon: 'PR',
+          title: 'Party Raid',
+          subtitle: 'Enter a tougher D-rank boss gate with better payout and higher injury risk.',
+          meta: 'Requires Level 4',
+          action: 'hunter-enter-dGate',
+          locked: hunter.level < 4,
+          tone: 'raid',
+        })}
+        ${renderHunterActivity({
+          icon: 'SP',
+          title: 'System Shop',
+          subtitle: 'Trade hunter income for recovery supplies.',
+          meta: '$400 / health and fatigue relief',
+          action: 'hunter-shop',
+          tone: 'shop',
+        })}
+        ${renderHunterActivity({
+          icon: 'SX',
+          title: 'Shadow Extraction',
+          subtitle: 'Attempt to bind the echo of a cleared boss into your shadow army.',
+          meta: canExtract ? `Boss echo: ${labelize(hunter.lastBossCleared)}` : 'Requires Level 10 and boss clear',
+          action: 'hunter-extract',
+          locked: !canExtract,
+          tone: 'shadow',
+        })}
+        ${renderHunterActivity({
+          icon: 'RG',
+          title: 'Red Gate',
+          subtitle: 'Emergency Gate with heavy heat, injury risk, and major rewards.',
+          meta: 'Requires Level 18',
+          action: 'hunter-enter-redGate',
+          locked: hunter.level < 18,
+          tone: 'red-gate',
+        })}
+        ${renderHunterActivity({
+          icon: 'MT',
+          title: 'Monarch Trace',
+          subtitle: 'A late-game System trace that is watching your shadow growth.',
+          meta: 'Requires S-rank and 3 shadows',
+          action: 'hunter-association',
+          locked: hunter.rank !== 'S' || (hunter.shadowArmy?.length ?? 0) < 3,
+          tone: 'monarch',
+        })}
+      </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-stats',
+        title: 'System Stat Points',
+        subtitle: `${hunter.statPoints} points available`,
+        body: `<article class="option-card"><div>${renderHunterStatButtons()}</div></article>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-log',
+        title: 'Hunter Log',
+        subtitle: 'World feed entries for Gates and System activity.',
+        body: renderLog('world'),
+      })}
+    </section>
+  `;
+}
+
 function renderWorld() {
   return `
     <section class="stack">
@@ -1995,15 +2293,21 @@ function renderWorld() {
           <p>${state.association ? 'You are cleared for private tournament brackets. True monster fights can appear in the Fight tab.' : 'Win enough hidden-world fights and build reputation to receive a private tournament contract.'}</p>
         </div>
       </article>
-      <article class="option-card">
-        <div>
-          <h2>Rumors</h2>
-          <ul class="rumors">
+      ${renderCollapsibleSection({
+        id: 'world-rumors',
+        title: 'Rumors',
+        subtitle: 'What the hidden world is whispering about this life.',
+        count: state.world.rumors.length,
+        body: `<article class="option-card"><div><ul class="rumors">
             ${state.world.rumors.map((rumor) => `<li>${rumor}</li>`).join('')}
-          </ul>
-        </div>
-      </article>
-      ${renderLog('world')}
+          </ul></div></article>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'world-log',
+        title: 'World Log',
+        subtitle: 'Recent world and hidden-circuit events.',
+        body: renderLog('world'),
+      })}
     </section>
   `;
 }
@@ -2081,6 +2385,8 @@ function previewEffects(effects = {}) {
   if (effects.injury) parts.push(`Injury: ${effects.injury}`);
   if (effects.world?.hiddenWorld) parts.push('Unlock hidden world');
   if (effects.world?.league) parts.push(effects.world.league);
+  if (effects.hunterWorld?.unlock) parts.push('Unlock Hunter Gates');
+  if (effects.hunterWorld?.delayMonths) parts.push(`Delay ${effects.hunterWorld.delayMonths} months`);
   return parts.slice(0, 4).join(' / ') || 'Story choice';
 }
 
@@ -2167,12 +2473,6 @@ function handleAction(action, source = null) {
     return;
   }
   if (!state) return;
-  if (action === 'toggle-current-clan') {
-    currentClanExpanded = !currentClanExpanded;
-    render();
-    applyPendingMobileScroll();
-    return;
-  }
   if (action === 'age-up') setState(ageUp(state));
   if (action === 'reroll-clan') {
     if (requiresClanRerollConfirmation(state)) {
@@ -2185,6 +2485,11 @@ function handleAction(action, source = null) {
   if (action === 'redeem-clan-password') {
     const input = document.querySelector('#clan-password-input');
     setState(redeemClanPassword(state, input?.value ?? ''));
+    return;
+  }
+  if (action === 'redeem-hunter-password') {
+    const input = document.querySelector('#hunter-password-input');
+    setState(redeemHunterPassword(state, input?.value ?? ''));
     return;
   }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));
@@ -2240,6 +2545,34 @@ function handleAction(action, source = null) {
   }
   if (action === 'close-social-post') {
     setState({ ...state, social: { ...state.social, lastPost: null } });
+    return;
+  }
+  if (action === 'hunter-daily') {
+    setState(runHunterDailyQuest(state));
+    return;
+  }
+  if (action.startsWith('hunter-enter-')) {
+    setState(enterHunterGate(state, action.replace('hunter-enter-', '')));
+    return;
+  }
+  if (action.startsWith('hunter-clear-')) {
+    setState(clearHunterGate(state, action.replace('hunter-clear-', '')));
+    return;
+  }
+  if (action.startsWith('hunter-stat-')) {
+    setState(spendHunterStatPoint(state, action.replace('hunter-stat-', '')));
+    return;
+  }
+  if (action === 'hunter-association') {
+    setState(visitHunterAssociation(state));
+    return;
+  }
+  if (action === 'hunter-shop') {
+    setState(buySystemItem(state));
+    return;
+  }
+  if (action === 'hunter-extract') {
+    setState(extractShadow(state));
     return;
   }
   if (action.startsWith('trash-')) {
@@ -2391,6 +2724,13 @@ document.addEventListener('click', (event) => {
     handleAction(action.dataset.action, action);
   }
 });
+
+document.addEventListener('toggle', (event) => {
+  const dropdown = event.target?.closest?.('[data-dropdown-id]');
+  if (!dropdown || event.target !== dropdown) return;
+  const id = dropdown.dataset.dropdownId;
+  if (dropdownState.isOpen(id) !== dropdown.open) dropdownState.toggle(id);
+}, true);
 
 document.addEventListener('pointerdown', (event) => {
   if (!moveIconBurst) return;
