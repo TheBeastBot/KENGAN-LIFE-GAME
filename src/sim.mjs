@@ -223,6 +223,11 @@ function normalizeHunterStats(stats = {}) {
 function normalizeHunterDailyQuest(quest) {
   if (!quest) return null;
   const stages = Array.isArray(quest.stages) ? quest.stages : [];
+  const outcome = ['won', 'lost', 'retreated', 'fatal'].includes(quest.outcome)
+    ? quest.outcome
+    : quest.completed
+      ? (quest.failed ? 'lost' : 'won')
+      : null;
   return {
     ...quest,
     stageIndex: Math.max(0, Math.floor(quest.stageIndex ?? 0)),
@@ -230,6 +235,7 @@ function normalizeHunterDailyQuest(quest) {
     startedMonth: quest.startedMonth ?? null,
     completed: Boolean(quest.completed),
     failed: Boolean(quest.failed),
+    outcome,
     monsterFightId: quest.monsterFightId ?? null,
     rewardsPreview: Array.isArray(quest.rewardsPreview) ? quest.rewardsPreview : [],
     stageResults: Array.isArray(quest.stageResults) ? quest.stageResults : [],
@@ -3212,6 +3218,7 @@ function createHunterDailyQuest(life) {
     startedMonth: lifeMonth(life),
     completed: false,
     failed: false,
+    outcome: null,
     monsterFightId: null,
     rewardsPreview: [...template.rewardsPreview],
     stageResults: [],
@@ -3227,7 +3234,10 @@ function currentHunterQuestStage(life) {
 function advanceHunterQuestStage(life, quest, result) {
   quest.stageResults = [...(quest.stageResults ?? []), result].slice(-8);
   quest.stageIndex += 1;
-  if (quest.stageIndex >= quest.stages.length) quest.completed = true;
+  if (quest.stageIndex >= quest.stages.length) {
+    quest.completed = true;
+    quest.outcome = 'won';
+  }
   life.hunterWorld.dailyQuest = quest;
 }
 
@@ -3249,14 +3259,42 @@ function applyHunterQuestFightResult(life, fight, won) {
   } else {
     quest.completed = true;
     quest.failed = true;
+    quest.outcome = 'lost';
     quest.stageResults = [...(quest.stageResults ?? []), {
       stageId: stage?.id,
-      label: `${monster.name} forced a retreat`,
+      label: `${monster.name} defeated you`,
       won: false,
     }].slice(-8);
     life.hunterWorld.dailyQuest = quest;
     fight.result.rewards.push('Quest progress: failed route unlocked partial System reward');
   }
+}
+
+function endFatalHunterQuestFight(life, fight, opponent) {
+  life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  const quest = life.hunterWorld.dailyQuest;
+  if (quest && quest.id === fight.questId) {
+    const stage = quest.stages[quest.stageIndex];
+    quest.completed = true;
+    quest.failed = true;
+    quest.outcome = 'fatal';
+    quest.stageResults = [...(quest.stageResults ?? []), {
+      stageId: stage?.id,
+      label: `${opponent.name} killed you`,
+      won: false,
+    }].slice(-8);
+    life.hunterWorld.dailyQuest = quest;
+  }
+  life.resources.health = 0;
+  return endLife(life, {
+    eyebrow: 'System Fatality',
+    title: 'Killed in a System Gate',
+    lines: [
+      `${life.identity.name} was killed by ${opponent.name}.`,
+      `Daily Quest: ${quest?.title ?? 'Unknown System objective'}.`,
+    ],
+    logText: `Killed in a System encounter: ${opponent.name} ended your life during ${quest?.title ?? 'a Daily Quest'}.`,
+  });
 }
 
 function unlockHunterWorld(life, { firstGate = 'eGate', protectCivilians = false } = {}) {
@@ -4072,20 +4110,23 @@ export function trashTalkOpponent(life, opponentId, styleId = 'respectful') {
   return addLog(next, `${style.name}: you called out ${opponent.name}. +${followerGain} followers.`, 'social');
 }
 
-export function endLife(life) {
+export function endLife(life, ending = {}) {
   const next = clone(life);
   const totalPower = Object.values(next.stats).reduce((sum, value) => sum + value, 0);
-  const title = next.association
+  const careerTitle = next.association
     ? `${next.identity.name}, Association Fighter`
     : next.world.hiddenWorld
       ? `${next.identity.name}, Underground Name`
       : `${next.identity.name}, Local Fighter`;
+  const title = ending.title ?? careerTitle;
   next.ended = true;
   next.activeFight = null;
   next.pendingEvent = null;
   next.legacySummary = {
+    eyebrow: ending.eyebrow ?? 'Legacy Summary',
     title,
     lines: [
+      ...(ending.lines ?? []),
       `Record: ${next.record.wins}-${next.record.losses}, ${next.record.kos} finishes.`,
       `Clan: ${next.clan.name} [${next.clan.rarity}].`,
       `Peak power total: ${totalPower}.`,
@@ -4093,7 +4134,7 @@ export function endLife(life) {
       `League: ${next.world.league}. Association: ${next.association ?? 'None'}.`,
     ],
   };
-  return addLog(next, `Life ended: ${title}.`, 'life');
+  return addLog(next, ending.logText ?? `Life ended: ${title}.`, 'life');
 }
 
 export function train(life, actionId) {
@@ -6967,6 +7008,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     momentum: fight.meters.momentum,
   });
 
+  if (fight.meters.playerHealth <= 0) {
+    return endFatalHunterQuestFight(next, fight, opponent);
+  }
   const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
   if (finished) {
     finishActiveFight(next);
@@ -7827,11 +7871,52 @@ export function startHunterQuestFight(life) {
   return addLog(next, `System monster encounter started: ${HUNTER_MONSTERS[monsterId]?.name ?? labelFromId(monsterId)}.`, 'world');
 }
 
+export function retreatHunterQuestFight(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const fight = next.activeFight;
+  const quest = next.hunterWorld.dailyQuest;
+  if (!fight || fight.source !== 'hunterQuest' || fight.finished || !quest || quest.id !== fight.questId) {
+    return addLog(next, 'There is no live System monster encounter to retreat from.', 'world');
+  }
+  const stage = quest.stages[quest.stageIndex];
+  const monster = getCombatOpponent(next, fight.opponentId) ?? HUNTER_MONSTERS[stage?.monsterId] ?? HUNTER_MONSTERS.systemGoblinScout;
+  quest.completed = true;
+  quest.failed = true;
+  quest.outcome = 'retreated';
+  quest.stageResults = [...(quest.stageResults ?? []), {
+    stageId: stage?.id,
+    label: `Retreated from ${monster.name}`,
+    result: 'You escaped alive, but the System marks the objective as abandoned.',
+    won: false,
+  }].slice(-8);
+  next.activeFight = null;
+  next.hunterWorld.dailyQuest = quest;
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 10);
+  next.resources.mood = clamp(next.resources.mood - 8);
+  next.resources.reputation = clamp(next.resources.reputation - 3, 0, 999);
+  return addLog(next, `You retreated from ${monster.name}. Survival cost: +10 fatigue, -8 mood, -3 reputation. No System reward.`, 'world');
+}
+
+export function dismissRetreatedHunterQuest(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const quest = next.hunterWorld.dailyQuest;
+  if (!quest || quest.outcome !== 'retreated') {
+    return addLog(next, 'There is no retreated System quest result to dismiss.', 'world');
+  }
+  next.hunterWorld.dailyQuest = null;
+  return addLog(next, `System Daily Quest dismissed: ${quest.title} was abandoned to survive.`, 'world');
+}
+
 export function claimHunterDailyQuest(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   const quest = next.hunterWorld.dailyQuest;
   if (!quest || !quest.completed) return addLog(next, 'No completed System Daily Quest can be claimed yet.', 'world');
+  if (quest.outcome === 'retreated' || quest.outcome === 'fatal') {
+    return addLog(next, 'No System reward is available for that terminal quest outcome.', 'world');
+  }
   const template = questTemplateById(quest.templateId);
   const reward = quest.failed ? template.partial : template.completion;
   applyDelta(next, reward);

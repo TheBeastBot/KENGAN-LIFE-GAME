@@ -49,6 +49,7 @@ import {
   runHunterDailyQuest,
   advanceHunterDailyQuest,
   claimHunterDailyQuest,
+  dismissRetreatedHunterQuest,
   resolveEventChoice,
   clearHunterGate,
   spendMoneyAction,
@@ -57,6 +58,7 @@ import {
   extractShadow,
   startFight,
   startHunterQuestFight,
+  retreatHunterQuestFight,
   startRivalFight,
   startTournamentFight,
   specialTrain,
@@ -321,6 +323,30 @@ test('winning a hunter quest monster fight advances quest progress without norma
 
 test('losing a hunter quest monster fight creates partial quest completion without normal losses', () => {
   let life = {
+    ...createNewLife({ gender: 'Female', seed: 9141 }),
+    resources: { ...createNewLife({ gender: 'Female', seed: 9141 }).resources, energy: 5 },
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9141 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.round = life.activeFight.maxRounds;
+  life.activeFight.meters.playerHealth = 35;
+  life.activeFight.meters.opponentHealth = life.activeFight.meters.maxOpponentHealth;
+
+  const next = takeFightTurn(life, 'manaGuard');
+
+  assert.equal(next.activeFight.finished, true);
+  assert.equal(next.activeFight.result.won, false);
+  assert.equal(next.hunterWorld.dailyQuest.completed, true);
+  assert.equal(next.hunterWorld.dailyQuest.failed, true);
+  assert.equal(next.hunterWorld.dailyQuest.outcome, 'lost');
+  assert.equal(next.record.losses, life.record.losses);
+  assert.notEqual(next.ended, true);
+});
+
+test('lethal hunter quest monster damage permanently ends the life without claimable rewards', () => {
+  let life = {
     ...createNewLife({ gender: 'Female', seed: 914 }),
     resources: { ...createNewLife({ gender: 'Female', seed: 914 }).resources, energy: 5 },
     hunterWorld: { ...createNewLife({ gender: 'Female', seed: 914 }).hunterWorld, unlocked: true, playerAwakened: true },
@@ -329,14 +355,50 @@ test('losing a hunter quest monster fight creates partial quest completion witho
   life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
   life = startHunterQuestFight(life);
   life.activeFight.meters.playerHealth = 1;
+  const beforeXp = life.hunterWorld.xp;
 
-  const next = takeFightTurn(life, 'defend');
+  const next = takeFightTurn(life, 'slash');
+  const claimAttempt = claimHunterDailyQuest(next);
 
-  assert.equal(next.activeFight.finished, true);
-  assert.equal(next.activeFight.result.won, false);
-  assert.equal(next.hunterWorld.dailyQuest.completed, true);
-  assert.equal(next.hunterWorld.dailyQuest.failed, true);
-  assert.equal(next.record.losses, life.record.losses);
+  assert.equal(next.ended, true);
+  assert.equal(next.activeFight, null);
+  assert.equal(next.resources.health, 0);
+  assert.equal(next.hunterWorld.dailyQuest.outcome, 'fatal');
+  assert.equal(next.hunterWorld.xp, beforeXp);
+  assert.equal(next.hunterWorld.dailyQuestsCompleted, life.hunterWorld.dailyQuestsCompleted);
+  assert.equal(next.legacySummary.eyebrow, 'System Fatality');
+  assert.equal(next.legacySummary.title, 'Killed in a System Gate');
+  assert.ok(next.legacySummary.lines.some((line) => line.includes('Daily Quest:')));
+  assert.equal(claimAttempt.hunterWorld.xp, beforeXp);
+});
+
+test('retreating from a hunter monster encounter is safe, costly, and grants no reward', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 9142 }),
+    resources: { ...createNewLife({ gender: 'Male', seed: 9142 }).resources, mood: 60, reputation: 20 },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 9142 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  const beforeExchanges = life.activeFight.exchanges.length;
+  const beforeXp = life.hunterWorld.xp;
+
+  const next = retreatHunterQuestFight(life);
+  const claimAttempt = claimHunterDailyQuest(next);
+  const dismissed = dismissRetreatedHunterQuest(next);
+
+  assert.equal(next.activeFight, null);
+  assert.notEqual(next.ended, true);
+  assert.equal(next.hunterWorld.dailyQuest.outcome, 'retreated');
+  assert.equal(next.hunterWorld.dailyQuest.stageResults.at(-1).label.startsWith('Retreated from'), true);
+  assert.equal(beforeExchanges, 0);
+  assert.equal(next.hunterWorld.systemFatigue, life.hunterWorld.systemFatigue + 10);
+  assert.equal(next.resources.mood, life.resources.mood - 8);
+  assert.equal(next.resources.reputation, life.resources.reputation - 3);
+  assert.equal(next.hunterWorld.xp, beforeXp);
+  assert.equal(claimAttempt.hunterWorld.xp, beforeXp);
+  assert.equal(dismissed.hunterWorld.dailyQuest, null);
 });
 
 test('claiming completed hunter daily quest grants xp, fatigue, completion count, and clears quest', () => {
@@ -377,6 +439,16 @@ test('normal fights still use normal fight source and record progression', () =>
 
   assert.equal(next.activeFight.source, 'fight');
   assert.equal(next.activeFight.questId, null);
+});
+
+test('normal fighter stoppages remain nonfatal when combat health reaches zero', () => {
+  let life = startFight(createNewLife({ gender: 'Male', seed: 9161 }), 'alleyScrapper');
+  life.activeFight.meters.playerHealth = 0;
+
+  const next = takeFightTurn(life, 'pressure');
+
+  assert.equal(next.activeFight.finished, true);
+  assert.notEqual(next.ended, true);
 });
 
 test('hunter gates reward progression and can injure tired players', () => {

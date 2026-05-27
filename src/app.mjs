@@ -42,10 +42,12 @@ import {
   resolveEventChoice,
   advanceHunterDailyQuest,
   claimHunterDailyQuest,
+  dismissRetreatedHunterQuest,
   spendLifeChoice,
   spendMoneyAction,
   startFight,
   startHunterQuestFight,
+  retreatHunterQuestFight,
   startRivalFight,
   startTournamentFight,
   specialTrain,
@@ -772,7 +774,7 @@ function renderEndedLife() {
   app.innerHTML = `
     <main class="shell start-shell">
       <section class="hero-panel legacy-panel">
-        <p class="eyebrow">Legacy Summary</p>
+        <p class="eyebrow">${escapeHtml(state.legacySummary?.eyebrow ?? 'Legacy Summary')}</p>
         <h1>${escapeHtml(state.legacySummary?.title ?? state.identity.name)}</h1>
         <div class="legacy-lines">
           ${(state.legacySummary?.lines ?? []).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}
@@ -2200,6 +2202,15 @@ function hunterQuestActivity(quest) {
       cta: 'Generate',
     };
   }
+  if (quest.outcome === 'retreated') {
+    return {
+      title: 'Retreated From Daily Quest',
+      subtitle: 'You escaped the monster encounter alive. Review the failed objective and clear it.',
+      meta: 'No reward / Survival penalties applied',
+      action: 'hunter-quest-open',
+      cta: 'Review',
+    };
+  }
   if (quest.completed) {
     return {
       title: 'Claim System Reward',
@@ -2234,6 +2245,20 @@ function renderHunterQuestPanel() {
   }
   const stage = currentHunterQuestStage(quest);
   const progress = `${Math.min((quest.stageIndex ?? 0) + 1, quest.stages?.length ?? 1)} / ${quest.stages?.length ?? 1}`;
+  if (quest.outcome === 'retreated') {
+    return `
+      <article class="option-card hunter-quest-card failed">
+        <div>
+          <p class="eyebrow">System Daily Quest / Retreated</p>
+          <h2>${escapeHtml(quest.title)}</h2>
+          <p>You escaped the monster encounter alive, but abandoned the objective. No System reward is available.</p>
+          <p class="muted">Consequences: +10 fatigue / -8 mood / -3 reputation</p>
+          ${renderHunterQuestResults(quest)}
+        </div>
+        ${button('Dismiss Failed Quest', 'hunter-quest-dismiss', 'danger')}
+      </article>
+    `;
+  }
   if (quest.completed) {
     return `
       <article class="option-card hunter-quest-card ${quest.failed ? 'failed' : 'complete'}">
@@ -2347,6 +2372,10 @@ function renderHunterMoves() {
           <span>${move.disabledReason || move.hint}</span>
         </button>
       `).join('')}
+      <button class="move-card danger-btn hunter-retreat-card" data-action="hunter-quest-retreat">
+        <strong>Retreat</strong>
+        <span>Escape alive now. The Daily Quest fails with no reward and survival penalties.</span>
+      </button>
     </section>
   `;
 }
@@ -2791,6 +2820,16 @@ function handleAction(action, source = null) {
     activeTab = 'hunter';
     hunterQuestPopupOpen = true;
     setState(startHunterQuestFight(state));
+    return;
+  }
+  if (action === 'hunter-quest-retreat') {
+    hunterQuestPopupOpen = true;
+    setState(retreatHunterQuestFight(state));
+    return;
+  }
+  if (action === 'hunter-quest-dismiss') {
+    hunterQuestPopupOpen = false;
+    setState(dismissRetreatedHunterQuest(state));
     return;
   }
   if (action === 'hunter-quest-claim') {

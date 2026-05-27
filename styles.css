@@ -606,6 +606,10 @@ select:focus {
   border-color: rgba(87, 151, 229, 0.34);
 }
 
+.hunter-retreat-card {
+  grid-column: 1 / -1;
+}
+
 .clan-password-card {
   display: grid;
   gap: 12px;
