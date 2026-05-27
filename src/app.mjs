@@ -27,6 +27,7 @@ import {
   getPlayerArchetype,
   getAutoRecoveryStatus,
   getAutoTrainingStatus,
+  getTrainingAllowance,
   getCoachedFightOptions,
   getSpecialTrainingStatus,
   getSpecialFights,
@@ -278,6 +279,7 @@ function normalizeSave(save) {
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
+    trainingSessionsUsed: Math.max(0, Math.min(20, Math.floor(save.trainingSessionsUsed ?? 0))),
     eventFlags: save.eventFlags ?? {},
     activeFight: normalizeFight(save.activeFight),
     injuries: save.injuries ?? [],
@@ -959,12 +961,13 @@ function renderCurrentClanAwakeningDetails() {
 }
 
 function renderTrain() {
+  const allowance = getTrainingAllowance(state);
   return `
     <section class="stack">
       ${renderCollapsibleSection({
         id: 'train-core',
         title: 'Training',
-        subtitle: `Build power, technique, and risk. Auto runs every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds.`,
+        subtitle: `${allowance.used} / ${allowance.limit} sessions used - ${allowance.remaining} remaining until Age Up. Auto runs every ${AUTO_ROUTINE_INTERVAL_MS / 1000} seconds.`,
         count: Object.keys(TRAINING_ACTIONS).length,
         body: `<section class="card-list">${Object.entries(TRAINING_ACTIONS).map(([id, action]) => renderTrainingCard(id, action)).join('')}</section>`,
       })}
@@ -980,8 +983,10 @@ function renderTrain() {
 }
 
 function renderTrainingCard(id, action) {
+  const allowance = getTrainingAllowance(state);
   const autoStatus = getAutoTrainingStatus(state, id);
   const autoEnabled = Boolean(state.autoTraining?.[id]) && !autoStatus.locked;
+  const autoBlocked = allowance.exhausted && !autoEnabled;
   return `
     <article class="option-card train-card" data-train-card="${id}">
       ${renderTrainingImage(id, action)}
@@ -990,10 +995,11 @@ function renderTrainingCard(id, action) {
         <p>${action.text}</p>
         <p class="muted">Cost ${action.cost} energy / Risk ${action.risk}</p>
         <p class="muted">Auto: ${autoStatus.reason}</p>
+        ${allowance.exhausted ? '<p class="training-limit-warning">Training limit reached. Age Up to train again.</p>' : ''}
       </div>
       <div class="mini-actions two-actions">
-        <button data-action="train-${id}">Train</button>
-        <button class="small-btn ${autoEnabled ? 'primary' : ''}" data-action="auto-train-${id}">
+        <button data-action="train-${id}" ${allowance.exhausted ? 'disabled' : ''}>Train</button>
+        <button class="small-btn ${autoEnabled ? 'primary' : ''}" data-action="auto-train-${id}" ${autoStatus.locked || autoBlocked ? 'disabled' : ''}>
           ${autoStatus.locked ? 'Auto Locked' : autoEnabled ? 'Auto On' : 'Auto Off'}
         </button>
       </div>
@@ -1608,6 +1614,7 @@ function renderFightReport(fight) {
 function renderBody() {
   const totalFights = state.record.wins + state.record.losses;
   const experienceBoost = getExperienceBoost(state);
+  const effectiveStats = getHunterEffectiveStats(state);
   return `
     <section class="stack">
       ${renderCollapsibleSection({
@@ -1623,13 +1630,23 @@ function renderBody() {
         body: renderTechniques(),
       })}
       <div class="stats-grid">
-        ${Object.entries(state.stats).map(([stat, value]) => `
-          <div class="stat-row ${feedbackClass(`stat-${stat}`)}">
+        ${Object.entries(state.stats).map(([stat, value]) => {
+          const cap = currentStatCap(stat);
+          const hunterBonus = Math.max(0, (effectiveStats[stat] ?? value) - value);
+          const total = value + hunterBonus;
+          const scale = Math.max(cap, total);
+          const baseWidth = Math.min(100, (value / scale) * 100);
+          const bonusWidth = Math.min(100 - baseWidth, (hunterBonus / scale) * 100);
+          return `
+          <div class="stat-row fighter-stat-row ${feedbackClass(`stat-${stat}`)}">
             <span>${labelize(stat)}</span>
-            <div class="bar"><i style="width:${Math.min(100, (value / currentStatCap(stat)) * 100)}%"></i></div>
-            <strong>${value}/${currentStatCap(stat)}</strong>
+            <div class="bar stacked-stat-bar">
+              <i class="fighter-stat-base" style="width:${baseWidth}%"></i>
+              ${hunterBonus ? `<i class="hunter-stat-bonus" style="width:${bonusWidth}%"></i>` : ''}
+            </div>
+            <strong class="${hunterBonus ? 'effective-stat-total' : ''}">${hunterBonus ? `${value} + <b>${hunterBonus}</b> = ${total}` : value}<small> / ${cap} cap</small></strong>
           </div>
-        `).join('')}
+        `; }).join('')}
       </div>
       ${renderCollapsibleSection({
         id: 'body-injuries',
@@ -2369,7 +2386,7 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
       <h2>System Monster Read</h2>
       <p>${objective}</p>
       <p>Target: ${escapeHtml(opponent.name)}. Threat pattern: ${escapeHtml(opponent.style)} / ${escapeHtml(opponent.threat)}.</p>
-      <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
+      <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Conserve, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
       ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}
     </article>

@@ -1871,6 +1871,49 @@ select:focus {
   background: linear-gradient(90deg, var(--focus), var(--gold));
 }
 
+.fighter-stat-row {
+  grid-template-columns: 96px minmax(0, 1fr) minmax(172px, auto);
+}
+
+.stacked-stat-bar {
+  display: flex;
+}
+
+.stacked-stat-bar i {
+  border-radius: 0;
+}
+
+.stacked-stat-bar i:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.stacked-stat-bar i:last-child {
+  border-radius: 0 999px 999px 0;
+}
+
+.stacked-stat-bar i:only-child {
+  border-radius: 999px;
+}
+
+.stacked-stat-bar .hunter-stat-bonus {
+  background: linear-gradient(90deg, #7d52c8, #c173f2);
+}
+
+.effective-stat-total b {
+  color: #c173f2;
+}
+
+.fighter-stat-row strong small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.training-limit-warning {
+  color: #d091f3;
+  font-weight: 700;
+}
+
 .social-grid .full {
   grid-column: 1 / -1;
 }
@@ -2809,6 +2852,14 @@ button:active,
 
   .stat-row {
     grid-template-columns: 88px minmax(0, 1fr) 64px;
+  }
+
+  .fighter-stat-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .fighter-stat-row strong {
+    grid-column: 2;
   }
 
   .technique-grid .stat-row {

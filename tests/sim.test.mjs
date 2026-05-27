@@ -289,6 +289,45 @@ test('hunter quest System moves reset for every monster exchange', () => {
   assert.equal(second.activeFight.round, first.activeFight.round + 1);
 });
 
+test('hunter quest Conserve restores mana, raises guard, and deals no outgoing damage', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 9124 }),
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9124 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.playerStamina = 20;
+  life.activeFight.meters.guard = 35;
+  const monsterHealth = life.activeFight.meters.opponentHealth;
+
+  const next = takeFightTurn(life, 'conserve');
+  const exchange = next.activeFight.exchanges[0];
+
+  assert.equal(exchange.moveId, 'conserve');
+  assert.equal(exchange.playerDamage, 0);
+  assert.equal(next.activeFight.meters.opponentHealth, monsterHealth);
+  assert.equal(next.activeFight.meters.playerStamina, 38);
+  assert.equal(next.activeFight.meters.guard, 49);
+  assert.ok(exchange.enemyDamage >= 0);
+});
+
+test('Conserve remains lethal if a System monster breaks through the guard', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 9125 }),
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9125 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.playerHealth = 1;
+
+  const next = takeFightTurn(life, 'conserve');
+
+  assert.equal(next.ended, true);
+  assert.equal(next.hunterWorld.dailyQuest.outcome, 'fatal');
+});
+
 test('normal fights still expose normal moves and no Hunter moves', () => {
   const life = startFight(createNewLife({ gender: 'Male', seed: 9122 }), 'alleyScrapper');
 
@@ -536,6 +575,38 @@ test('dungeon room rewards pay immediately and health and mana carry into the bo
   assert.equal(life.activeFight.meters.playerStamina, carriedMana);
 });
 
+test('System Conserve mana recovered in a dungeon carries into the following room', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 9221 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 9221 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 9221 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.playerStamina = 20;
+
+  life = takeFightTurn(life, 'conserve');
+  assert.equal(life.activeFight.meters.playerStamina, 38);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
+  const carriedMana = life.hunterWorld.activeDungeon.carriedStamina;
+  life = advanceHunterDungeon(life);
+
+  assert.equal(life.activeFight.meters.playerStamina, carriedMana);
+  assert.ok(carriedMana > 20);
+});
+
 test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and shadow eligibility', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 923 }),
@@ -757,6 +828,28 @@ test('one Hunter stat adds ten mapped fighter-stat equivalent power', () => {
     const effective = getHunterEffectiveStats(life);
     assert.equal(sum(effective, mappedStats), sum(baseLife.stats, mappedStats) + 10);
   }
+});
+
+test('Hunter overlay is unavailable before awakening and strengthens ordinary fights afterward', () => {
+  const base = createNewLife({ gender: 'Male', seed: 932 });
+  const storedHunterStats = { strength: 12, agility: 0, vitality: 10, sense: 0, intelligence: 0 };
+  const locked = {
+    ...base,
+    hunterWorld: { ...base.hunterWorld, stats: storedHunterStats },
+  };
+  const awakened = {
+    ...base,
+    hunterWorld: { ...base.hunterWorld, unlocked: true, playerAwakened: true, stats: storedHunterStats },
+  };
+
+  assert.equal(getHunterEffectiveStats(locked).strength, base.stats.strength);
+  const normalFight = startFight(base, 'alleyScrapper');
+  const awakenedFight = startFight(awakened, 'alleyScrapper');
+  assert.ok(awakenedFight.activeFight.meters.maxPlayerHealth > normalFight.activeFight.meters.maxPlayerHealth);
+
+  const normalExchange = takeFightTurn(normalFight, 'pressure').activeFight.exchanges[0];
+  const awakenedExchange = takeFightTurn(awakenedFight, 'pressure').activeFight.exchanges[0];
+  assert.ok(awakenedExchange.playerDamage > normalExchange.playerDamage);
 });
 
 test('hunter association can promote ranks after enough gates and power', () => {
@@ -1107,6 +1200,43 @@ test('training consumes energy and improves matching stats', () => {
   assert.ok(next.log[0].text.includes('Heavy Bag'));
 });
 
+test('normal training allows twenty completed sessions and blocks the twenty-first without cost', () => {
+  let life = createNewLife({ gender: 'Nonbinary', seed: 111 });
+
+  for (let session = 0; session < 20; session += 1) {
+    life = train({ ...life, resources: { ...life.resources, energy: 100 } }, 'heavyBag');
+  }
+  const beforeBlocked = {
+    energy: 100,
+    strength: life.stats.strength,
+  };
+  const blocked = train({ ...life, resources: { ...life.resources, energy: beforeBlocked.energy } }, 'heavyBag');
+
+  assert.equal(life.trainingSessionsUsed, 20);
+  assert.equal(blocked.trainingSessionsUsed, 20);
+  assert.equal(blocked.stats.strength, beforeBlocked.strength);
+  assert.equal(blocked.resources.energy, beforeBlocked.energy);
+  assert.ok(blocked.log[0].text.includes('Age Up'));
+});
+
+test('manual and automatic training share one twenty-session allowance', () => {
+  const base = createNewLife({ gender: 'Male', seed: 3061 });
+  let life = {
+    ...base,
+    trainingSessionsUsed: 19,
+    resources: { ...base.resources, energy: 100 },
+    mentor: MENTORS.find((mentor) => mentor.id === 'tiredCoach'),
+  };
+  life = train(life, 'heavyBag');
+  const beforeAuto = { strength: life.stats.strength, energy: life.resources.energy };
+  const next = toggleAutoTraining(life, 'heavyBag');
+
+  assert.equal(next.trainingSessionsUsed, 20);
+  assert.equal(next.stats.strength, beforeAuto.strength);
+  assert.equal(next.resources.energy, beforeAuto.energy);
+  assert.ok(next.log.some((item) => item.text.includes('Age Up')));
+});
+
 test('turning auto training on immediately runs that training when energy is available', () => {
   const life = {
     ...createNewLife({ gender: 'Male', seed: 306 }),
@@ -1141,6 +1271,21 @@ test('auto training runs enabled training during age up without popup events', (
   assert.equal(next.trainingPopup, null);
   assert.ok(!next.pendingEvent || next.pendingEvent.id !== 'training-injury');
   assert.ok(next.log.some((item) => item.text.includes('Auto training')));
+});
+
+test('age up resets training allowance before enabled auto training consumes the new interval', () => {
+  const base = createNewLife({ gender: 'Male', seed: 3041 });
+  const life = {
+    ...base,
+    trainingSessionsUsed: 20,
+    resources: { ...base.resources, energy: 100 },
+    mentor: MENTORS.find((mentor) => mentor.id === 'tiredCoach'),
+    autoTraining: { heavyBag: true },
+  };
+
+  const next = ageUp(life);
+
+  assert.equal(next.trainingSessionsUsed, 1);
 });
 
 test('auto routine quietly runs enabled training outside manual clicks', () => {
@@ -1386,6 +1531,7 @@ test('special trainings unlock through milestones and raise stat caps without ra
   assert.ok(next.specialTrainingCaps.strength > 0);
   assert.ok(getStatCap(next, 'strength') > beforeCap);
   assert.equal(next.stats.strength, beforeStrength);
+  assert.equal(next.trainingSessionsUsed, fighter.trainingSessionsUsed);
   assert.equal(next.resources.energy, fighter.resources.energy - SPECIAL_TRAINING_ACTIONS.undergroundLimitDrills.cost.energy);
   assert.ok(next.log[0].text.includes('cap increased'));
 });

@@ -66,6 +66,7 @@ const DEFAULT_HUNTER_WORLD = {
   dailyQuest: null,
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
+export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
   D: { level: 5, gatesCleared: 3, power: 135 },
   C: { level: 10, gatesCleared: 8, power: 205 },
@@ -230,6 +231,15 @@ export const HUNTER_MOVES = {
     damageBias: 0.45,
     guardBias: 12,
     text: 'Mana Guard blooms over your forearms before the monster lands clean.',
+  },
+  conserve: {
+    label: 'Conserve',
+    category: 'defense',
+    hint: 'Hold position and recover 18 mana while reducing the next monster hit.',
+    staminaCost: 0,
+    damageBias: 0,
+    guardBias: 14,
+    text: 'You draw mana inward and brace behind a compressed System guard.',
   },
   analyzeWeakness: {
     label: 'Analyze Weakness',
@@ -3141,6 +3151,7 @@ function hunterPower(life) {
 export function getHunterEffectiveStats(life) {
   const base = life.stats ?? {};
   const hunter = normalizeHunterWorld(life.hunterWorld);
+  if (!hunter.unlocked || !hunter.playerAwakened) return { ...base };
   const stats = hunter.stats;
   return {
     ...base,
@@ -3155,6 +3166,17 @@ export function getHunterEffectiveStats(life) {
     control: (base.control ?? 0) + stats.sense * 2 + stats.intelligence * 6,
     aggression: base.aggression ?? 0,
   };
+}
+
+function usesHunterCombatOverlay(life) {
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  return hunter.unlocked && hunter.playerAwakened;
+}
+
+function withPlayerCombatStats(life) {
+  return usesHunterCombatOverlay(life)
+    ? { ...life, stats: getHunterEffectiveStats(life) }
+    : life;
 }
 
 function hunterXpForNextLevel(level) {
@@ -4251,6 +4273,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     eventFlags: {},
     trainingPopup: null,
     trainingSessionCount: 0,
+    trainingSessionsUsed: 0,
     log: [
       createLog(`Born in the ${pick(NEIGHBORHOODS, rng)} with a ${familyWealth} family.`),
       createLog(`Clan result: ${clan.name} [${clan.rarity}].`, 'clan'),
@@ -4435,12 +4458,16 @@ export function endLife(life, ending = {}) {
 export function train(life, actionId) {
   const action = TRAINING_ACTIONS[actionId];
   if (!action) return life;
+  if (getTrainingAllowance(life).exhausted) {
+    return addLog(life, `Training limit reached: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train');
+  }
   if (life.resources.energy < action.cost) {
     return queueTriggeredEvents(addLog(life, `You are too exhausted for ${action.name}.`, 'train'), 'train', { actionId });
   }
 
   const rarity = getRarity(life.clan.rarity);
   const next = clone(life);
+  next.trainingSessionsUsed = getTrainingAllowance(next).used + 1;
   next.resources.energy = clamp(next.resources.energy - action.cost);
   next.resources.mood = clamp(next.resources.mood + 1);
 
@@ -4473,9 +4500,11 @@ function applyTrainingNoPopup(life, actionId) {
   const action = TRAINING_ACTIONS[actionId];
   const autoStatus = getAutoTrainingStatus(life, actionId);
   if (!action || autoStatus.locked) return null;
+  if (getTrainingAllowance(life).exhausted) return 'limit';
   const energyCost = Math.max(0, action.cost - mentorAutoEnergyDiscount(life.mentor));
   if (life.resources.energy < energyCost) return null;
   const rarity = getRarity(life.clan.rarity);
+  life.trainingSessionsUsed = getTrainingAllowance(life).used + 1;
   life.resources.energy = clamp(life.resources.energy - energyCost);
   life.resources.mood = clamp(life.resources.mood + 1);
   for (const [stat, amount] of Object.entries(action.gains)) {
@@ -4559,13 +4588,25 @@ export function getAutoRecoveryStatus(life, actionId) {
   return { locked: false, reason: `${mentor.name} can supervise ${action.name}.` };
 }
 
+export function getTrainingAllowance(life) {
+  const used = clamp(Math.floor(life.trainingSessionsUsed ?? 0), 0, TRAINING_SESSION_LIMIT);
+  return {
+    used,
+    limit: TRAINING_SESSION_LIMIT,
+    remaining: TRAINING_SESSION_LIMIT - used,
+    exhausted: used >= TRAINING_SESSION_LIMIT,
+  };
+}
+
 function runAutoUpkeep(life) {
   const trained = [];
+  let blockedByLimit = false;
   for (const [actionId, enabled] of Object.entries(life.autoTraining ?? {})) {
     if (!enabled) continue;
     if (getAutoTrainingStatus(life, actionId).locked) continue;
     const action = applyTrainingNoPopup(life, actionId);
-    if (action) trained.push(action.name);
+    if (action === 'limit') blockedByLimit = true;
+    else if (action) trained.push(action.name);
   }
   const recovered = [];
   for (const [actionId, enabled] of Object.entries(life.autoRecovery ?? {})) {
@@ -4575,6 +4616,9 @@ function runAutoUpkeep(life) {
     if (action) recovered.push(action.name);
   }
   if (trained.length) life.log = [createLog(`Auto training: ${trained.join(', ')} completed without popups.`, 'train'), ...life.log].slice(0, 60);
+  if (blockedByLimit && !life.log?.[0]?.text?.includes('Auto training paused')) {
+    life.log = [createLog(`Auto training paused: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train'), ...life.log].slice(0, 60);
+  }
   if (recovered.length) life.log = [createLog(`Auto recovery: ${recovered.join(', ')} completed without popups.`, 'recovery'), ...life.log].slice(0, 60);
   return life;
 }
@@ -4597,6 +4641,7 @@ export function toggleAutoTraining(life, actionId) {
   let result = addLog(next, `Auto training ${enabled ? 'enabled' : 'disabled'}: ${TRAINING_ACTIONS[actionId].name}.`, 'train');
   if (!enabled) return result;
   const trained = applyTrainingNoPopup(result, actionId);
+  if (trained === 'limit') return addLog(result, `Auto training paused: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train');
   if (!trained) return addLog(result, `Auto training queued: ${TRAINING_ACTIONS[actionId].name} will run when you have enough energy.`, 'train');
   return addLog(result, `Auto training: ${TRAINING_ACTIONS[actionId].name} ran immediately without popups.`, 'train');
 }
@@ -6807,9 +6852,10 @@ function createActiveFight(life, opponentId, options = {}) {
   const prep = life.nextFightPrep ?? {};
   const opponentStats = getOpponentStats(opponent);
   const isSystemFight = options.source === 'hunterQuest' || options.source === 'hunterDungeon';
-  const playerStats = isSystemFight ? getHunterEffectiveStats(life) : life.stats;
   const hunter = normalizeHunterWorld(life.hunterWorld);
-  const maxPlayerHealth = fightHealthFromStats(playerStats) + (isSystemFight ? hunter.stats.vitality * 10 : 0);
+  const usesHunterStats = isSystemFight || usesHunterCombatOverlay(life);
+  const playerStats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  const maxPlayerHealth = fightHealthFromStats(playerStats) + (usesHunterStats ? hunter.stats.vitality * 10 : 0);
   const maxOpponentHealth = fightHealthFromStats(opponentStats);
   const breakdown = fightBreakdown(life, opponent);
   if (opponent.adaptationCount) {
@@ -7208,6 +7254,11 @@ function hunterMoveProfile(move, life) {
       damageBonus: 0,
       incomingReduction: 10 + hunter.stats.vitality * 2 + hunter.stats.intelligence,
     },
+    conserve: {
+      stat: stats.durability * 0.92 + stats.willpower * 0.9 + stats.control * 0.52 + hunter.level * 4,
+      damageBonus: 0,
+      incomingReduction: 12,
+    },
     analyzeWeakness: {
       stat: stats.fightIq * 1.1 + stats.control * 0.8 + stats.technique * 0.45 + hunter.level * 4,
       damageBonus: hunter.stats.sense + hunter.stats.intelligence,
@@ -7249,10 +7300,12 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const executeBonus = move.id === 'execute' ? Math.round(hurtPercent / 4) : 0;
   const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
   const basePlayerDamage = Math.max(1, Math.round(move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense));
-  const criticalChance = clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004, 0.05, 0.42);
+  const criticalChance = move.id === 'conserve'
+    ? 0
+    : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004, 0.05, 0.42);
   const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'hunter-crit');
   const critical = criticalRoll < criticalChance;
-  let playerDamage = critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
+  let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
   const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1 }, fight, -swing);
   const baseEnemyDamage = Math.max(1, Math.round(monsterDamage + opponentStats.aggression / 70 - profile.incomingReduction));
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0), 0.03, 0.38);
@@ -7261,7 +7314,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
 
   fight.moveCooldowns = {};
   fight.systemAnalysis = move.id === 'analyzeWeakness';
-  fight.meters.playerStamina = clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, 100);
+  fight.meters.playerStamina = move.id === 'conserve'
+    ? clamp(fight.meters.playerStamina + 18, 0, 100)
+    : clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
@@ -7335,35 +7390,37 @@ export function takeFightTurn(life, tactic = 'pressure') {
   const next = clone(life);
   const fight = next.activeFight;
   const move = resolveFightMove(next, tactic);
+  const combatLife = withPlayerCombatStats(next);
+  const combatStats = combatLife.stats;
   const previousOptimalMove = fight.optimalMove ? clone(fight.optimalMove) : null;
-  const optimalBoost = optimalBoostForMove(previousOptimalMove, move, next);
+  const optimalBoost = optimalBoostForMove(previousOptimalMove, move, combatLife);
   tactic = move.category;
   const injuryEffects = activeInjuryEffects(next, tactic);
-  const profile = tacticProfile(move.id, next);
+  const profile = tacticProfile(move.id, combatLife);
   const fightRound = visibleFightRound(fight);
   let opponentTactic = opponentIntent(opponent, fightRound);
   if (existingGrappling.phase === 'ground') opponentTactic = 'grapple';
   const enemyMove = chooseEnemyFightMove(opponent, opponentTactic, fight);
-  const passive = clanCombatModifier(next, tactic, opponentTactic, fight);
-  const special = clanSpecialModifier(next, tactic, fight);
+  const passive = clanCombatModifier(combatLife, tactic, opponentTactic, fight);
+  const special = clanSpecialModifier(combatLife, tactic, fight);
   const matchup = matchupModifier(tactic, opponentTactic);
   const weakMove = weakMoveForOpponent(opponent);
   const weakMoveHit = move.id === weakMove.id;
   const weakMoveBonus = weakMoveHit ? 18 : 0;
   const opponentStats = getOpponentStats(opponent);
-  const fightIqReadBonus = next.stats.fightIq * 0.08 + Math.max(0, next.stats.fightIq - opponentStats.fightIq) * 0.04;
-  const enemyFightIqReadBonus = opponentStats.fightIq * 0.055 + Math.max(0, opponentStats.fightIq - next.stats.fightIq) * 0.035;
+  const fightIqReadBonus = combatStats.fightIq * 0.08 + Math.max(0, combatStats.fightIq - opponentStats.fightIq) * 0.04;
+  const enemyFightIqReadBonus = opponentStats.fightIq * 0.055 + Math.max(0, opponentStats.fightIq - combatStats.fightIq) * 0.035;
   const playerScore = profile.stat + fightIqReadBonus + fight.meters.playerStamina * 0.35 + fight.meters.momentum * 0.5 + matchup + weakMoveBonus + passive.scoreBonus + special.scoreBonus + optimalBoost.scoreBonus - injuryEffects.scorePenalty;
   const enemyScore = opponentScore(opponent, opponentTactic, fightRound) + enemyMove.scoreBonus + enemyFightIqReadBonus + fight.meters.opponentStamina * 0.25 - fight.meters.guard * 0.12;
   const swing = playerScore - enemyScore;
   const precisionDamage = tactic === 'counter'
-    ? (next.stats.fightIq + next.stats.reflexes) / 90
+    ? (combatStats.fightIq + combatStats.reflexes) / 90
     : tactic === 'grapple'
-      ? (next.stats.flexibility + next.stats.technique) / 95
+      ? (combatStats.flexibility + combatStats.technique) / 95
       : tactic === 'pressure'
-        ? next.stats.aggression / 95
+        ? combatStats.aggression / 95
         : tactic === 'special'
-          ? (next.stats.willpower + next.stats.aggression) / 110
+          ? (combatStats.willpower + combatStats.aggression) / 110
           : 0;
   const opponentDefense =
     opponentStats.durability * 0.026 +
@@ -7378,31 +7435,31 @@ export function takeFightTurn(life, tactic = 'pressure') {
     ? clamp(Math.round((fight.meters.maxOpponentHealth ?? 100) * (opponent.tier === 'Special Fight' ? 0.045 : 0.025)), opponent.tier === 'Special Fight' ? 12 : 5, opponent.tier === 'Special Fight' ? 42 : 18)
     : 1;
   const basePlayerDamage = Math.max(1, weakDamageFloor, calculatedPlayerDamage);
-  const criticalChance = clampFloat(0.04 + next.stats.technique * 0.00055 + next.stats.fightIq * 0.00012, 0.04, 0.42);
+  const criticalChance = clampFloat(0.04 + combatStats.technique * 0.00055 + combatStats.fightIq * 0.00012, 0.04, 0.42);
   const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, tactic, opponentTactic, fight.exchanges.length, 'player-crit');
   const critical = criticalRoll < criticalChance;
   const rawPlayerDamageBeforeInjury = critical ? Math.round(basePlayerDamage * 1.55 + 4) : basePlayerDamage;
   const rawPlayerDamage = Math.max(1, Math.round(rawPlayerDamageBeforeInjury * injuryEffects.damageMultiplier));
-  const baseEnemyDamage = Math.max(1, incomingDamage(next, opponent, opponentTactic, profile, fight, swing) + Math.round(enemyFightIqReadBonus / 18) - passive.incomingReduction - special.incomingReduction - optimalBoost.incomingReduction);
+  const baseEnemyDamage = Math.max(1, incomingDamage(combatLife, opponent, opponentTactic, profile, fight, swing) + Math.round(enemyFightIqReadBonus / 18) - passive.incomingReduction - special.incomingReduction - optimalBoost.incomingReduction);
   const enemyCriticalChance = clampFloat(0.03 + opponentStats.technique * 0.00028 + opponentStats.fightIq * 0.00008, 0.03, opponent.tier === 'Special Fight' ? 0.34 : 0.28);
   const enemyCriticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, tactic, opponentTactic, fight.exchanges.length, 'enemy-crit');
   const enemyCritical = enemyCriticalRoll < enemyCriticalChance;
   const enemyMoveDamage = Math.max(1, Math.round(baseEnemyDamage * (enemyMove.damageMultiplier ?? 1)));
   const rawEnemyDamageBeforeInjury = enemyCritical ? Math.round(enemyMoveDamage * 1.35 + 3) : enemyMoveDamage;
   const rawEnemyDamage = Math.max(1, Math.round(rawEnemyDamageBeforeInjury * injuryEffects.incomingMultiplier) + injuryEffects.incomingFlat);
-  let opponentDodge = opponentDodgeResult(next, opponent, tactic, opponentTactic, fight, swing);
+  let opponentDodge = opponentDodgeResult(combatLife, opponent, tactic, opponentTactic, fight, swing);
   let playerDamage = opponentDodge.dodged ? 0 : rawPlayerDamage;
-  const dodge = dodgeResult(next, opponent, tactic, opponentTactic, fight, swing, injuryEffects);
+  const dodge = dodgeResult(combatLife, opponent, tactic, opponentTactic, fight, swing, injuryEffects);
   let enemyDamage = dodge.dodged ? 0 : rawEnemyDamage;
   const staminaCost = profile.staminaCost + passive.staminaCostDelta + optimalBoost.staminaCostDelta + (tactic === 'special' && getRarity(next.clan.rarity).name === 'Common' ? 6 : 0);
-  const guardGain = profile.guardBias + optimalBoost.guardGain + (profile.guardBias > 0 ? Math.floor((next.stats.control + next.stats.willpower) / 120) : 0);
+  const guardGain = profile.guardBias + optimalBoost.guardGain + (profile.guardBias > 0 ? Math.floor((combatStats.control + combatStats.willpower) / 120) : 0);
   let groundTransition = '';
   let submissionFinishChance = 0;
   let submissionFinished = false;
 
   if (tactic === 'grapple') {
     const groundResult = resolveGroundExchange({
-      life: next,
+      life: combatLife,
       opponent,
       fight,
       move,
@@ -7424,7 +7481,7 @@ export function takeFightTurn(life, tactic = 'pressure') {
     }
   } else if (tactic === 'conserve' && existingGrappling.phase === 'ground' && existingGrappling.top === 'opponent' && move.groundRole === 'bottomConserve') {
     const groundResult = resolveBottomConserveExchange({
-      life: next,
+      life: combatLife,
       opponent,
       fight,
       move,
@@ -7440,7 +7497,7 @@ export function takeFightTurn(life, tactic = 'pressure') {
     opponentDodge = { ...opponentDodge, dodged: false };
   } else if (opponentTactic === 'grapple') {
     const groundResult = resolveEnemyGroundExchange({
-      life: next,
+      life: combatLife,
       opponent,
       fight,
       enemyMove,
@@ -7477,16 +7534,16 @@ export function takeFightTurn(life, tactic = 'pressure') {
   if (submissionFinished) fight.meters.opponentHealth = 0;
   fight.meters.guard = clamp(fight.meters.guard + guardGain - (opponentTactic === 'pressure' ? 5 : 0), 0, 100);
   fight.meters.momentum = clamp(fight.meters.momentum + Math.round(swing / 7), -50, 50);
-  const injuryDefense = next.stats.durability * 0.018 + next.stats.flexibility * 0.016 + next.stats.control * 0.012 + next.stats.willpower * 0.01;
+  const injuryDefense = combatStats.durability * 0.018 + combatStats.flexibility * 0.016 + combatStats.control * 0.012 + combatStats.willpower * 0.01;
   const playerDamagePercent = 100 - healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.injuryRisk = clamp(opponent.risk + playerDamagePercent / 7 + (tactic === 'special' ? 3 : 0) + injuryEffects.injuryRiskBonus - injuryDefense, 0, 100);
   const combatInjury = combatInjuryForExchange(next, opponentTactic, enemyDamage, fight, enemyMove);
   if (combatInjury) addOrUpgradeInjury(next, combatInjury);
-  const nextOptimalMove = chooseOptimalMove(next, opponent, fight);
+  const nextOptimalMove = chooseOptimalMove(combatLife, opponent, fight);
   fight.optimalMove = nextOptimalMove;
 
   const exchangeText = narrateExchange({
-    life: next,
+    life: combatLife,
     opponent,
     profile,
     tactic,
@@ -8020,6 +8077,7 @@ function nextAvailableFightMove(life, preferredMoveId) {
 
 export function ageUp(life) {
   const next = clone(life);
+  next.trainingSessionsUsed = 0;
   const ageStep = advanceLifeClock(next);
   next.resources.energy = 100;
   next.resources.health = clamp(next.resources.health + (ageStep === 'month' ? 2 : 4));
