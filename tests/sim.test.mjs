@@ -834,6 +834,20 @@ test('social posts grow followers and tie into reputation, money, heat, and spon
   assert.ok(sponsor.relationships.sponsor > afterClip.relationships.sponsor);
 });
 
+test('followers pay one money each on age up', () => {
+  const base = createNewLife({ gender: 'Female', seed: 183 });
+  const life = {
+    ...base,
+    identity: { ...base.identity, age: 12, month: 0 },
+    social: { ...base.social, followers: 1234 },
+  };
+
+  const next = ageUp(life);
+
+  assert.equal(next.resources.money, life.resources.money + 20 + 1234);
+  assert.ok(next.log.some((entry) => entry.text.includes('Social income')));
+});
+
 test('each social media post action has twelve popup flavor variations', () => {
   const base = {
     ...createNewLife({ gender: 'Male', seed: 184 }),

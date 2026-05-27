@@ -2795,6 +2795,13 @@ function addFollowers(life, amount) {
   life.social.followers = Math.max(0, Math.floor(life.social.followers + amount));
 }
 
+function applyFollowerAgeUpIncome(life) {
+  life.social = normalizeSocial(life);
+  const followerIncome = Math.max(0, Math.floor(life.social.followers));
+  if (followerIncome > 0) life.resources.money += followerIncome;
+  return followerIncome;
+}
+
 function followerTierBonus(followers = 0) {
   if (followers >= 1000000) return 5;
   if (followers >= 100000) return 4;
@@ -6903,6 +6910,7 @@ export function ageUp(life) {
   next.resources.health = clamp(next.resources.health + (ageStep === 'month' ? 2 : 4));
   next.resources.mood = clamp(next.resources.mood + (ageStep === 'month' ? 1 : 2));
   next.resources.money += next.identity.age < 18 ? 20 : ageStep === 'month' ? 60 : 120;
+  const followerIncome = applyFollowerAgeUpIncome(next);
 
   if (next.identity.age >= 18 && next.phase === 'Youth') {
     next.phase = 'Local Fighter';
@@ -6922,7 +6930,10 @@ export function ageUp(life) {
   runAutoUpkeep(next);
 
   const event = yearlyEvent(next, ageStep);
-  return queueTriggeredEvents(addLog(event.life, event.text, event.type), 'ageUp', {
+  const logged = followerIncome > 0
+    ? addLog(addLog(event.life, event.text, event.type), `Social income: ${followerIncome} followers paid $${followerIncome}.`, 'social')
+    : addLog(event.life, event.text, event.type);
+  return queueTriggeredEvents(logged, 'ageUp', {
     age: next.identity.age,
     month: next.identity.month ?? 0,
     ageStep,
