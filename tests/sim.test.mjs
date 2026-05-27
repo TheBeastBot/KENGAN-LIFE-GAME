@@ -265,6 +265,23 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
+test('hunter quest System moves reset for every monster exchange', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 9123 }),
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9123 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+
+  const first = takeFightTurn(life, 'slash');
+  const slash = getUnlockedHunterMoves(first).find((move) => move.id === 'slash');
+  const second = takeFightTurn(first, 'slash');
+
+  assert.equal(slash.disabledReason, '');
+  assert.equal(second.activeFight.round, first.activeFight.round + 1);
+});
+
 test('normal fights still expose normal moves and no Hunter moves', () => {
   const life = startFight(createNewLife({ gender: 'Male', seed: 9122 }), 'alleyScrapper');
 

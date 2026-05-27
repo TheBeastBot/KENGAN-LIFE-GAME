@@ -131,7 +131,6 @@ export const HUNTER_MOVES = {
     staminaCost: 14,
     damageBias: 1.15,
     guardBias: -2,
-    cooldown: 1,
     text: 'System Slash cuts a bright line through the monster entry.',
   },
   dashStrike: {
@@ -141,7 +140,6 @@ export const HUNTER_MOVES = {
     staminaCost: 18,
     damageBias: 1.28,
     guardBias: -4,
-    cooldown: 1,
     text: 'Dash Strike turns footwork into a blue afterimage and impact.',
   },
   manaGuard: {
@@ -151,7 +149,6 @@ export const HUNTER_MOVES = {
     staminaCost: 8,
     damageBias: 0.45,
     guardBias: 12,
-    cooldown: 1,
     text: 'Mana Guard blooms over your forearms before the monster lands clean.',
   },
   analyzeWeakness: {
@@ -161,7 +158,6 @@ export const HUNTER_MOVES = {
     staminaCost: 7,
     damageBias: 0.55,
     guardBias: 4,
-    cooldown: 2,
     text: 'Analyze Weakness turns the monster movement into readable System marks.',
   },
   execute: {
@@ -171,7 +167,6 @@ export const HUNTER_MOVES = {
     staminaCost: 28,
     damageBias: 1.85,
     guardBias: -7,
-    cooldown: 3,
     text: 'Execute marks the target and drives the final line toward the core.',
   },
   shadowAssist: {
@@ -181,7 +176,6 @@ export const HUNTER_MOVES = {
     staminaCost: 20,
     damageBias: 1.35,
     guardBias: 2,
-    cooldown: 2,
     text: 'Shadow Assist drags the monster timing off-beat for one brutal opening.',
   },
 };
@@ -4740,7 +4734,6 @@ export function getUnlockedHunterMoves(life) {
   return Object.entries(HUNTER_MOVES).map(([id, move]) => ({
     id,
     ...move,
-    cooldownRemaining: life.activeFight?.moveCooldowns?.[id] ?? 0,
     disabledReason: hunterMoveDisabledReason(life, { id, ...move }),
   }));
 }
@@ -4749,8 +4742,6 @@ function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
   if (!fight || fight.finished || fight.source !== 'hunterQuest') return '';
   if (move.id === 'shadowAssist' && !(normalizeHunterWorld(life.hunterWorld).shadowArmy?.length)) return 'Requires at least one shadow in your army.';
-  const cooldown = fight.moveCooldowns?.[move.id] ?? 0;
-  if (cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'}.`;
   if ((fight.meters.playerStamina ?? 0) < Math.max(1, move.staminaCost - 4)) return 'Not enough stamina for this System skill.';
   return '';
 }
@@ -6926,12 +6917,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   const enemyDamage = dodged ? 0 : baseEnemyDamage;
 
-  for (const [id, cooldown] of Object.entries(fight.moveCooldowns ?? {})) {
-    const remaining = Math.max(0, cooldown - 1);
-    if (remaining) fight.moveCooldowns[id] = remaining;
-    else delete fight.moveCooldowns[id];
-  }
-  fight.moveCooldowns[move.id] = move.cooldown ?? 1;
+  fight.moveCooldowns = {};
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   fight.meters.playerStamina = clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, 100);
