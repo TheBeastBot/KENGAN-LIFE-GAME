@@ -4341,6 +4341,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     trainingPopup: null,
     trainingSessionCount: 0,
     trainingSessionsUsed: 0,
+    favoriteTrainingIds: [],
     log: [
       createLog(`Born in the ${pick(NEIGHBORHOODS, rng)} with a ${familyWealth} family.`),
       createLog(`Clan result: ${clan.name} [${clan.rarity}].`, 'clan'),
@@ -4715,6 +4716,20 @@ export function toggleAutoTraining(life, actionId) {
   if (trained === 'limit') return addLog(result, `Auto training paused: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train');
   if (!trained) return addLog(result, `Auto training queued: ${TRAINING_ACTIONS[actionId].name} will run when you have enough energy.`, 'train');
   return addLog(result, `Auto training: ${TRAINING_ACTIONS[actionId].name} ran immediately without popups.`, 'train');
+}
+
+export function toggleFavoriteTraining(life, actionId) {
+  if (!TRAINING_ACTIONS[actionId]) return life;
+  const next = clone(life);
+  const favorites = new Set(
+    Array.isArray(next.favoriteTrainingIds)
+      ? next.favoriteTrainingIds.filter((id) => Boolean(TRAINING_ACTIONS[id]))
+      : []
+  );
+  if (favorites.has(actionId)) favorites.delete(actionId);
+  else favorites.add(actionId);
+  next.favoriteTrainingIds = [...favorites];
+  return next;
 }
 
 export function toggleAutoRecovery(life, actionId) {

@@ -67,6 +67,7 @@ import {
   scheduleCoachedFight,
   toggleAutoRecovery,
   toggleAutoTraining,
+  toggleFavoriteTraining,
   useSocialAction,
   spendHunterStatPoint,
   extractShadow,
@@ -76,7 +77,7 @@ import {
   retreatHunterDungeon,
   visitHunterAssociation,
 } from './sim.mjs';
-import { createDropdownStateController } from './ui-state.mjs';
+import { captureElementScroll, createDropdownStateController, restoreElementScroll } from './ui-state.mjs';
 
 const STORAGE_KEY = 'underground-life-sim-save-v1';
 const DROPDOWN_STORAGE_KEY = 'underground-life-sim-dropdowns-v1';
@@ -217,6 +218,8 @@ let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
 let pendingMobileScroll = null;
+let pendingPopupScroll = null;
+let fightInfoOpen = false;
 let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
@@ -227,6 +230,7 @@ const dropdownState = createDropdownStateController({
   storage: localStorage,
   storageKey: DROPDOWN_STORAGE_KEY,
   defaults: {
+    'train-favorites': true,
     'train-core': true,
     'recover-core': true,
     'money-fight-prep': true,
@@ -281,6 +285,9 @@ function normalizeSave(save) {
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
     trainingSessionsUsed: Math.max(0, Math.min(20, Math.floor(save.trainingSessionsUsed ?? 0))),
+    favoriteTrainingIds: Array.isArray(save.favoriteTrainingIds)
+      ? save.favoriteTrainingIds.filter((id) => Boolean(TRAINING_ACTIONS[id]))
+      : [],
     eventFlags: save.eventFlags ?? {},
     activeFight: normalizeFight(save.activeFight),
     injuries: save.injuries ?? [],
@@ -472,12 +479,21 @@ function migrateClan(clan) {
 
 function setState(next, options = {}) {
   const previous = state;
+  if (
+    !pendingPopupScroll &&
+    previous?.activeFight &&
+    !previous.activeFight.finished &&
+    next?.activeFight?.source === previous.activeFight.source
+  ) {
+    queueRenderedPopupScroll();
+  }
   state = next;
   uiFeedback = buildUiFeedback(previous, next);
   saveGame();
   render();
   applyPendingCoachScroll();
   applyPendingMobileScroll();
+  applyPendingPopupScroll();
   scheduleFeedbackClear();
   if (!options.skipAutoRoutine) scheduleAutoRoutine();
 }
@@ -492,7 +508,7 @@ function shouldPreserveMobileScroll(action) {
   if (action === 'new-life' || action === 'reset') return false;
   if (action === 'close-fight' || action.startsWith('start-fight-') || action === 'start-rival-fight') return false;
   if (action === 'join-tournament' || action === 'start-tournament-fight') return false;
-  if (action.startsWith('event-') || action.startsWith('fight-turn-')) return false;
+  if (action.startsWith('event-')) return false;
   return true;
 }
 
@@ -530,6 +546,23 @@ function applyPendingMobileScroll() {
   });
 }
 
+function queuePopupScroll(action, source = null) {
+  if (!action?.startsWith('fight-turn-')) return;
+  pendingPopupScroll = captureElementScroll(source?.closest?.('[data-scroll-key]'));
+}
+
+function queueRenderedPopupScroll() {
+  const popup = document.querySelector('[data-scroll-key]');
+  pendingPopupScroll = captureElementScroll(popup);
+}
+
+function applyPendingPopupScroll() {
+  if (!pendingPopupScroll) return;
+  const pending = pendingPopupScroll;
+  pendingPopupScroll = null;
+  window.requestAnimationFrame(() => restoreElementScroll(document, pending));
+}
+
 function queueCoachScroll() {
   pendingCoachScrollY = window.scrollY;
 }
@@ -549,8 +582,10 @@ function scheduleFeedbackClear() {
   feedbackTimer = window.setTimeout(() => {
     uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
     queueMobileScroll('feedback-clear');
+    queueRenderedPopupScroll();
     render();
     applyPendingMobileScroll();
+    applyPendingPopupScroll();
   }, 1200);
 }
 
@@ -963,8 +998,18 @@ function renderCurrentClanAwakeningDetails() {
 
 function renderTrain() {
   const allowance = getTrainingAllowance(state);
+  const favorites = (state.favoriteTrainingIds ?? []).filter((id) => Boolean(TRAINING_ACTIONS[id]));
   return `
     <section class="stack">
+      ${renderCollapsibleSection({
+        id: 'train-favorites',
+        title: 'Favorite Trainings',
+        subtitle: favorites.length ? 'Your prioritized sessions, ready without hunting through the full list.' : 'Star a normal training to keep it here for quick access.',
+        count: favorites.length,
+        body: favorites.length
+          ? `<section class="card-list">${favorites.map((id) => renderTrainingCard(id, TRAINING_ACTIONS[id])).join('')}</section>`
+          : '<article class="option-card favorite-empty-state"><h2>No favorites yet</h2><p>Tap the star on a normal training to add it here.</p></article>',
+      })}
       ${renderCollapsibleSection({
         id: 'train-core',
         title: 'Training',
@@ -988,8 +1033,12 @@ function renderTrainingCard(id, action) {
   const autoStatus = getAutoTrainingStatus(state, id);
   const autoEnabled = Boolean(state.autoTraining?.[id]) && !autoStatus.locked;
   const autoBlocked = allowance.exhausted && !autoEnabled;
+  const favorite = state.favoriteTrainingIds?.includes(id);
   return `
     <article class="option-card train-card" data-train-card="${id}">
+      <button class="favorite-training-toggle ${favorite ? 'selected' : ''}" data-action="favorite-train-${id}" aria-pressed="${favorite ? 'true' : 'false'}" aria-label="${favorite ? 'Remove' : 'Add'} ${escapeHtml(action.name)} ${favorite ? 'from' : 'to'} favorites" title="${favorite ? 'Remove from favorites' : 'Add to favorites'}">
+        <span aria-hidden="true">${favorite ? '&#9733;' : '&#9734;'}</span>
+      </button>
       ${renderTrainingImage(id, action)}
       <div>
         <h2>${action.name}</h2>
@@ -1408,7 +1457,7 @@ function renderActiveFight() {
         <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Win' : 'Loss') : 'Live'}</span>
       </article>
       ${renderCombatMeters(fight)}
-      ${fight.exchanges.length === 0 ? renderBreakdown(fight) : ''}
+      ${renderBreakdown(fight)}
       ${fight.finished ? renderFightReport(fight) : renderTactics()}
       ${renderExchanges(fight)}
     </section>
@@ -1517,11 +1566,25 @@ function combatMeter(label, value, sublabel, max = 100) {
 }
 
 function renderBreakdown(fight) {
-  return `
+  return renderFightInfoDropdown('Fight Info', 'Pre-fight read and matchup weaknesses.', `
     <article class="breakdown dossier-report">
       <h2>Pre-Fight Read</h2>
       ${fight.breakdown.map((line) => `<p class="${line.startsWith('Specific weak move:') ? 'weak-move-read' : ''}">${line}</p>`).join('')}
     </article>
+  `);
+}
+
+function renderFightInfoDropdown(title, subtitle, body) {
+  return `
+    <details class="collapsible-section fight-info-dropdown" data-fight-info ${fightInfoOpen ? 'open' : ''}>
+      <summary class="collapsible-summary">
+        <span>
+          <strong>${escapeHtml(title)}</strong>
+          <em>${escapeHtml(subtitle)}</em>
+        </span>
+      </summary>
+      <div class="collapsible-body">${body}</div>
+    </details>
   `;
 }
 
@@ -2324,7 +2387,7 @@ function renderHunterQuestPopup() {
   if (!quest && state.activeFight?.source !== 'hunterQuest') return '';
   return `
     <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup">
+      <section class="event-modal hunter-quest-popup" data-scroll-key="hunter-quest">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">System Daily Quest</p>
@@ -2353,7 +2416,7 @@ function renderHunterMonsterFight(mode = 'quest') {
         <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Cleared' : 'Failed') : 'Live'}</span>
       </article>
       ${renderHunterCombatMeters(fight)}
-      ${fight.exchanges.length === 0 ? renderHunterMonsterReadout(fight, opponent, mode) : ''}
+      ${renderHunterMonsterReadout(fight, opponent, mode)}
       ${fight.finished ? (mode === 'dungeon' ? renderHunterDungeonFightReport(fight) : renderFightReport(fight)) : renderHunterMoves(mode)}
       ${renderExchanges(fight)}
     </section>
@@ -2386,7 +2449,7 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
     .map((moveId) => HUNTER_MONSTER_MOVES[moveId]?.label)
     .filter(Boolean)
     .join(', ');
-  return `
+  return renderFightInfoDropdown('Fight Info', 'System target read and observed monster attacks.', `
     <article class="breakdown dossier-report system-monster-readout">
       <h2>System Monster Read</h2>
       <p>${objective}</p>
@@ -2396,7 +2459,7 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
       ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}
     </article>
-  `;
+  `);
 }
 
 function renderHunterMoves(mode = 'quest') {
@@ -2536,7 +2599,7 @@ function renderHunterDungeonPopup() {
   if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
   return `
     <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup dungeon-popup">
+      <section class="event-modal hunter-quest-popup dungeon-popup" data-scroll-key="hunter-dungeon">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">Gate Board</p>
@@ -2906,6 +2969,10 @@ function handleAction(action, source = null) {
     setState(toggleAutoRecovery(state, action.replace('auto-recover-', '')));
     return;
   }
+  if (action.startsWith('favorite-train-')) {
+    setState(toggleFavoriteTraining(state, action.replace('favorite-train-', '')));
+    return;
+  }
   if (action.startsWith('train-')) {
     const trainingId = action.replace('train-', '');
     const trainingAction = TRAINING_ACTIONS[trainingId];
@@ -2965,6 +3032,7 @@ function handleAction(action, source = null) {
   if (action === 'hunter-quest-fight') {
     activeTab = 'hunter';
     hunterQuestPopupOpen = true;
+    fightInfoOpen = false;
     setState(startHunterQuestFight(state));
     return;
   }
@@ -3001,6 +3069,7 @@ function handleAction(action, source = null) {
   }
   if (action === 'hunter-dungeon-start') {
     hunterDungeonPopupOpen = true;
+    fightInfoOpen = false;
     setState(startHunterDungeonEncounter(state));
     return;
   }
@@ -3090,10 +3159,12 @@ function handleAction(action, source = null) {
   }
   if (action.startsWith('start-fight-')) {
     selectedFightCategory = null;
+    fightInfoOpen = false;
     setState(startFight(state, action.replace('start-fight-', '')));
   }
   if (action === 'start-rival-fight') {
     selectedFightCategory = null;
+    fightInfoOpen = false;
     setState(startRivalFight(state));
   }
   if (action === 'join-tournament') {
@@ -3103,6 +3174,7 @@ function handleAction(action, source = null) {
   if (action === 'start-tournament-fight') {
     selectedFightCategory = null;
     activeTab = 'tournament';
+    fightInfoOpen = false;
     setState(startTournamentFight(state));
   }
   if (action.startsWith('open-tactic-')) {
@@ -3123,6 +3195,7 @@ function handleAction(action, source = null) {
   }
   if (action === 'close-fight') {
     selectedFightCategory = null;
+    fightInfoOpen = false;
     setState({ ...state, activeFight: null });
   }
   if (action.startsWith('event-')) {
@@ -3181,11 +3254,17 @@ document.addEventListener('click', (event) => {
   const action = event.target.closest('[data-action]');
   if (action) {
     queueMobileScroll(action.dataset.action, action);
+    queuePopupScroll(action.dataset.action, action);
     handleAction(action.dataset.action, action);
   }
 });
 
 document.addEventListener('toggle', (event) => {
+  const fightInfo = event.target?.closest?.('[data-fight-info]');
+  if (fightInfo && event.target === fightInfo) {
+    fightInfoOpen = fightInfo.open;
+    return;
+  }
   const dropdown = event.target?.closest?.('[data-dropdown-id]');
   if (!dropdown || event.target !== dropdown) return;
   const id = dropdown.dataset.dropdownId;

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  captureElementScroll,
   createDropdownStateController,
+  restoreElementScroll,
 } from '../src/ui-state.mjs';
 
 function memoryStorage(initial = {}) {
@@ -48,4 +50,21 @@ test('dropdown toggles are persisted and override defaults', () => {
 
   assert.equal(reloaded.isOpen('training'), false);
   assert.equal(reloaded.isOpen('history'), true);
+});
+
+test('popup scroll snapshots restore the matching rerendered surface without smooth scrolling', () => {
+  const previous = { scrollTop: 284, dataset: { scrollKey: 'hunter-dungeon' } };
+  const next = { scrollTop: 0 };
+  const root = {
+    querySelector(selector) {
+      assert.equal(selector, '[data-scroll-key="hunter-dungeon"]');
+      return next;
+    },
+  };
+
+  const snapshot = captureElementScroll(previous);
+  const restored = restoreElementScroll(root, snapshot);
+
+  assert.equal(restored, true);
+  assert.equal(next.scrollTop, 284);
 });

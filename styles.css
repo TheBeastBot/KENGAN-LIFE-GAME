@@ -581,6 +581,8 @@ select:focus {
   width: min(100%, 720px);
   max-height: min(86vh, 820px);
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border-color: rgba(87, 151, 229, 0.5);
   background:
     linear-gradient(135deg, rgba(87, 151, 229, 0.13), rgba(125, 243, 198, 0.08)),
@@ -1914,6 +1916,45 @@ select:focus {
   font-weight: 700;
 }
 
+.train-card {
+  position: relative;
+}
+
+.option-card > .favorite-training-toggle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-color: rgba(229, 185, 79, 0.42);
+  background: rgba(16, 17, 18, 0.82);
+  color: var(--gold);
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
+.option-card > .favorite-training-toggle.selected {
+  border-color: rgba(229, 185, 79, 0.78);
+  background: rgba(229, 185, 79, 0.16);
+}
+
+.favorite-empty-state {
+  min-height: 76px;
+  align-content: center;
+}
+
+.fight-info-dropdown .collapsible-body {
+  padding-top: 10px;
+}
+
+.fight-info-dropdown .breakdown {
+  margin: 0;
+}
+
 .social-grid .full {
   grid-column: 1 / -1;
 }
@@ -1998,6 +2039,12 @@ select:focus {
       contain-intrinsic-size: 96px;
     }
   }
+}
+
+.combat .exchange-log article,
+.hunter-quest-popup .exchange-log article {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
 }
 
 @media (max-width: 560px) {

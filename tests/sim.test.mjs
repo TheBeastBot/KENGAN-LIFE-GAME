@@ -72,6 +72,7 @@ import {
   scheduleCoachedFight,
   toggleAutoRecovery,
   toggleAutoTraining,
+  toggleFavoriteTraining,
   trashTalkOpponent,
   takeFightTurn,
   train,
@@ -98,6 +99,20 @@ test('new life uses the chosen first name and current clan as last name', () => 
   assert.equal(life.identity.firstName, 'Kazuo');
   assert.equal(life.identity.lastName, life.clan.name);
   assert.equal(life.identity.name, `Kazuo ${life.clan.name}`);
+});
+
+test('favorite trainings are persisted separately from training progress and can be toggled off', () => {
+  const life = createNewLife({ seed: 42 });
+  const initialStats = { ...life.stats };
+
+  const favorited = toggleFavoriteTraining(life, 'heavyBag');
+  const unfavorited = toggleFavoriteTraining(favorited, 'heavyBag');
+
+  assert.deepEqual(life.favoriteTrainingIds, []);
+  assert.deepEqual(favorited.favoriteTrainingIds, ['heavyBag']);
+  assert.deepEqual(unfavorited.favoriteTrainingIds, []);
+  assert.deepEqual(favorited.stats, initialStats);
+  assert.equal(favorited.resources.energy, life.resources.energy);
 });
 
 test('new life starts with locked hunter world state', () => {
