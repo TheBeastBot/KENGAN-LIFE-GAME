@@ -3747,6 +3747,52 @@ test('bottom position shows reversals and get-ups, which can flip or stand the f
   assert.match(stoodUp.activeFight.grappling.lastTransition, /Get up:/);
 });
 
+test('grappling skill improves bottom get-up success', () => {
+  const base = createNewLife({ gender: 'Male', seed: 12032 });
+  const fighter = {
+    ...base,
+    identity: { ...base.identity, age: 22 },
+    world: { ...base.world, hiddenWorld: true },
+    record: { wins: 20, losses: 0, kos: 10 },
+    resources: { ...base.resources, reputation: 500, energy: 100 },
+    stats: {
+      strength: 100,
+      speed: 100,
+      durability: 100,
+      technique: 100,
+      fightIq: 100,
+      willpower: 100,
+      reflexes: 100,
+      flexibility: 100,
+      aggression: 100,
+      control: 100,
+    },
+    unlockedSkills: [...Object.keys(FIGHT_MOVES)],
+  };
+  const bottomState = {
+    phase: 'ground',
+    top: 'opponent',
+    position: 'mount',
+    lastTransition: 'Takedown: test bottom.',
+  };
+  const lowGrappling = startFight({ ...fighter, techniques: { striking: 0, grappling: 0, defense: 0 } }, 'warehouseChamp');
+  lowGrappling.activeFight.grappling = bottomState;
+  lowGrappling.activeFight.meters.playerStamina = 60;
+  lowGrappling.activeFight.meters.opponentStamina = 90;
+  const highGrappling = startFight({ ...fighter, techniques: { striking: 0, grappling: 150, defense: 0 } }, 'warehouseChamp');
+  highGrappling.activeFight.grappling = bottomState;
+  highGrappling.activeFight.meters.playerStamina = 60;
+  highGrappling.activeFight.meters.opponentStamina = 90;
+
+  const denied = takeFightTurn(lowGrappling, 'technicalStandUp');
+  const escaped = takeFightTurn(highGrappling, 'technicalStandUp');
+
+  assert.equal(denied.activeFight.grappling.phase, 'ground');
+  assert.match(denied.activeFight.grappling.lastTransition, /Get up denied:/);
+  assert.equal(escaped.activeFight.grappling.phase, 'standing');
+  assert.match(escaped.activeFight.grappling.lastTransition, /Get up:/);
+});
+
 test('bottom position unlocks conserve survival moves that reduce ground damage', () => {
   const base = createNewLife({ gender: 'Male', seed: 12031 });
   const fighter = {

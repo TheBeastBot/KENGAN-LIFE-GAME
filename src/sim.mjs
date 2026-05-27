@@ -5791,7 +5791,7 @@ function playerGrapplingSkill(life, role = 'takedown') {
     takedown: stats.strength * 0.34 + stats.speed * 0.24,
     submission: stats.control * 0.35 + stats.flexibility * 0.22,
     reversal: stats.flexibility * 0.32 + stats.reflexes * 0.2,
-    getUp: stats.speed * 0.25 + stats.willpower * 0.18,
+    getUp: stats.speed * 0.25 + stats.willpower * 0.18 + techniqueTrack * 0.28,
   }[role] ?? 0;
   return (
     stats.technique * 0.82 +
