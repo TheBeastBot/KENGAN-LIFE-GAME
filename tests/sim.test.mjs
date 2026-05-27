@@ -9,6 +9,8 @@ import {
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
+  HUNTER_MONSTERS,
+  HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
   MENTORS,
   MONEY_ACTIONS,
@@ -289,7 +291,7 @@ test('hunter quest System moves reset for every monster exchange', () => {
   assert.equal(second.activeFight.round, first.activeFight.round + 1);
 });
 
-test('hunter quest Conserve restores mana, raises guard, and deals no outgoing damage', () => {
+test('hunter quest Conserve works at zero mana, restores mana, raises guard, and deals no outgoing damage', () => {
   let life = {
     ...createNewLife({ gender: 'Female', seed: 9124 }),
     hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9124 }).hunterWorld, unlocked: true, playerAwakened: true },
@@ -297,7 +299,7 @@ test('hunter quest Conserve restores mana, raises guard, and deals no outgoing d
   life = runHunterDailyQuest(life);
   life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
   life = startHunterQuestFight(life);
-  life.activeFight.meters.playerStamina = 20;
+  life.activeFight.meters.playerStamina = 0;
   life.activeFight.meters.guard = 35;
   const monsterHealth = life.activeFight.meters.opponentHealth;
 
@@ -307,7 +309,7 @@ test('hunter quest Conserve restores mana, raises guard, and deals no outgoing d
   assert.equal(exchange.moveId, 'conserve');
   assert.equal(exchange.playerDamage, 0);
   assert.equal(next.activeFight.meters.opponentHealth, monsterHealth);
-  assert.equal(next.activeFight.meters.playerStamina, 38);
+  assert.equal(next.activeFight.meters.playerStamina, 18);
   assert.equal(next.activeFight.meters.guard, 49);
   assert.ok(exchange.enemyDamage >= 0);
 });
@@ -539,6 +541,67 @@ test('selecting a Gate creates a multi-room dungeon with a final boss System fig
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
+test('Arch Lich dungeon exchanges use spell attacks instead of human fighting moves', () => {
+  const initial = createNewLife({ gender: 'Male', seed: 9211 });
+  let life = {
+    ...initial,
+    hunterWorld: {
+      ...initial.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      activeDungeon: {
+        id: 'dungeon-lich-test',
+        name: 'Black Mana Vault',
+        rank: 'A',
+        encounters: [{ monsterId: 'archLichBoss', isBoss: true }],
+        encounterIndex: 0,
+        carriedHealth: null,
+        carriedStamina: null,
+        startedMonth: 0,
+        rewardsEarned: [],
+        completed: false,
+        retreated: false,
+        failed: false,
+        bossDefeated: false,
+        outcome: null,
+        awaitingAdvance: false,
+      },
+    },
+  };
+  life = startHunterDungeonEncounter(life);
+
+  const next = takeFightTurn(life, 'manaGuard');
+  const exchange = next.activeFight.exchanges[0];
+  const lichSpells = ['Death Array', 'Soul Spear', 'Phylactery Curse'];
+  const humanMoves = Object.values(ENEMY_FIGHT_MOVES).map((move) => move.label);
+
+  assert.ok(lichSpells.includes(exchange.opponentMoveLabel));
+  assert.ok(!humanMoves.includes(exchange.opponentMoveLabel));
+});
+
+test('every System monster exposes a dedicated non-human attack kit', () => {
+  const humanMoves = new Set(Object.values(ENEMY_FIGHT_MOVES).map((move) => move.label));
+
+  for (const [monsterId, monster] of Object.entries(HUNTER_MONSTERS)) {
+    assert.ok(monster.moveIds?.length >= 2, `${monsterId} should have its own System attacks`);
+    for (const moveId of monster.moveIds) {
+      assert.ok(HUNTER_MONSTER_MOVES[moveId], `${monsterId} should resolve ${moveId}`);
+      assert.ok(!humanMoves.has(HUNTER_MONSTER_MOVES[moveId].label), `${monsterId} should not resolve a human fight move`);
+    }
+  }
+});
+
+test('System monster combat scales dungeon danger above the authored base opponents', () => {
+  const eRoom = getOpponentStats(HUNTER_MONSTERS.gateCrawler);
+  const aBoss = getOpponentStats(HUNTER_MONSTERS.archLichBoss);
+  const redBoss = getOpponentStats(HUNTER_MONSTERS.redDemonKnight);
+  const normalBoss = getOpponentStats(HUNTER_MONSTERS.demonKnightBoss);
+
+  assert.ok(eRoom.strength >= 90);
+  assert.ok(aBoss.strength >= 900);
+  assert.ok(redBoss.strength > normalBoss.strength);
+});
+
 test('dungeon room rewards pay immediately and health and mana carry into the boss encounter', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 922 }),
@@ -594,17 +657,17 @@ test('System Conserve mana recovered in a dungeon carries into the following roo
   life = generateHunterGateOffers(life);
   life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
   life = startHunterDungeonEncounter(life);
-  life.activeFight.meters.playerStamina = 20;
+  life.activeFight.meters.playerStamina = 0;
 
   life = takeFightTurn(life, 'conserve');
-  assert.equal(life.activeFight.meters.playerStamina, 38);
+  assert.equal(life.activeFight.meters.playerStamina, 18);
   life.activeFight.meters.opponentHealth = 1;
   life = takeFightTurn(life, 'slash');
   const carriedMana = life.hunterWorld.activeDungeon.carriedStamina;
   life = advanceHunterDungeon(life);
 
   assert.equal(life.activeFight.meters.playerStamina, carriedMana);
-  assert.ok(carriedMana > 20);
+  assert.ok(carriedMana > 0);
 });
 
 test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and shadow eligibility', () => {
@@ -1378,6 +1441,48 @@ test('auto recovery runs enabled recovery when resources are low without popup e
   assert.equal(next.trainingPopup, null);
   assert.ok(!next.pendingEvent);
   assert.ok(next.log.some((item) => item.text.includes('Auto recovery')));
+});
+
+test('auto recovery remains paused throughout every live fight source', () => {
+  const initial = createNewLife({ gender: 'Female', seed: 3051 });
+  const configured = {
+    ...initial,
+    resources: { ...initial.resources, money: 1000, health: 35, energy: 20 },
+    mentor: MENTORS.find((mentor) => mentor.id === 'dockVeteran'),
+    autoRecovery: { restDay: true },
+  };
+  const normalFight = startFight(configured, 'alleyScrapper');
+  const questFight = {
+    ...normalFight,
+    activeFight: { ...normalFight.activeFight, source: 'hunterQuest', questId: 'test-quest' },
+  };
+  const dungeonFight = {
+    ...normalFight,
+    activeFight: { ...normalFight.activeFight, source: 'hunterDungeon', dungeonId: 'test-dungeon' },
+  };
+
+  for (const life of [normalFight, questFight, dungeonFight]) {
+    const next = runAutoRoutine(life);
+    assert.equal(next.resources.health, life.resources.health);
+    assert.equal(next.resources.energy, life.resources.energy);
+    assert.equal(next.resources.money, life.resources.money);
+  }
+});
+
+test('enabling auto recovery during a live fight queues it without immediately healing', () => {
+  const initial = createNewLife({ gender: 'Female', seed: 3052 });
+  const life = startFight({
+    ...initial,
+    resources: { ...initial.resources, money: 1000, health: 35, energy: 20 },
+    mentor: MENTORS.find((mentor) => mentor.id === 'dockVeteran'),
+  }, 'alleyScrapper');
+
+  const next = toggleAutoRecovery(life, 'restDay');
+
+  assert.equal(next.autoRecovery.restDay, true);
+  assert.equal(next.resources.health, life.resources.health);
+  assert.equal(next.resources.money, life.resources.money);
+  assert.ok(next.log[0].text.includes('paused while a fight is live'));
 });
 
 test('spar training partner is first and trains every stat with a popup', () => {

@@ -3,6 +3,7 @@ import {
   CLAN_RARITIES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
+  HUNTER_MONSTER_MOVES,
   MENTORS,
   MONEY_ACTIONS,
   SOCIAL_ACTIONS,
@@ -1054,7 +1055,7 @@ function renderRecoveryCard(id, action) {
       <div class="mini-actions two-actions">
         <button data-action="recover-${id}">Recover</button>
         <button class="small-btn ${autoEnabled ? 'primary' : ''}" data-action="auto-recover-${id}">
-          ${autoStatus.locked ? 'Auto Locked' : autoEnabled ? 'Auto On' : 'Auto Off'}
+          ${autoStatus.locked ? 'Auto Locked' : autoEnabled && autoStatus.paused ? 'Auto Paused' : autoEnabled ? 'Auto On' : 'Auto Off'}
         </button>
       </div>
     </article>
@@ -2381,11 +2382,16 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
   const objective = mode === 'dungeon'
     ? `Gate: ${escapeHtml(dungeon?.name ?? 'Dungeon Run')} / Room ${(dungeon?.encounterIndex ?? 0) + 1} of ${dungeon?.encounters?.length ?? 1}${fight.isBoss ? ' / Boss' : ''}.`
     : `Quest: ${escapeHtml(quest?.title ?? 'Daily Quest')}${stage?.title ? ` / ${escapeHtml(stage.title)}` : ''}.`;
+  const monsterAttacks = (opponent.moveIds ?? [])
+    .map((moveId) => HUNTER_MONSTER_MOVES[moveId]?.label)
+    .filter(Boolean)
+    .join(', ');
   return `
     <article class="breakdown dossier-report system-monster-readout">
       <h2>System Monster Read</h2>
       <p>${objective}</p>
       <p>Target: ${escapeHtml(opponent.name)}. Threat pattern: ${escapeHtml(opponent.style)} / ${escapeHtml(opponent.threat)}.</p>
+      ${monsterAttacks ? `<p>Observed monster attacks: ${escapeHtml(monsterAttacks)}.</p>` : ''}
       <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Conserve, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
       ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}

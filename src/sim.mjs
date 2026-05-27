@@ -199,9 +199,76 @@ for (const [rank, bossId, baseBossId] of [
     ...boss,
     name: `Elite Red ${boss.name}`,
     threat: `Red Gate ${rank}-Rank Boss`,
-    power: Math.round(boss.power * 1.24),
-    risk: Math.round(boss.risk * 1.2),
+    power: Math.round(boss.power * 1.35),
+    risk: Math.round(boss.risk * 1.25),
   };
+}
+
+const HUNTER_MONSTER_ATTACK_LABELS = {
+  systemGoblinScout: ['Raking Lunge', 'Ankle Bite', 'Shriek Pounce'],
+  subwayRipper: ['Tunnel Skewer', 'Ceiling Drop', 'Darkline Ambush'],
+  manaHoundAlpha: ['Mana Fang', 'Pack Rush', 'Alpha Howl'],
+  gateCrawler: ['Skitter Claw', 'Wall Pounce'],
+  manaMite: ['Swarm Bite', 'Mana Siphon'],
+  goblinCaptain: ['Rust Blade Flurry', 'Dirty Bomb', 'Commanding Shriek'],
+  razorJawAlpha: ['Razor Bite', 'Mauling Charge', 'Pack Frenzy'],
+  stoneFang: ['Granite Bite', 'Tail Sweep'],
+  ironImp: ['Hooked Talons', 'Scrap Dive'],
+  ironKnightBoss: ['Execution Cleave', 'Shield Crush', 'Mana-Joint Thrust'],
+  drownedSentinel: ['Anchor Cleave', 'Undertow Grasp', 'Flooded Judgment'],
+  bloodApe: ['Rending Smash', 'Bloodrage Slam'],
+  venomStalker: ['Needle Pounce', 'Venom Spray'],
+  bloodOgreBoss: ['Bone Maul', 'Meat Hook', 'Bloodquake'],
+  cryptMinotaur: ['Labyrinth Charge', 'Horn Toss', 'Gravewall Crash'],
+  frostStalker: ['Ice Fang', 'Whiteout Ambush'],
+  iceRevenant: ['Frozen Spear', 'Soul Chill'],
+  frostWardenBoss: ['Glacial Sentence', 'Ice Prison', 'Absolute Zero'],
+  ashGolemBoss: ['Cinder Hammer', 'Ash Burst', 'Molten Core'],
+  abyssKnight: ['Void Sword', 'Blink Sever'],
+  voidCaster: ['Mana Lance', 'Gravity Hex'],
+  demonKnightBoss: ['Black Flame Blade', 'Hellfire Rend', 'Demonic Execution'],
+  archLichBoss: ['Death Array', 'Soul Spear', 'Phylactery Curse'],
+  dragonSpawn: ['Inferno Claw', 'Wing Buffet'],
+  chaosKnight: ['Space Sever', 'Rift Impale'],
+  dragonMonarchBoss: ['Calamity Breath', 'Wingstorm Cataclysm', 'Dragon Fear'],
+  monarchAvatarBoss: ['Ruin Decree', 'Shadow Dominion', 'Existence Break'],
+  redGoblinCaptain: ['Crimson Blade Flurry', 'Red Gate Bomb', 'Blood Command'],
+  redIronKnight: ['Crimson Execution', 'Red Shield Rupture', 'Blood-Joint Thrust'],
+  redBloodOgre: ['Crimson Bone Maul', 'Blood Chain Hook', 'Red Gate Quake'],
+  redFrostWarden: ['Crimson Ice Sentence', 'Bloodfrost Prison', 'Red Absolute Zero'],
+  redDemonKnight: ['Crimson Flame Blade', 'Red Hellfire Rend', 'Blood Execution'],
+  redDragonMonarch: ['Crimson Calamity Breath', 'Red Wingstorm', 'Blood Dragon Fear'],
+};
+
+function monsterMove(id, label, index, isBoss) {
+  const signature = index === 2;
+  const category = signature ? 'special' : index === 1 ? 'counter' : 'pressure';
+  return {
+    id,
+    label,
+    category,
+    text: `${label} tears through the Gate with inhuman force.`,
+    scoreBonus: signature ? (isBoss ? 17 : 12) : index === 1 ? 7 : 5,
+    damageMultiplier: signature ? (isBoss ? 1.52 : 1.3) : index === 1 ? 1.14 : 1.08,
+    staminaCost: signature ? 12 : 7,
+    injury: {
+      name: 'body trauma',
+      text: `${label} leaves System damage burning through your body.`,
+    },
+  };
+}
+
+export const HUNTER_MONSTER_MOVES = {};
+for (const [monsterId, labels] of Object.entries(HUNTER_MONSTER_ATTACK_LABELS)) {
+  const monster = HUNTER_MONSTERS[monsterId];
+  if (!monster) continue;
+  const isBoss = monster.threat.includes('Boss');
+  monster.systemMonster = true;
+  monster.moveIds = labels.map((label, index) => {
+    const moveId = `${monsterId}Move${index + 1}`;
+    HUNTER_MONSTER_MOVES[moveId] = monsterMove(moveId, label, index, isBoss);
+    return moveId;
+  });
 }
 
 export const HUNTER_MOVES = {
@@ -4520,6 +4587,7 @@ function applyTrainingNoPopup(life, actionId) {
 
 function applyRecoveryNoPopup(life, actionId) {
   const action = RECOVERY_ACTIONS[actionId];
+  if (life.activeFight && !life.activeFight.finished) return null;
   if (!action || getAutoRecoveryStatus(life, actionId).locked || life.resources.money < action.cost) return null;
   const needsRecovery = life.resources.health < 85 || life.resources.energy < 65 || (action.injuryHeal > 0 && life.injuries.length > 0);
   if (!needsRecovery) return null;
@@ -4584,6 +4652,9 @@ export function getAutoRecoveryStatus(life, actionId) {
   if (!mentor) return { locked: true, reason: 'Requires a mentor to supervise Auto Recovery.' };
   if (!mentorAllows(mentor, 'autoRecoveryIds', actionId)) {
     return { locked: true, reason: `${mentor.name} does not supervise ${action.name}.` };
+  }
+  if (life.activeFight && !life.activeFight.finished) {
+    return { locked: false, paused: true, reason: `${mentor.name} is paused while a fight is live.` };
   }
   return { locked: false, reason: `${mentor.name} can supervise ${action.name}.` };
 }
@@ -4655,6 +4726,9 @@ export function toggleAutoRecovery(life, actionId) {
   next.autoRecovery = { ...(next.autoRecovery ?? {}), [actionId]: enabled };
   let result = addLog(next, `Auto recovery ${enabled ? 'enabled' : 'disabled'}: ${RECOVERY_ACTIONS[actionId].name}.`, 'recovery');
   if (!enabled) return result;
+  if (result.activeFight && !result.activeFight.finished) {
+    return addLog(result, `Auto recovery paused while a fight is live: ${RECOVERY_ACTIONS[actionId].name} will resume after combat.`, 'recovery');
+  }
   const recovered = applyRecoveryNoPopup(result, actionId);
   if (!recovered) return addLog(result, `Auto recovery queued: ${RECOVERY_ACTIONS[actionId].name} will run when recovery is needed and affordable.`, 'recovery');
   return addLog(result, `Auto recovery: ${RECOVERY_ACTIONS[actionId].name} ran immediately without popups.`, 'recovery');
@@ -4919,7 +4993,22 @@ export function getOpponentStats(opponent) {
   if (opponent.temperament === 'patient counter-striker') add({ fightIq: 0.28, reflexes: 0.24, technique: 0.16, control: 0.16, aggression: -0.1 });
   if (opponent.temperament === 'defensive grinder') add({ durability: 0.24, willpower: 0.2, control: 0.22, flexibility: 0.08, speed: -0.08 });
 
-  return scaledStatBlock(opponent.power, multipliers);
+  return scaledStatBlock(resolvedOpponentPower(opponent), multipliers);
+}
+
+const SYSTEM_MONSTER_POWER_MULTIPLIERS = {
+  'Hunter Quest': 1.4,
+  E: 1.75,
+  D: 1.85,
+  C: 2.05,
+  B: 2.3,
+  A: 2.55,
+  S: 2.8,
+};
+
+function resolvedOpponentPower(opponent) {
+  if (!opponent?.systemMonster) return opponent.power;
+  return Math.round(opponent.power * (SYSTEM_MONSTER_POWER_MULTIPLIERS[opponent.tier] ?? 1));
 }
 
 function opponentTacticStat(stats, intent) {
@@ -5123,7 +5212,8 @@ function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   if (move.id === 'shadowAssist' && !(normalizeHunterWorld(life.hunterWorld).shadowArmy?.length)) return 'Requires at least one shadow in your army.';
-  if ((fight.meters.playerStamina ?? 0) < Math.max(1, move.staminaCost - 4)) return 'Not enough stamina for this System skill.';
+  const staminaRequired = move.staminaCost === 0 ? 0 : Math.max(1, move.staminaCost - 4);
+  if ((fight.meters.playerStamina ?? 0) < staminaRequired) return 'Not enough stamina for this System skill.';
   return '';
 }
 
@@ -5303,6 +5393,16 @@ function chooseEnemyFightMove(opponent, category, fight) {
   const roll = deterministicRoll(fight.opponentId, fight.round, fight.exchanges.length, category, opponent.name, 'enemy-move');
   const id = selectedPool[Math.floor(roll * selectedPool.length) % selectedPool.length];
   return { id, ...ENEMY_FIGHT_MOVES[id] };
+}
+
+function chooseHunterMonsterMove(opponent, fight) {
+  const pool = (opponent.moveIds ?? []).filter((id) => HUNTER_MONSTER_MOVES[id]);
+  if (!pool.length) {
+    return monsterMove('systemFallbackMove', opponent.style ?? 'Monster Strike', 0, false);
+  }
+  const roll = deterministicRoll(fight.opponentId, fight.round, fight.exchanges.length, opponent.name, 'system-monster-move');
+  const id = pool[Math.floor(roll * pool.length) % pool.length];
+  return HUNTER_MONSTER_MOVES[id];
 }
 
 function tacticLabel(tactic) {
@@ -5689,7 +5789,7 @@ function incomingDamage(life, opponent, opponentTactic, profile, fight, swing) {
     special: 1.45,
   }[opponentTactic] ?? 1;
   const attackStat = opponentTacticStat(stats, opponentTactic);
-  const rawThreat = (9 + attackStat / 55 + opponent.power / 80 + visibleFightRound(fight) * 1.1) * intentDamage;
+  const rawThreat = (9 + attackStat / 55 + resolvedOpponentPower(opponent) / 80 + visibleFightRound(fight) * 1.1) * intentDamage;
   const bodyDefense =
     life.stats.durability * 0.024 +
     life.stats.willpower * 0.024 +
@@ -7290,8 +7390,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const stats = getHunterEffectiveStats(next);
   const opponentStats = getOpponentStats(opponent);
   const profile = hunterMoveProfile(move, next);
-  const opponentTactic = opponentIntent(opponent, visibleFightRound(fight));
-  const enemyMove = chooseEnemyFightMove(opponent, opponentTactic, fight);
+  const enemyMove = chooseHunterMonsterMove(opponent, fight);
+  const opponentTactic = enemyMove.category;
   const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22;
   const analyzeBonus = fight.systemAnalysis ? 18 + next.hunterWorld.stats.sense * 2 : 0;
   const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus;
@@ -7306,8 +7406,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'hunter-crit');
   const critical = criticalRoll < criticalChance;
   let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
-  const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1 }, fight, -swing);
-  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage + opponentStats.aggression / 70 - profile.incomingReduction));
+  const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1, guardBias: move.guardBias }, fight, -swing);
+  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction));
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0), 0.03, 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   const enemyDamage = dodged ? 0 : baseEnemyDamage;
