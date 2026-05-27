@@ -53,6 +53,7 @@ const DEFAULT_HUNTER_WORLD = {
   inventory: [],
   activeGate: null,
   lastGateMonth: null,
+  dailyQuest: null,
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
 const HUNTER_RANK_REQUIREMENTS = {
@@ -67,6 +68,51 @@ const HUNTER_GATES = {
   dGate: { id: 'dGate', name: 'D-Rank Dungeon Gate', rank: 'D', danger: 55, xp: 90, money: 520, reputation: 6, heat: 5, boss: 'steel-knight' },
   cGate: { id: 'cGate', name: 'C-Rank Party Raid', rank: 'C', danger: 105, xp: 165, money: 1400, reputation: 11, heat: 8, boss: 'blood-ogre' },
   redGate: { id: 'redGate', name: 'Red Gate Emergency', rank: 'B', danger: 165, xp: 260, money: 3200, reputation: 18, heat: 15, boss: 'frost-warden' },
+};
+
+export const HUNTER_MONSTERS = {
+  systemGoblinScout: {
+    name: 'Gate Scout',
+    style: 'Claw Rush',
+    threat: 'System Monster',
+    tier: 'Hunter Quest',
+    power: 72,
+    temperament: 'reckless pressure',
+    strengths: ['claw swarms', 'low lunges', 'pain ignorance'],
+    weakness: 'overextends after the first rush',
+    reward: 0,
+    rep: 0,
+    risk: 6,
+    requirements: {},
+  },
+  subwayRipper: {
+    name: 'Subway Ripper',
+    style: 'Tunnel Ambush',
+    threat: 'System Monster',
+    tier: 'Hunter Quest',
+    power: 116,
+    temperament: 'patient counter-striker',
+    strengths: ['dark angles', 'sudden counters', 'hit-and-run entries'],
+    weakness: 'struggles when pinned and forced to trade',
+    reward: 0,
+    rep: 0,
+    risk: 10,
+    requirements: {},
+  },
+  manaHoundAlpha: {
+    name: 'Mana Hound Alpha',
+    style: 'Pack Predator',
+    threat: 'System Monster',
+    tier: 'Hunter Quest',
+    power: 142,
+    temperament: 'reckless pressure',
+    strengths: ['chain lunges', 'bite feints', 'relentless pursuit'],
+    weakness: 'loses rhythm when its charge is countered',
+    reward: 0,
+    rep: 0,
+    risk: 13,
+    requirements: {},
+  },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -103,6 +149,22 @@ function defaultHunterWorld() {
   return clone(DEFAULT_HUNTER_WORLD);
 }
 
+function normalizeHunterDailyQuest(quest) {
+  if (!quest) return null;
+  const stages = Array.isArray(quest.stages) ? quest.stages : [];
+  return {
+    ...quest,
+    stageIndex: Math.max(0, Math.floor(quest.stageIndex ?? 0)),
+    stages,
+    startedMonth: quest.startedMonth ?? null,
+    completed: Boolean(quest.completed),
+    failed: Boolean(quest.failed),
+    monsterFightId: quest.monsterFightId ?? null,
+    rewardsPreview: Array.isArray(quest.rewardsPreview) ? quest.rewardsPreview : [],
+    stageResults: Array.isArray(quest.stageResults) ? quest.stageResults : [],
+  };
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   const rank = HUNTER_RANKS.includes(hunterWorld.rank) ? hunterWorld.rank : DEFAULT_HUNTER_WORLD.rank;
   const activeGate = hunterWorld.activeGate
@@ -126,6 +188,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastGateMonth: hunterWorld.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
+    dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
   };
 }
 
@@ -2900,6 +2963,204 @@ function grantHunterXp(life, amount) {
   }
 }
 
+const HUNTER_DAILY_QUEST_TEMPLATES = [
+  {
+    id: 'penalty-zone-drill',
+    title: 'Penalty Zone Drill',
+    rewardsPreview: ['Hunter XP', '+durability', '+willpower', 'Fatigue +6'],
+    completion: { xp: 68, fatigue: 6, stats: { durability: 2, willpower: 2, control: 1 }, resources: { mood: -1 } },
+    partial: { xp: 28, fatigue: 4, stats: { durability: 1 }, resources: { mood: -3 } },
+    stages: [
+      {
+        id: 'forced-warmup',
+        type: 'choice',
+        title: 'Mandatory Conditioning',
+        body: 'The blue window opens over your vision: push-ups, sprints, breath holds. The floor looks normal until missing a rep makes it shake.',
+        choices: [
+          { id: 'perfect-form', label: 'Perfect Form', result: 'You slow the reps down and make every count clean.', effects: { stats: { control: 1, durability: 1 }, resources: { energy: -10 } } },
+          { id: 'speed-run', label: 'Speed Run', result: 'You race the timer and let the System judge the ugly reps later.', effects: { stats: { speed: 1, willpower: 1 }, resources: { energy: -14, mood: -1 } } },
+          { id: 'refuse-slack', label: 'Refuse To Slack', result: 'You add extra reps before the warning can appear.', effects: { stats: { willpower: 2 }, resources: { energy: -18, health: -3 } } },
+        ],
+      },
+      {
+        id: 'monster-punishment',
+        type: 'combat',
+        title: 'Punishment Monster',
+        body: 'The penalty space tears open. Something small, fast, and mean crawls out before the System can call it training.',
+        monsterId: 'systemGoblinScout',
+      },
+      {
+        id: 'cooldown',
+        type: 'choice',
+        title: 'System Cooldown',
+        body: 'The monster dissolves into blue dust. Your muscles keep twitching like the quest is still counting.',
+        choices: [
+          { id: 'breathing-reset', label: 'Breathing Reset', result: 'You force your breathing back under control before the reward screen opens.', effects: { stats: { control: 1 }, resources: { energy: 5, mood: 1 } } },
+          { id: 'study-window', label: 'Study Window', result: 'You replay the fight log and mark where the monster punished your entries.', effects: { stats: { fightIq: 1, technique: 1 }, resources: { mood: -1 } } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'subway-gate-trace',
+    title: 'Subway Gate Trace',
+    rewardsPreview: ['Hunter XP', '$260', '+technique', 'Heat +4'],
+    completion: { xp: 92, fatigue: 8, stats: { technique: 2, reflexes: 1, fightIq: 1 }, resources: { money: 260, reputation: 3 }, world: { heat: 4 } },
+    partial: { xp: 36, fatigue: 6, stats: { reflexes: 1 }, resources: { reputation: 1 }, world: { heat: 3 } },
+    stages: [
+      {
+        id: 'track-leak',
+        type: 'choice',
+        title: 'Mana Leak',
+        body: 'A station platform flickers after midnight. The System marks three traces under the tracks and one moving thing past the tunnel lights.',
+        choices: [
+          { id: 'follow-trace', label: 'Follow Trace', result: 'You read the mana trail instead of rushing the noise.', effects: { stats: { fightIq: 1 }, resources: { energy: -8 } } },
+          { id: 'secure-platform', label: 'Secure Platform', result: 'You clear the civilians first and lose a little time.', effects: { resources: { reputation: 2, energy: -10 }, world: { heat: 1 } } },
+          { id: 'rush-dark', label: 'Rush The Dark', result: 'You enter before the thing can set the ambush cleanly.', effects: { stats: { aggression: 1, reflexes: 1 }, resources: { health: -4, energy: -12 } } },
+        ],
+      },
+      {
+        id: 'tunnel-fight',
+        type: 'combat',
+        title: 'Tunnel Monster',
+        body: 'The lights die in sequence. A long shape hits the wall, vanishes, then comes back from the wrong angle.',
+        monsterId: 'subwayRipper',
+      },
+      {
+        id: 'seal-trace',
+        type: 'choice',
+        title: 'Seal The Trace',
+        body: 'The gate leak is still breathing through the concrete. The System lets you decide what to take from it.',
+        choices: [
+          { id: 'harvest-core', label: 'Harvest Core', result: 'You pull the core loose and sell the clean fragments.', effects: { resources: { money: 120 }, world: { heat: 2 } } },
+          { id: 'study-residue', label: 'Study Residue', result: 'You study how the leak bent space around the fight.', effects: { stats: { technique: 1, fightIq: 1 }, resources: { energy: -4 } } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'civilian-rescue',
+    title: 'Emergency Civilian Rescue',
+    rewardsPreview: ['Hunter XP', '+reputation', '+willpower', 'Heat +6'],
+    completion: { xp: 84, fatigue: 9, stats: { willpower: 2, speed: 1, control: 1 }, resources: { reputation: 7, mood: 2 }, world: { heat: 6 } },
+    partial: { xp: 32, fatigue: 7, stats: { willpower: 1 }, resources: { reputation: 2, mood: -2 }, world: { heat: 5 } },
+    stages: [
+      {
+        id: 'first-response',
+        type: 'choice',
+        title: 'Street Gate Alarm',
+        body: 'A small Gate opens beside stopped traffic. People are filming until the first hound steps out.',
+        choices: [
+          { id: 'draw-aggro', label: 'Draw Aggro', result: 'You make yourself the loudest target on the street.', effects: { stats: { willpower: 1, aggression: 1 }, resources: { health: -3, energy: -10 } } },
+          { id: 'evacuate-first', label: 'Evacuate First', result: 'You move people behind cover before taking the center line.', effects: { resources: { reputation: 3, energy: -12 }, stats: { control: 1 } } },
+          { id: 'call-hunters', label: 'Call Hunters', result: 'You send the location and buy time, but official attention follows.', effects: { world: { heat: 2 }, stats: { fightIq: 1 }, resources: { mood: 1 } } },
+        ],
+      },
+      {
+        id: 'alpha-hound',
+        type: 'combat',
+        title: 'Alpha At The Crosswalk',
+        body: 'The biggest hound lowers its head and the smaller ones stop moving. The System marks it as the condition for survival.',
+        monsterId: 'manaHoundAlpha',
+      },
+      {
+        id: 'after-action',
+        type: 'choice',
+        title: 'After-Action Window',
+        body: 'Sirens arrive late. The System asks whether you want credit, silence, or one more scan for stragglers.',
+        choices: [
+          { id: 'take-credit', label: 'Take Credit', result: 'Witness clips make sure the Association knows your face.', effects: { resources: { reputation: 3 }, world: { heat: 2 } } },
+          { id: 'stay-quiet', label: 'Stay Quiet', result: 'You leave before the interviews and keep the focus on survival.', effects: { resources: { mood: 2 }, world: { heat: -1 } } },
+          { id: 'scan-again', label: 'Scan Again', result: 'You find one more trace and learn how the pack entered.', effects: { stats: { fightIq: 1, reflexes: 1 }, resources: { energy: -5 } } },
+        ],
+      },
+    ],
+  },
+];
+
+function questTemplateById(id) {
+  return HUNTER_DAILY_QUEST_TEMPLATES.find((quest) => quest.id === id) ?? HUNTER_DAILY_QUEST_TEMPLATES[0];
+}
+
+function applyDelta(life, effects = {}) {
+  if (effects.resources) {
+    for (const [resource, amount] of Object.entries(effects.resources)) {
+      if (resource in life.resources) life.resources[resource] = clamp(life.resources[resource] + amount, 0, resource === 'reputation' ? 999 : 1000000);
+    }
+  }
+  if (effects.stats) {
+    for (const [stat, amount] of Object.entries(effects.stats)) {
+      if (stat in life.stats) life.stats[stat] = clampLifeStat(life, stat, life.stats[stat] + amount);
+    }
+  }
+  if (effects.world) {
+    life.world = life.world ?? {};
+    if ('heat' in effects.world) life.world.heat = clamp((life.world.heat ?? 0) + effects.world.heat, 0, 100);
+    for (const [key, value] of Object.entries(effects.world)) {
+      if (key !== 'heat') life.world[key] = value;
+    }
+  }
+}
+
+function createHunterDailyQuest(life) {
+  const index = Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), life.hunterWorld?.dailyQuestsCompleted ?? 0, 'hunter-daily') * HUNTER_DAILY_QUEST_TEMPLATES.length);
+  const template = HUNTER_DAILY_QUEST_TEMPLATES[index] ?? HUNTER_DAILY_QUEST_TEMPLATES[0];
+  return {
+    id: `${template.id}-${lifeMonth(life)}-${life.hunterWorld?.dailyQuestsCompleted ?? 0}`,
+    templateId: template.id,
+    title: template.title,
+    stageIndex: 0,
+    stages: clone(template.stages),
+    startedMonth: lifeMonth(life),
+    completed: false,
+    failed: false,
+    monsterFightId: null,
+    rewardsPreview: [...template.rewardsPreview],
+    stageResults: [],
+  };
+}
+
+function currentHunterQuestStage(life) {
+  const quest = normalizeHunterWorld(life.hunterWorld).dailyQuest;
+  if (!quest || quest.completed) return null;
+  return quest.stages[quest.stageIndex] ?? null;
+}
+
+function advanceHunterQuestStage(life, quest, result) {
+  quest.stageResults = [...(quest.stageResults ?? []), result].slice(-8);
+  quest.stageIndex += 1;
+  if (quest.stageIndex >= quest.stages.length) quest.completed = true;
+  life.hunterWorld.dailyQuest = quest;
+}
+
+function applyHunterQuestFightResult(life, fight, won) {
+  life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  const quest = life.hunterWorld.dailyQuest;
+  if (!quest || quest.id !== fight.questId) return;
+  const stage = quest.stages[quest.stageIndex];
+  const monster = HUNTER_MONSTERS[stage?.monsterId] ?? HUNTER_MONSTERS.systemGoblinScout;
+  if (won) {
+    advanceHunterQuestStage(life, quest, {
+      stageId: stage?.id,
+      label: `${monster.name} defeated`,
+      won: true,
+    });
+    life.stats.reflexes = clampLifeStat(life, 'reflexes', life.stats.reflexes + 1);
+    fight.result.rewards.push('Quest progress: monster objective cleared');
+    fight.result.rewards.push('+1 reflexes from live System combat');
+  } else {
+    quest.completed = true;
+    quest.failed = true;
+    quest.stageResults = [...(quest.stageResults ?? []), {
+      stageId: stage?.id,
+      label: `${monster.name} forced a retreat`,
+      won: false,
+    }].slice(-8);
+    life.hunterWorld.dailyQuest = quest;
+    fight.result.rewards.push('Quest progress: failed route unlocked partial System reward');
+  }
+}
+
 function unlockHunterWorld(life, { firstGate = 'eGate', protectCivilians = false } = {}) {
   life.hunterWorld = {
     ...normalizeHunterWorld(life.hunterWorld),
@@ -3451,6 +3712,11 @@ function rivalAsOpponent(life) {
     stats: rival.stats,
     requirements: {},
   };
+}
+
+export function getCombatOpponent(life, opponentId) {
+  if (HUNTER_MONSTERS[opponentId]) return HUNTER_MONSTERS[opponentId];
+  return getAdaptedOpponent(life, opponentId);
 }
 
 export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now() } = {}) {
@@ -6083,8 +6349,8 @@ function setStandingGrappling(fight, text = 'Get up: the fight resets to standin
   };
 }
 
-function createActiveFight(life, opponentId) {
-  const opponent = getAdaptedOpponent(life, opponentId);
+function createActiveFight(life, opponentId, options = {}) {
+  const opponent = getCombatOpponent(life, opponentId);
   if (!opponent) return null;
   const prep = life.nextFightPrep ?? {};
   const opponentStats = getOpponentStats(opponent);
@@ -6102,6 +6368,8 @@ function createActiveFight(life, opponentId) {
   if (activeCallout) breakdown.push(`Social media: you called out ${opponent.name}. Rewards are hotter, but they start the fight annoyed.`);
   return {
     opponentId,
+    source: options.source ?? 'fight',
+    questId: options.questId ?? null,
     round: 1,
     maxRounds: 25,
     exchangesPerRound: 5,
@@ -6463,7 +6731,7 @@ function resolveBottomConserveExchange({ life, opponent, fight, move, playerScor
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
   life = withNormalizedClanAwakening(life);
-  const opponent = getAdaptedOpponent(life, life.activeFight.opponentId);
+  const opponent = getCombatOpponent(life, life.activeFight.opponentId);
   if (!opponent) return life;
   const existingGrappling = normalizeGrapplingState(life.activeFight);
   const requestedMove = resolveFightMove(life, tactic);
@@ -6695,6 +6963,7 @@ export function takeFightTurn(life, tactic = 'pressure') {
   const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
   if (finished) {
     finishActiveFight(next);
+    if (fight.source === 'hunterQuest') return next;
     return queueTriggeredEvents(next, 'fight', { opponentId: fight.opponentId, won: fight.result?.won });
   }
 
@@ -6882,7 +7151,7 @@ function applyTournamentResult(life, fight, won) {
 
 function finishActiveFight(life) {
   const fight = life.activeFight;
-  const opponent = getAdaptedOpponent(life, fight.opponentId);
+  const opponent = getCombatOpponent(life, fight.opponentId);
   const playerHealthPercent = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
   const opponentHealthPercent = healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
   const won = fight.meters.opponentHealth <= 0 || (
@@ -6900,19 +7169,16 @@ function finishActiveFight(life) {
     won,
     summary,
     reasons,
-    rewards: won ? [`+$${opponent.reward}`, `+${opponent.rep} reputation`] : [`+${Math.floor(opponent.rep / 4)} reputation`, 'Painful lesson'],
+    rewards: fight.source === 'hunterQuest'
+      ? [won ? 'System monster defeated' : 'System objective failed']
+      : (won ? [`+$${opponent.reward}`, `+${opponent.rep} reputation`] : [`+${Math.floor(opponent.rep / 4)} reputation`, 'Painful lesson']),
     injuries: [],
   };
-
-  const cooldownMonths = fightCooldownMonths(opponent);
-  life.fightCooldowns = life.fightCooldowns ?? {};
-  life.fightCooldowns[fight.opponentId] = lifeMonth(life) + cooldownMonths;
-  fight.result.rewards.push(`Rematch opens in ${cooldownMonths} month${cooldownMonths === 1 ? '' : 's'}`);
 
   life.resources.energy = clamp(life.resources.energy - 28);
   const cornerCare = fight.prep?.cornerman ? 5 : 0;
   life.resources.health = clamp(life.resources.health - Math.max(1, Math.round(fight.meters.injuryRisk / (won ? 5 : 3)) - cornerCare));
-  life.world.heat = clamp(life.world.heat + getRarity(life.clan.rarity).powerMultiplier * 2, 0, 100);
+  life.world.heat = clamp(life.world.heat + (fight.source === 'hunterQuest' ? 1 : getRarity(life.clan.rarity).powerMultiplier * 2), 0, 100);
 
   if (fight.meters.injuryRisk >= 15) {
     const injury = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) < 45
@@ -6921,6 +7187,21 @@ function finishActiveFight(life) {
     addOrUpgradeInjury(life, injury);
     fight.result.injuries.push(injuryLabel(injury));
   }
+
+  if (fight.source === 'hunterQuest') {
+    applyHunterQuestFightResult(life, fight, won);
+    const fightGrowth = applyFightOptionGrowth(life, fight, won);
+    if (fightGrowth.length) fight.result.rewards.push(`Combat growth: ${fightGrowth.join(', ')}`);
+    const techniqueGrowth = applyTechniqueGrowth(life, fight, won);
+    if (techniqueGrowth.length) fight.result.rewards.push(`Technique growth: ${techniqueGrowth.join(', ')}. Archetype: ${getPlayerArchetype(life)}`);
+    life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
+    return;
+  }
+
+  const cooldownMonths = fightCooldownMonths(opponent);
+  life.fightCooldowns = life.fightCooldowns ?? {};
+  life.fightCooldowns[fight.opponentId] = lifeMonth(life) + cooldownMonths;
+  fight.result.rewards.push(`Rematch opens in ${cooldownMonths} month${cooldownMonths === 1 ? '' : 's'}`);
 
   if (won) {
     life.record.wins += 1;
@@ -7255,16 +7536,62 @@ export function runHunterDailyQuest(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   if (!next.hunterWorld.unlocked) return addLog(next, 'No System daily quest is active yet.', 'world');
-  const fatigue = next.hunterWorld.systemFatigue;
-  next.resources.energy = clamp(next.resources.energy - (14 + Math.floor(fatigue / 12)));
-  next.resources.mood = clamp(next.resources.mood - 1);
-  next.stats.durability = clampLifeStat(next, 'durability', next.stats.durability + 2);
-  next.stats.willpower = clampLifeStat(next, 'willpower', next.stats.willpower + 1);
-  next.stats.control = clampLifeStat(next, 'control', next.stats.control + 1);
+  if (next.hunterWorld.dailyQuest) return addLog(next, 'A System Daily Quest is already active. Finish or claim it before generating another.', 'world');
+  next.hunterWorld.dailyQuest = createHunterDailyQuest(next);
+  return addLog(next, `System Daily Quest generated: ${next.hunterWorld.dailyQuest.title}.`, 'world');
+}
+
+export function advanceHunterDailyQuest(life, choiceId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const quest = next.hunterWorld.dailyQuest;
+  const stage = currentHunterQuestStage(next);
+  if (!quest || !stage) return addLog(next, 'No active System quest stage is waiting.', 'world');
+  if (stage.type === 'combat') return addLog(next, 'The current System quest objective is a monster encounter.', 'world');
+  const choice = (stage.choices ?? []).find((item) => item.id === choiceId);
+  if (!choice) return addLog(next, 'That System quest option is not available.', 'world');
+  applyDelta(next, choice.effects);
+  advanceHunterQuestStage(next, quest, {
+    stageId: stage.id,
+    choiceId,
+    label: choice.label,
+    result: choice.result,
+  });
+  return addLog(next, choice.result, 'world');
+}
+
+export function startHunterQuestFight(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (next.activeFight) return addLog(next, 'Finish the active fight before entering the System quest encounter.', 'world');
+  const quest = next.hunterWorld.dailyQuest;
+  const stage = currentHunterQuestStage(next);
+  if (!quest || !stage) return addLog(next, 'No active System quest encounter is waiting.', 'world');
+  if (stage.type !== 'combat') return addLog(next, 'The current System quest objective is not a monster fight.', 'world');
+  const monsterId = stage.monsterId ?? 'systemGoblinScout';
+  const activeFight = createActiveFight(next, monsterId, { source: 'hunterQuest', questId: quest.id });
+  if (!activeFight) return addLog(next, 'The System could not materialize that monster.', 'world');
+  activeFight.breakdown.unshift(`System Quest: ${quest.title}. Clear this monster objective to advance the Daily Quest.`);
+  activeFight.maxRounds = Math.min(activeFight.maxRounds, 18);
+  next.activeFight = activeFight;
+  next.hunterWorld.dailyQuest.monsterFightId = monsterId;
+  return addLog(next, `System monster encounter started: ${HUNTER_MONSTERS[monsterId]?.name ?? labelFromId(monsterId)}.`, 'world');
+}
+
+export function claimHunterDailyQuest(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const quest = next.hunterWorld.dailyQuest;
+  if (!quest || !quest.completed) return addLog(next, 'No completed System Daily Quest can be claimed yet.', 'world');
+  const template = questTemplateById(quest.templateId);
+  const reward = quest.failed ? template.partial : template.completion;
+  applyDelta(next, reward);
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + (reward.fatigue ?? 0));
   next.hunterWorld.dailyQuestsCompleted += 1;
-  next.hunterWorld.systemFatigue = clamp(fatigue + 4);
-  grantHunterXp(next, 42 + next.hunterWorld.level * 4);
-  return addLog(next, 'System Daily Quest complete: the body hurts, the numbers rise, and the blue window approves.', 'world');
+  grantHunterXp(next, reward.xp + next.hunterWorld.level * (quest.failed ? 2 : 5));
+  next.hunterWorld.dailyQuest = null;
+  const result = quest.failed ? 'partial reward issued after failed objective' : 'complete reward issued';
+  return addLog(next, `System Daily Quest claimed: ${template.title}, ${result}.`, 'world');
 }
 
 export function enterHunterGate(life, gateId = 'eGate') {

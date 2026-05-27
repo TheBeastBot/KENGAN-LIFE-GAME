@@ -539,6 +539,40 @@ select:focus {
   gap: 8px;
 }
 
+.hunter-quest-card {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(87, 151, 229, 0.12), rgba(125, 243, 198, 0.06)),
+    var(--panel-2);
+}
+
+.hunter-quest-card.complete {
+  border-color: rgba(125, 243, 198, 0.34);
+}
+
+.hunter-quest-card.failed {
+  border-color: rgba(225, 77, 82, 0.36);
+}
+
+.quest-choice-grid {
+  align-self: center;
+  min-width: min(100%, 280px);
+}
+
+.quest-results {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.hunter-combat-shell {
+  display: grid;
+  gap: 10px;
+}
+
 .clan-password-card {
   display: grid;
   gap: 12px;

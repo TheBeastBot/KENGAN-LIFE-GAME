@@ -44,6 +44,8 @@ import {
   recruitCoachedFighter,
   releaseCoachedFighter,
   runHunterDailyQuest,
+  advanceHunterDailyQuest,
+  claimHunterDailyQuest,
   resolveEventChoice,
   clearHunterGate,
   spendMoneyAction,
@@ -51,6 +53,7 @@ import {
   enterHunterGate,
   extractShadow,
   startFight,
+  startHunterQuestFight,
   startRivalFight,
   startTournamentFight,
   specialTrain,
@@ -197,7 +200,7 @@ test('wrong hunter password does not trigger hunter awakening', () => {
   assert.ok(next.log[0].text.includes('Hunter password rejected'));
 });
 
-test('hunter daily quests grant xp and cost energy', () => {
+test('hunter daily quest start creates an active quest without instant rewards', () => {
   const life = {
     ...createNewLife({ gender: 'Male', seed: 91 }),
     hunterWorld: { ...createNewLife({ gender: 'Male', seed: 91 }).hunterWorld, unlocked: true, playerAwakened: true },
@@ -205,10 +208,132 @@ test('hunter daily quests grant xp and cost energy', () => {
 
   const next = runHunterDailyQuest(life);
 
+  assert.ok(next.hunterWorld.dailyQuest);
+  assert.equal(next.hunterWorld.dailyQuest.completed, false);
+  assert.equal(next.hunterWorld.xp, life.hunterWorld.xp);
+  assert.equal(next.hunterWorld.dailyQuestsCompleted, 0);
+  assert.equal(next.resources.energy, life.resources.energy);
+});
+
+test('hunter daily quest choice stages change state and advance objectives', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 911 }),
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 911 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  const stage = life.hunterWorld.dailyQuest.stages[0];
+  const choice = stage.choices[0];
+
+  const next = advanceHunterDailyQuest(life, choice.id);
+
+  assert.equal(next.hunterWorld.dailyQuest.stageIndex, 1);
+  assert.equal(next.hunterWorld.dailyQuest.stageResults.length, 1);
+  assert.notDeepEqual(next.resources, life.resources);
+});
+
+test('hunter quest combat stage starts a quest-sourced monster fight', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 912 }),
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 912 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+
+  const next = startHunterQuestFight(life);
+
+  assert.equal(next.activeFight.source, 'hunterQuest');
+  assert.equal(next.activeFight.questId, next.hunterWorld.dailyQuest.id);
+  assert.equal(next.hunterWorld.dailyQuest.monsterFightId, next.activeFight.opponentId);
+});
+
+test('winning a hunter quest monster fight advances quest progress without normal record rewards', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 913 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 913 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 913 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.opponentHealth = 1;
+
+  const next = takeFightTurn(life, 'pressure');
+
+  assert.equal(next.activeFight.finished, true);
+  assert.equal(next.activeFight.result.won, true);
+  assert.equal(next.record.wins, life.record.wins);
+  assert.equal(next.resources.clanRerolls, life.resources.clanRerolls);
+  assert.equal(next.hunterWorld.dailyQuest.stageIndex, 2);
+});
+
+test('losing a hunter quest monster fight creates partial quest completion without normal losses', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 914 }),
+    resources: { ...createNewLife({ gender: 'Female', seed: 914 }).resources, energy: 5 },
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 914 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.playerHealth = 1;
+
+  const next = takeFightTurn(life, 'defend');
+
+  assert.equal(next.activeFight.finished, true);
+  assert.equal(next.activeFight.result.won, false);
+  assert.equal(next.hunterWorld.dailyQuest.completed, true);
+  assert.equal(next.hunterWorld.dailyQuest.failed, true);
+  assert.equal(next.record.losses, life.record.losses);
+});
+
+test('claiming completed hunter daily quest grants xp, fatigue, completion count, and clears quest', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 915 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 915 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 915 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'pressure');
+  life = { ...life, activeFight: null };
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[2].choices[0].id);
+
+  const next = claimHunterDailyQuest(life);
+
   assert.ok(next.hunterWorld.xp > life.hunterWorld.xp);
+  assert.ok(next.hunterWorld.systemFatigue > life.hunterWorld.systemFatigue);
   assert.equal(next.hunterWorld.dailyQuestsCompleted, 1);
-  assert.ok(next.resources.energy < life.resources.energy);
-  assert.ok(next.stats.durability > life.stats.durability);
+  assert.equal(next.hunterWorld.dailyQuest, null);
+});
+
+test('normal fights still use normal fight source and record progression', () => {
+  const life = createNewLife({ gender: 'Male', seed: 916 });
+  const next = startFight(life, 'alleyScrapper');
+
+  assert.equal(next.activeFight.source, 'fight');
+  assert.equal(next.activeFight.questId, null);
 });
 
 test('hunter gates reward progression and can injure tired players', () => {
@@ -240,7 +365,8 @@ test('hunter xp levels grant stat points that improve main stats', () => {
     },
   };
 
-  life = runHunterDailyQuest(life);
+  life = enterHunterGate(life, 'eGate');
+  life = clearHunterGate(life, 'balanced');
   const beforeStrength = life.stats.strength;
   const next = spendHunterStatPoint(life, 'strength');
 

@@ -19,6 +19,7 @@ import {
   endLife,
   getAvailableFights,
   getAdaptedOpponent,
+  getCombatOpponent,
   getLockedFights,
   getExperienceBoost,
   getOpponentArchetype,
@@ -37,9 +38,12 @@ import {
   redeemHunterPassword,
   rerollClan,
   resolveEventChoice,
+  advanceHunterDailyQuest,
+  claimHunterDailyQuest,
   spendLifeChoice,
   spendMoneyAction,
   startFight,
+  startHunterQuestFight,
   startRivalFight,
   startTournamentFight,
   specialTrain,
@@ -89,6 +93,7 @@ const DEFAULT_HUNTER_WORLD = {
   inventory: [],
   activeGate: null,
   lastGateMonth: null,
+  dailyQuest: null,
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -211,6 +216,7 @@ const dropdownState = createDropdownStateController({
     'social-posts': true,
     'hunter-core': true,
     'hunter-actions': true,
+    'hunter-daily-quest': true,
     'world-rumors': true,
   },
 });
@@ -320,6 +326,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastGateMonth: hunterWorld?.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
+    dailyQuest: hunterWorld?.dailyQuest ?? null,
   };
 }
 
@@ -1377,7 +1384,7 @@ function renderActiveFight() {
 }
 
 function activeFightOpponent(fight) {
-  if (fight.opponentId !== 'rival') return getAdaptedOpponent(state, fight.opponentId) ?? OPPONENTS[fight.opponentId];
+  if (fight.opponentId !== 'rival') return getCombatOpponent(state, fight.opponentId) ?? OPPONENTS[fight.opponentId];
   const rival = state.rival;
   if (!rival) return null;
   return {
@@ -1568,7 +1575,7 @@ function renderFightReport(fight) {
           ${fight.result.injuries.map((injury) => `<p>${formatInjury(injury)}</p>`).join('')}
         </div>
       </div>
-      <button class="primary wide" data-action="close-fight">Back to Fight List</button>
+      <button class="primary wide" data-action="close-fight">${fight.source === 'hunterQuest' ? 'Back to System Quest' : 'Back to Fight List'}</button>
     </article>
   `;
 }
@@ -2121,7 +2128,7 @@ function hunterPowerUi() {
   return Math.round(statPower + (state.hunterWorld?.level ?? 1) * 8 + shadows * 18);
 }
 
-function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '' }) {
+function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open' }) {
   return `
     <article class="hunter-activity option-card ${locked ? 'locked' : ''} ${tone}">
       <div class="hunter-icon" aria-hidden="true">${icon}</div>
@@ -2130,7 +2137,7 @@ function renderHunterActivity({ icon, title, subtitle, meta, action, locked = fa
         <p>${subtitle}</p>
         <span class="activity-meta">${meta}</span>
       </div>
-      ${locked ? '<span class="lock-pill">Locked</span>' : button('Open', action, 'activity-open')}
+      ${locked ? '<span class="lock-pill">Locked</span>' : button(cta, action, 'activity-open')}
     </article>
   `;
 }
@@ -2142,6 +2149,97 @@ function renderHunterStatButtons() {
     <div class="compact-action-grid">
       ${['strength', 'speed', 'durability', 'technique', 'fightIq', 'willpower', 'reflexes', 'control'].map((stat) => button(labelize(stat), `hunter-stat-${stat}`)).join('')}
     </div>
+  `;
+}
+
+function currentHunterQuestStage(quest) {
+  if (!quest || quest.completed) return null;
+  return quest.stages?.[quest.stageIndex ?? 0] ?? null;
+}
+
+function hunterQuestActivity(quest) {
+  if (!quest) {
+    return {
+      title: 'Generate Daily Quest',
+      subtitle: 'Open a System event chain with choices, monster combat, and a real reward screen.',
+      meta: 'No active quest',
+      action: 'hunter-daily',
+      cta: 'Generate',
+    };
+  }
+  if (quest.completed) {
+    return {
+      title: 'Claim System Reward',
+      subtitle: quest.failed ? 'The objective failed, but the System still offers partial completion rewards.' : 'The daily objective is complete. Claim XP, growth, and System credit.',
+      meta: quest.failed ? 'Partial reward ready' : 'Reward ready',
+      action: 'hunter-quest-claim',
+      cta: 'Claim',
+    };
+  }
+  const stage = currentHunterQuestStage(quest);
+  return {
+    title: quest.title,
+    subtitle: stage?.body ?? 'System objective active.',
+    meta: `Stage ${(quest.stageIndex ?? 0) + 1}/${quest.stages?.length ?? 1}`,
+    action: stage?.type === 'combat' ? 'hunter-quest-fight' : 'hunter-quest-focus',
+    cta: stage?.type === 'combat' ? 'Fight' : 'View',
+  };
+}
+
+function renderHunterQuestPanel() {
+  const quest = state.hunterWorld?.dailyQuest;
+  if (!quest) {
+    return `
+      <article class="option-card hunter-quest-card">
+        <div>
+          <p class="eyebrow">System Daily Quest</p>
+          <h2>No Quest Active</h2>
+          <p>The System is quiet. Generate a daily quest to open a random event chain with choices and monster combat.</p>
+        </div>
+        ${button('Generate Daily Quest', 'hunter-daily', 'primary')}
+      </article>
+    `;
+  }
+  const stage = currentHunterQuestStage(quest);
+  const progress = `${Math.min((quest.stageIndex ?? 0) + 1, quest.stages?.length ?? 1)} / ${quest.stages?.length ?? 1}`;
+  if (quest.completed) {
+    return `
+      <article class="option-card hunter-quest-card ${quest.failed ? 'failed' : 'complete'}">
+        <div>
+          <p class="eyebrow">System Daily Quest</p>
+          <h2>${escapeHtml(quest.title)}</h2>
+          <p>${quest.failed ? 'Objective failed. The System converts survival data into a partial reward.' : 'All objectives complete. The blue reward window is waiting.'}</p>
+          <p class="muted">Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+          ${renderHunterQuestResults(quest)}
+        </div>
+        ${button('Claim Reward', 'hunter-quest-claim', 'primary')}
+      </article>
+    `;
+  }
+  const choices = stage?.type === 'choice'
+    ? `<div class="compact-action-grid quest-choice-grid">${(stage.choices ?? []).map((choice) => button(choice.label, `hunter-quest-choice-${choice.id}`)).join('')}</div>`
+    : button('Enter Monster Fight', 'hunter-quest-fight', 'primary wide');
+  return `
+    <article class="option-card hunter-quest-card">
+      <div>
+        <p class="eyebrow">System Daily Quest / Stage ${progress}</p>
+        <h2>${escapeHtml(stage?.title ?? quest.title)}</h2>
+        <p>${escapeHtml(stage?.body ?? 'The System is waiting for your next action.')}</p>
+        <p class="muted">Quest: ${escapeHtml(quest.title)}. Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+        ${renderHunterQuestResults(quest)}
+      </div>
+      ${choices}
+    </article>
+  `;
+}
+
+function renderHunterQuestResults(quest) {
+  const results = quest.stageResults ?? [];
+  if (!results.length) return '';
+  return `
+    <ul class="quest-results">
+      ${results.map((result) => `<li>${escapeHtml(result.result ?? result.label ?? 'Objective updated')}</li>`).join('')}
+    </ul>
   `;
 }
 
@@ -2162,6 +2260,7 @@ function renderHunter() {
   }
   const activeGate = hunter.activeGate;
   const canExtract = hunter.lastBossCleared && hunter.level >= 10;
+  const questActivity = hunterQuestActivity(hunter.dailyQuest);
   return `
     <section class="stack hunter-panel">
       ${renderCollapsibleSection({
@@ -2192,10 +2291,11 @@ function renderHunter() {
         body: `<div class="activity-list">
         ${renderHunterActivity({
           icon: 'DQ',
-          title: 'Daily Quest',
-          subtitle: 'System conditioning that trades energy for XP, willpower, control, and durability.',
-          meta: `Completed ${hunter.dailyQuestsCompleted}`,
-          action: 'hunter-daily',
+          title: questActivity.title,
+          subtitle: questActivity.subtitle,
+          meta: `${questActivity.meta} / Completed ${hunter.dailyQuestsCompleted}`,
+          action: questActivity.action,
+          cta: questActivity.cta,
           tone: 'daily',
         })}
         ${renderHunterActivity({
@@ -2259,6 +2359,12 @@ function renderHunter() {
           tone: 'monarch',
         })}
       </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-daily-quest',
+        title: 'System Daily Quest',
+        subtitle: hunter.dailyQuest ? hunter.dailyQuest.title : 'Generate a random System event chain.',
+        body: state.activeFight?.source === 'hunterQuest' ? `<div class="hunter-combat-shell">${renderActiveFight()}</div>` : renderHunterQuestPanel(),
       })}
       ${renderCollapsibleSection({
         id: 'hunter-stats',
@@ -2549,6 +2655,24 @@ function handleAction(action, source = null) {
   }
   if (action === 'hunter-daily') {
     setState(runHunterDailyQuest(state));
+    return;
+  }
+  if (action === 'hunter-quest-focus') {
+    if (!dropdownState.isOpen('hunter-daily-quest')) dropdownState.toggle('hunter-daily-quest');
+    render();
+    return;
+  }
+  if (action.startsWith('hunter-quest-choice-')) {
+    setState(advanceHunterDailyQuest(state, action.replace('hunter-quest-choice-', '')));
+    return;
+  }
+  if (action === 'hunter-quest-fight') {
+    activeTab = 'hunter';
+    setState(startHunterQuestFight(state));
+    return;
+  }
+  if (action === 'hunter-quest-claim') {
+    setState(claimHunterDailyQuest(state));
     return;
   }
   if (action.startsWith('hunter-enter-')) {
