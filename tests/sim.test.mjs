@@ -9,6 +9,7 @@ import {
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
+  HUNTER_MOVES,
   MENTORS,
   MONEY_ACTIONS,
   OPPONENTS,
@@ -33,8 +34,10 @@ import {
   getSpecialTrainingStatus,
   getSpecialFights,
   getExperienceBoost,
+  getHunterEffectiveStats,
   getStatCap,
   getUnlockedFightMoves,
+  getUnlockedHunterMoves,
   joinTournament,
   redeemClanPassword,
   redeemHunterPassword,
@@ -97,6 +100,7 @@ test('new life starts with locked hunter world state', () => {
   assert.equal(life.hunterWorld.rank, 'E');
   assert.equal(life.hunterWorld.level, 1);
   assert.equal(life.hunterWorld.statPoints, 0);
+  assert.deepEqual(life.hunterWorld.stats, { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 });
   assert.deepEqual(life.hunterWorld.shadowArmy, []);
 });
 
@@ -246,6 +250,28 @@ test('hunter quest combat stage starts a quest-sourced monster fight', () => {
   assert.equal(next.hunterWorld.dailyQuest.monsterFightId, next.activeFight.opponentId);
 });
 
+test('hunter quest fights expose System moves instead of normal fighter moves', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 9121 }),
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 9121 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+
+  const hunterMoves = getUnlockedHunterMoves(life);
+
+  assert.deepEqual(hunterMoves.map((move) => move.id), Object.keys(HUNTER_MOVES));
+  assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
+});
+
+test('normal fights still expose normal moves and no Hunter moves', () => {
+  const life = startFight(createNewLife({ gender: 'Male', seed: 9122 }), 'alleyScrapper');
+
+  assert.ok(getUnlockedFightMoves(life, 'pressure').length > 0);
+  assert.deepEqual(getUnlockedHunterMoves(life), []);
+});
+
 test('winning a hunter quest monster fight advances quest progress without normal record rewards', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 913 }),
@@ -353,7 +379,7 @@ test('hunter gates reward progression and can injure tired players', () => {
   assert.ok(next.resources.health < life.resources.health);
 });
 
-test('hunter xp levels grant stat points that improve main stats', () => {
+test('hunter xp levels grant five Hunter stat points and spending them does not mutate fighter stats', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 93 }),
     hunterWorld: {
@@ -368,12 +394,41 @@ test('hunter xp levels grant stat points that improve main stats', () => {
   life = enterHunterGate(life, 'eGate');
   life = clearHunterGate(life, 'balanced');
   const beforeStrength = life.stats.strength;
+  const beforeHunterStrength = life.hunterWorld.stats.strength;
   const next = spendHunterStatPoint(life, 'strength');
 
   assert.ok(life.hunterWorld.level > 1);
-  assert.ok(life.hunterWorld.statPoints > 0);
+  assert.ok(life.hunterWorld.statPoints >= 5);
   assert.equal(next.hunterWorld.statPoints, life.hunterWorld.statPoints - 1);
-  assert.ok(next.stats.strength > beforeStrength);
+  assert.equal(next.hunterWorld.stats.strength, beforeHunterStrength + 1);
+  assert.equal(next.stats.strength, beforeStrength);
+});
+
+test('one Hunter stat adds ten mapped fighter-stat equivalent power', () => {
+  const baseLife = createNewLife({ gender: 'Male', seed: 931 });
+  const withHunterStat = (stat) => ({
+    ...baseLife,
+    hunterWorld: {
+      ...baseLife.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      stats: { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0, [stat]: 1 },
+    },
+  });
+  const sum = (stats, keys) => keys.reduce((total, key) => total + (stats[key] ?? 0), 0);
+  const statMappings = {
+    strength: ['strength'],
+    agility: ['speed', 'reflexes', 'flexibility'],
+    vitality: ['durability', 'willpower'],
+    sense: ['fightIq', 'technique', 'reflexes', 'control'],
+    intelligence: ['fightIq', 'control'],
+  };
+
+  for (const [hunterStat, mappedStats] of Object.entries(statMappings)) {
+    const life = withHunterStat(hunterStat);
+    const effective = getHunterEffectiveStats(life);
+    assert.equal(sum(effective, mappedStats), sum(baseLife.stats, mappedStats) + 10);
+  }
 });
 
 test('hunter association can promote ranks after enough gates and power', () => {

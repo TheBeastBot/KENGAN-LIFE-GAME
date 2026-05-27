@@ -573,6 +573,39 @@ select:focus {
   gap: 10px;
 }
 
+.hunter-quest-modal {
+  z-index: 12;
+}
+
+.hunter-quest-popup {
+  width: min(100%, 720px);
+  max-height: min(86vh, 820px);
+  overflow: auto;
+  border-color: rgba(87, 151, 229, 0.5);
+  background:
+    linear-gradient(135deg, rgba(87, 151, 229, 0.13), rgba(125, 243, 198, 0.08)),
+    var(--panel);
+}
+
+.hunter-popup-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hunter-popup-header h2 {
+  margin-top: 2px;
+}
+
+.hunter-stat-grid {
+  margin-bottom: 10px;
+}
+
+.system-move-card {
+  border-color: rgba(87, 151, 229, 0.34);
+}
+
 .clan-password-card {
   display: grid;
   gap: 12px;

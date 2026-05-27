@@ -39,6 +39,13 @@ const DEFAULT_CLAN_AWAKENING = {
   corruption: 0,
   lastAwakeningMonth: null,
 };
+const DEFAULT_HUNTER_STATS = {
+  strength: 0,
+  agility: 0,
+  vitality: 0,
+  sense: 0,
+  intelligence: 0,
+};
 const DEFAULT_HUNTER_WORLD = {
   unlocked: false,
   playerAwakened: false,
@@ -46,6 +53,7 @@ const DEFAULT_HUNTER_WORLD = {
   xp: 0,
   level: 1,
   statPoints: 0,
+  stats: DEFAULT_HUNTER_STATS,
   gatesCleared: 0,
   dailyQuestsCompleted: 0,
   systemFatigue: 0,
@@ -115,6 +123,69 @@ export const HUNTER_MONSTERS = {
   },
 };
 
+export const HUNTER_MOVES = {
+  slash: {
+    label: 'Slash',
+    category: 'attack',
+    hint: 'A direct System blade line. Scales with Hunter Strength and Sense.',
+    staminaCost: 14,
+    damageBias: 1.15,
+    guardBias: -2,
+    cooldown: 1,
+    text: 'System Slash cuts a bright line through the monster entry.',
+  },
+  dashStrike: {
+    label: 'Dash Strike',
+    category: 'attack',
+    hint: 'Burst through the monster angle. Scales with Agility and Strength.',
+    staminaCost: 18,
+    damageBias: 1.28,
+    guardBias: -4,
+    cooldown: 1,
+    text: 'Dash Strike turns footwork into a blue afterimage and impact.',
+  },
+  manaGuard: {
+    label: 'Mana Guard',
+    category: 'defense',
+    hint: 'Raise a System guard to reduce incoming damage and recover control.',
+    staminaCost: 8,
+    damageBias: 0.45,
+    guardBias: 12,
+    cooldown: 1,
+    text: 'Mana Guard blooms over your forearms before the monster lands clean.',
+  },
+  analyzeWeakness: {
+    label: 'Analyze Weakness',
+    category: 'support',
+    hint: 'Read the monster pattern. Lower damage now, stronger next exchange.',
+    staminaCost: 7,
+    damageBias: 0.55,
+    guardBias: 4,
+    cooldown: 2,
+    text: 'Analyze Weakness turns the monster movement into readable System marks.',
+  },
+  execute: {
+    label: 'Execute',
+    category: 'finisher',
+    hint: 'High-cost finisher that grows stronger when the monster is hurt.',
+    staminaCost: 28,
+    damageBias: 1.85,
+    guardBias: -7,
+    cooldown: 3,
+    text: 'Execute marks the target and drives the final line toward the core.',
+  },
+  shadowAssist: {
+    label: 'Shadow Assist',
+    category: 'summon',
+    hint: 'Call shadow pressure. Stronger with Intelligence and shadow army size.',
+    staminaCost: 20,
+    damageBias: 1.35,
+    guardBias: 2,
+    cooldown: 2,
+    text: 'Shadow Assist drags the monster timing off-beat for one brutal opening.',
+  },
+};
+
 function clanPasswordHint(progress = 0) {
   const revealed = clamp(Math.floor(progress), 0, SECRET_CLAN_PASSWORD.length);
   return SECRET_CLAN_PASSWORD
@@ -149,6 +220,12 @@ function defaultHunterWorld() {
   return clone(DEFAULT_HUNTER_WORLD);
 }
 
+function normalizeHunterStats(stats = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
+  );
+}
+
 function normalizeHunterDailyQuest(quest) {
   if (!quest) return null;
   const stages = Array.isArray(quest.stages) ? quest.stages : [];
@@ -179,6 +256,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     xp: Math.max(0, Math.floor(hunterWorld.xp ?? 0)),
     level: Math.max(1, Math.floor(hunterWorld.level ?? 1)),
     statPoints: Math.max(0, Math.floor(hunterWorld.statPoints ?? 0)),
+    stats: normalizeHunterStats(hunterWorld.stats),
     gatesCleared: Math.max(0, Math.floor(hunterWorld.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld.dailyQuestsCompleted ?? 0)),
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
@@ -2933,7 +3011,7 @@ function applyFollowerAgeUpIncome(life) {
 }
 
 function hunterPower(life) {
-  const stats = life.stats ?? {};
+  const stats = getHunterEffectiveStats(life);
   const statPower = (
     (stats.strength ?? 0) +
     (stats.speed ?? 0) +
@@ -2949,6 +3027,25 @@ function hunterPower(life) {
   return Math.round(statPower + hunter.level * 8 + shadowPower);
 }
 
+export function getHunterEffectiveStats(life) {
+  const base = life.stats ?? {};
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const stats = hunter.stats;
+  return {
+    ...base,
+    strength: (base.strength ?? 0) + stats.strength * 10,
+    speed: (base.speed ?? 0) + stats.agility * 4,
+    reflexes: (base.reflexes ?? 0) + stats.agility * 3 + stats.sense * 2,
+    flexibility: (base.flexibility ?? 0) + stats.agility * 3,
+    durability: (base.durability ?? 0) + stats.vitality * 5,
+    willpower: (base.willpower ?? 0) + stats.vitality * 5,
+    fightIq: (base.fightIq ?? 0) + stats.sense * 3 + stats.intelligence * 4,
+    technique: (base.technique ?? 0) + stats.sense * 3,
+    control: (base.control ?? 0) + stats.sense * 2 + stats.intelligence * 6,
+    aggression: base.aggression ?? 0,
+  };
+}
+
 function hunterXpForNextLevel(level) {
   return 100 + Math.max(1, level) * 35;
 }
@@ -2959,7 +3056,7 @@ function grantHunterXp(life, amount) {
   while (life.hunterWorld.xp >= hunterXpForNextLevel(life.hunterWorld.level)) {
     life.hunterWorld.xp -= hunterXpForNextLevel(life.hunterWorld.level);
     life.hunterWorld.level += 1;
-    life.hunterWorld.statPoints += 2;
+    life.hunterWorld.statPoints += 5;
   }
 }
 
@@ -2967,9 +3064,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
   {
     id: 'penalty-zone-drill',
     title: 'Penalty Zone Drill',
-    rewardsPreview: ['Hunter XP', '+durability', '+willpower', 'Fatigue +6'],
-    completion: { xp: 68, fatigue: 6, stats: { durability: 2, willpower: 2, control: 1 }, resources: { mood: -1 } },
-    partial: { xp: 28, fatigue: 4, stats: { durability: 1 }, resources: { mood: -3 } },
+    rewardsPreview: ['Hunter XP', '+vitality', '+sense', 'Fatigue +6'],
+    completion: { xp: 68, fatigue: 6, hunterStats: { vitality: 2, sense: 1 }, resources: { mood: -1 } },
+    partial: { xp: 28, fatigue: 4, hunterStats: { vitality: 1 }, resources: { mood: -3 } },
     stages: [
       {
         id: 'forced-warmup',
@@ -2977,9 +3074,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         title: 'Mandatory Conditioning',
         body: 'The blue window opens over your vision: push-ups, sprints, breath holds. The floor looks normal until missing a rep makes it shake.',
         choices: [
-          { id: 'perfect-form', label: 'Perfect Form', result: 'You slow the reps down and make every count clean.', effects: { stats: { control: 1, durability: 1 }, resources: { energy: -10 } } },
-          { id: 'speed-run', label: 'Speed Run', result: 'You race the timer and let the System judge the ugly reps later.', effects: { stats: { speed: 1, willpower: 1 }, resources: { energy: -14, mood: -1 } } },
-          { id: 'refuse-slack', label: 'Refuse To Slack', result: 'You add extra reps before the warning can appear.', effects: { stats: { willpower: 2 }, resources: { energy: -18, health: -3 } } },
+          { id: 'perfect-form', label: 'Perfect Form', result: 'You slow the reps down and make every count clean.', effects: { hunterStats: { vitality: 1 }, resources: { energy: -10 } } },
+          { id: 'speed-run', label: 'Speed Run', result: 'You race the timer and let the System judge the ugly reps later.', effects: { hunterStats: { agility: 1 }, resources: { energy: -14, mood: -1 } } },
+          { id: 'refuse-slack', label: 'Refuse To Slack', result: 'You add extra reps before the warning can appear.', effects: { hunterStats: { strength: 1 }, resources: { energy: -18, health: -3 } } },
         ],
       },
       {
@@ -2995,8 +3092,8 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         title: 'System Cooldown',
         body: 'The monster dissolves into blue dust. Your muscles keep twitching like the quest is still counting.',
         choices: [
-          { id: 'breathing-reset', label: 'Breathing Reset', result: 'You force your breathing back under control before the reward screen opens.', effects: { stats: { control: 1 }, resources: { energy: 5, mood: 1 } } },
-          { id: 'study-window', label: 'Study Window', result: 'You replay the fight log and mark where the monster punished your entries.', effects: { stats: { fightIq: 1, technique: 1 }, resources: { mood: -1 } } },
+          { id: 'breathing-reset', label: 'Breathing Reset', result: 'You force your breathing back under control before the reward screen opens.', effects: { hunterStats: { vitality: 1 }, resources: { energy: 5, mood: 1 } } },
+          { id: 'study-window', label: 'Study Window', result: 'You replay the fight log and mark where the monster punished your entries.', effects: { hunterStats: { sense: 1 }, resources: { mood: -1 } } },
         ],
       },
     ],
@@ -3004,9 +3101,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
   {
     id: 'subway-gate-trace',
     title: 'Subway Gate Trace',
-    rewardsPreview: ['Hunter XP', '$260', '+technique', 'Heat +4'],
-    completion: { xp: 92, fatigue: 8, stats: { technique: 2, reflexes: 1, fightIq: 1 }, resources: { money: 260, reputation: 3 }, world: { heat: 4 } },
-    partial: { xp: 36, fatigue: 6, stats: { reflexes: 1 }, resources: { reputation: 1 }, world: { heat: 3 } },
+    rewardsPreview: ['Hunter XP', '$260', '+sense', 'Heat +4'],
+    completion: { xp: 92, fatigue: 8, hunterStats: { sense: 2, intelligence: 1 }, resources: { money: 260, reputation: 3 }, world: { heat: 4 } },
+    partial: { xp: 36, fatigue: 6, hunterStats: { sense: 1 }, resources: { reputation: 1 }, world: { heat: 3 } },
     stages: [
       {
         id: 'track-leak',
@@ -3014,9 +3111,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         title: 'Mana Leak',
         body: 'A station platform flickers after midnight. The System marks three traces under the tracks and one moving thing past the tunnel lights.',
         choices: [
-          { id: 'follow-trace', label: 'Follow Trace', result: 'You read the mana trail instead of rushing the noise.', effects: { stats: { fightIq: 1 }, resources: { energy: -8 } } },
+          { id: 'follow-trace', label: 'Follow Trace', result: 'You read the mana trail instead of rushing the noise.', effects: { hunterStats: { sense: 1 }, resources: { energy: -8 } } },
           { id: 'secure-platform', label: 'Secure Platform', result: 'You clear the civilians first and lose a little time.', effects: { resources: { reputation: 2, energy: -10 }, world: { heat: 1 } } },
-          { id: 'rush-dark', label: 'Rush The Dark', result: 'You enter before the thing can set the ambush cleanly.', effects: { stats: { aggression: 1, reflexes: 1 }, resources: { health: -4, energy: -12 } } },
+          { id: 'rush-dark', label: 'Rush The Dark', result: 'You enter before the thing can set the ambush cleanly.', effects: { hunterStats: { agility: 1 }, resources: { health: -4, energy: -12 } } },
         ],
       },
       {
@@ -3033,7 +3130,7 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         body: 'The gate leak is still breathing through the concrete. The System lets you decide what to take from it.',
         choices: [
           { id: 'harvest-core', label: 'Harvest Core', result: 'You pull the core loose and sell the clean fragments.', effects: { resources: { money: 120 }, world: { heat: 2 } } },
-          { id: 'study-residue', label: 'Study Residue', result: 'You study how the leak bent space around the fight.', effects: { stats: { technique: 1, fightIq: 1 }, resources: { energy: -4 } } },
+          { id: 'study-residue', label: 'Study Residue', result: 'You study how the leak bent space around the fight.', effects: { hunterStats: { intelligence: 1 }, resources: { energy: -4 } } },
         ],
       },
     ],
@@ -3041,9 +3138,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
   {
     id: 'civilian-rescue',
     title: 'Emergency Civilian Rescue',
-    rewardsPreview: ['Hunter XP', '+reputation', '+willpower', 'Heat +6'],
-    completion: { xp: 84, fatigue: 9, stats: { willpower: 2, speed: 1, control: 1 }, resources: { reputation: 7, mood: 2 }, world: { heat: 6 } },
-    partial: { xp: 32, fatigue: 7, stats: { willpower: 1 }, resources: { reputation: 2, mood: -2 }, world: { heat: 5 } },
+    rewardsPreview: ['Hunter XP', '+reputation', '+vitality', 'Heat +6'],
+    completion: { xp: 84, fatigue: 9, hunterStats: { vitality: 2, agility: 1 }, resources: { reputation: 7, mood: 2 }, world: { heat: 6 } },
+    partial: { xp: 32, fatigue: 7, hunterStats: { vitality: 1 }, resources: { reputation: 2, mood: -2 }, world: { heat: 5 } },
     stages: [
       {
         id: 'first-response',
@@ -3051,9 +3148,9 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         title: 'Street Gate Alarm',
         body: 'A small Gate opens beside stopped traffic. People are filming until the first hound steps out.',
         choices: [
-          { id: 'draw-aggro', label: 'Draw Aggro', result: 'You make yourself the loudest target on the street.', effects: { stats: { willpower: 1, aggression: 1 }, resources: { health: -3, energy: -10 } } },
-          { id: 'evacuate-first', label: 'Evacuate First', result: 'You move people behind cover before taking the center line.', effects: { resources: { reputation: 3, energy: -12 }, stats: { control: 1 } } },
-          { id: 'call-hunters', label: 'Call Hunters', result: 'You send the location and buy time, but official attention follows.', effects: { world: { heat: 2 }, stats: { fightIq: 1 }, resources: { mood: 1 } } },
+          { id: 'draw-aggro', label: 'Draw Aggro', result: 'You make yourself the loudest target on the street.', effects: { hunterStats: { strength: 1 }, resources: { health: -3, energy: -10 } } },
+          { id: 'evacuate-first', label: 'Evacuate First', result: 'You move people behind cover before taking the center line.', effects: { resources: { reputation: 3, energy: -12 }, hunterStats: { vitality: 1 } } },
+          { id: 'call-hunters', label: 'Call Hunters', result: 'You send the location and buy time, but official attention follows.', effects: { world: { heat: 2 }, hunterStats: { intelligence: 1 }, resources: { mood: 1 } } },
         ],
       },
       {
@@ -3071,7 +3168,7 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
         choices: [
           { id: 'take-credit', label: 'Take Credit', result: 'Witness clips make sure the Association knows your face.', effects: { resources: { reputation: 3 }, world: { heat: 2 } } },
           { id: 'stay-quiet', label: 'Stay Quiet', result: 'You leave before the interviews and keep the focus on survival.', effects: { resources: { mood: 2 }, world: { heat: -1 } } },
-          { id: 'scan-again', label: 'Scan Again', result: 'You find one more trace and learn how the pack entered.', effects: { stats: { fightIq: 1, reflexes: 1 }, resources: { energy: -5 } } },
+          { id: 'scan-again', label: 'Scan Again', result: 'You find one more trace and learn how the pack entered.', effects: { hunterStats: { sense: 1 }, resources: { energy: -5 } } },
         ],
       },
     ],
@@ -3083,6 +3180,13 @@ function questTemplateById(id) {
 }
 
 function applyDelta(life, effects = {}) {
+  if (effects.hunterStats) {
+    life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+    life.hunterWorld.stats = { ...life.hunterWorld.stats };
+    for (const [stat, amount] of Object.entries(effects.hunterStats)) {
+      if (stat in DEFAULT_HUNTER_STATS) life.hunterWorld.stats[stat] = Math.max(0, Math.floor((life.hunterWorld.stats[stat] ?? 0) + amount));
+    }
+  }
   if (effects.resources) {
     for (const [resource, amount] of Object.entries(effects.resources)) {
       if (resource in life.resources) life.resources[resource] = clamp(life.resources[resource] + amount, 0, resource === 'reputation' ? 999 : 1000000);
@@ -3145,9 +3249,9 @@ function applyHunterQuestFightResult(life, fight, won) {
       label: `${monster.name} defeated`,
       won: true,
     });
-    life.stats.reflexes = clampLifeStat(life, 'reflexes', life.stats.reflexes + 1);
+    life.hunterWorld.stats.sense = Math.max(0, (life.hunterWorld.stats.sense ?? 0) + 1);
     fight.result.rewards.push('Quest progress: monster objective cleared');
-    fight.result.rewards.push('+1 reflexes from live System combat');
+    fight.result.rewards.push('+1 Hunter Sense from live System combat');
   } else {
     quest.completed = true;
     quest.failed = true;
@@ -4602,6 +4706,7 @@ function resolveFightMove(life, moveId = 'pressure') {
 }
 
 export function getUnlockedFightMoves(life, category) {
+  if (life.activeFight?.source === 'hunterQuest') return [];
   const roleContext = category === 'grapple' ? grapplingRoleContext(life.activeFight) : null;
   const grappling = normalizeGrapplingState(life.activeFight);
   return Object.entries(FIGHT_MOVES)
@@ -4628,6 +4733,26 @@ export function getUnlockedFightMoves(life, category) {
       cooldownRemaining: life.activeFight?.moveCooldowns?.[id] ?? 0,
       disabledReason: fightMoveDisabledReason(life, { id, ...move }),
     }));
+}
+
+export function getUnlockedHunterMoves(life) {
+  if (life.activeFight?.source !== 'hunterQuest') return [];
+  return Object.entries(HUNTER_MOVES).map(([id, move]) => ({
+    id,
+    ...move,
+    cooldownRemaining: life.activeFight?.moveCooldowns?.[id] ?? 0,
+    disabledReason: hunterMoveDisabledReason(life, { id, ...move }),
+  }));
+}
+
+function hunterMoveDisabledReason(life, move) {
+  const fight = life.activeFight;
+  if (!fight || fight.finished || fight.source !== 'hunterQuest') return '';
+  if (move.id === 'shadowAssist' && !(normalizeHunterWorld(life.hunterWorld).shadowArmy?.length)) return 'Requires at least one shadow in your army.';
+  const cooldown = fight.moveCooldowns?.[move.id] ?? 0;
+  if (cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'}.`;
+  if ((fight.meters.playerStamina ?? 0) < Math.max(1, move.staminaCost - 4)) return 'Not enough stamina for this System skill.';
+  return '';
 }
 
 function fightMoveDisabledReason(life, move) {
@@ -6354,7 +6479,9 @@ function createActiveFight(life, opponentId, options = {}) {
   if (!opponent) return null;
   const prep = life.nextFightPrep ?? {};
   const opponentStats = getOpponentStats(opponent);
-  const maxPlayerHealth = fightHealthFromStats(life.stats);
+  const playerStats = options.source === 'hunterQuest' ? getHunterEffectiveStats(life) : life.stats;
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const maxPlayerHealth = fightHealthFromStats(playerStats) + (options.source === 'hunterQuest' ? hunter.stats.vitality * 10 : 0);
   const maxOpponentHealth = fightHealthFromStats(opponentStats);
   const breakdown = fightBreakdown(life, opponent);
   if (opponent.adaptationCount) {
@@ -6390,7 +6517,7 @@ function createActiveFight(life, opponentId, options = {}) {
       opponentHealth: maxOpponentHealth,
       maxPlayerHealth,
       maxOpponentHealth,
-      playerStamina: clamp(life.resources.energy + (prep.trainingCamp ? 10 : 0), 25, 100),
+      playerStamina: clamp(life.resources.energy + (prep.trainingCamp ? 10 : 0) + (options.source === 'hunterQuest' ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 100),
       opponentStamina: clamp(54 + (opponentStats.durability + opponentStats.willpower + opponentStats.control) / 30, 45, 100),
       momentum: (prep.trainingCamp ? 5 : 0) + (prep.scoutTape ? 8 : 0) - (activeCallout?.opponentMomentum ?? 0),
       guard: 50 + (prep.cornerman ? 12 : 0),
@@ -6728,8 +6855,144 @@ function resolveBottomConserveExchange({ life, opponent, fight, move, playerScor
   return result;
 }
 
+function hunterMoveProfile(move, life) {
+  const stats = getHunterEffectiveStats(life);
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const shadowPower = hunter.shadowArmy.length * (8 + hunter.stats.intelligence * 0.6);
+  const profiles = {
+    slash: {
+      stat: stats.strength * 1.05 + stats.technique * 0.45 + stats.fightIq * 0.25 + hunter.level * 4,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense,
+      incomingReduction: 0,
+    },
+    dashStrike: {
+      stat: stats.speed * 1.1 + stats.reflexes * 0.85 + stats.strength * 0.35 + hunter.level * 4,
+      damageBonus: hunter.stats.agility * 2 + hunter.stats.strength,
+      incomingReduction: 0,
+    },
+    manaGuard: {
+      stat: stats.durability * 0.95 + stats.willpower * 0.9 + stats.control * 0.5 + hunter.level * 4,
+      damageBonus: 0,
+      incomingReduction: 10 + hunter.stats.vitality * 2 + hunter.stats.intelligence,
+    },
+    analyzeWeakness: {
+      stat: stats.fightIq * 1.1 + stats.control * 0.8 + stats.technique * 0.45 + hunter.level * 4,
+      damageBonus: hunter.stats.sense + hunter.stats.intelligence,
+      incomingReduction: 4 + hunter.stats.sense,
+    },
+    execute: {
+      stat: stats.strength * 0.9 + stats.speed * 0.55 + stats.fightIq * 0.55 + hunter.level * 5,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 2,
+      incomingReduction: 0,
+    },
+    shadowAssist: {
+      stat: stats.control * 0.9 + stats.fightIq * 0.75 + shadowPower + hunter.level * 4,
+      damageBonus: shadowPower,
+      incomingReduction: hunter.shadowArmy.length * 2,
+    },
+  };
+  return profiles[move.id] ?? profiles.slash;
+}
+
+function takeHunterQuestTurn(life, moveId = 'slash') {
+  const move = HUNTER_MOVES[moveId] ? { id: moveId, ...HUNTER_MOVES[moveId] } : { id: 'slash', ...HUNTER_MOVES.slash };
+  const disabledReason = hunterMoveDisabledReason(life, move);
+  if (disabledReason) return addLog(life, disabledReason, 'world');
+
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const fight = next.activeFight;
+  const opponent = getCombatOpponent(next, fight.opponentId);
+  const stats = getHunterEffectiveStats(next);
+  const opponentStats = getOpponentStats(opponent);
+  const profile = hunterMoveProfile(move, next);
+  const opponentTactic = opponentIntent(opponent, visibleFightRound(fight));
+  const enemyMove = chooseEnemyFightMove(opponent, opponentTactic, fight);
+  const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22;
+  const analyzeBonus = fight.systemAnalysis ? 18 + next.hunterWorld.stats.sense * 2 : 0;
+  const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus;
+  const swing = playerScore - enemyScore;
+  const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
+  const executeBonus = move.id === 'execute' ? Math.round(hurtPercent / 4) : 0;
+  const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
+  const basePlayerDamage = Math.max(1, Math.round(move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense));
+  const criticalChance = clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004, 0.05, 0.42);
+  const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'hunter-crit');
+  const critical = criticalRoll < criticalChance;
+  let playerDamage = critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
+  const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1 }, fight, -swing);
+  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage + opponentStats.aggression / 70 - profile.incomingReduction));
+  const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0), 0.03, 0.38);
+  const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
+  const enemyDamage = dodged ? 0 : baseEnemyDamage;
+
+  for (const [id, cooldown] of Object.entries(fight.moveCooldowns ?? {})) {
+    const remaining = Math.max(0, cooldown - 1);
+    if (remaining) fight.moveCooldowns[id] = remaining;
+    else delete fight.moveCooldowns[id];
+  }
+  fight.moveCooldowns[move.id] = move.cooldown ?? 1;
+  fight.systemAnalysis = move.id === 'analyzeWeakness';
+  fight.meters.playerStamina = clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, 100);
+  fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
+  fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
+  fight.meters.guard = clamp(fight.meters.guard + move.guardBias, 0, 100);
+  fight.meters.momentum = clamp(fight.meters.momentum + Math.round(swing / 8), -50, 50);
+  const injuryDefense = stats.durability * 0.014 + stats.flexibility * 0.012 + stats.control * 0.01 + stats.willpower * 0.01;
+  const playerDamagePercent = 100 - healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
+  fight.meters.injuryRisk = clamp(opponent.risk + playerDamagePercent / 8 - injuryDefense, 0, 100);
+  const combatInjury = combatInjuryForExchange(next, opponentTactic, enemyDamage, fight, enemyMove);
+  if (combatInjury) addOrUpgradeInjury(next, combatInjury);
+
+  const monsterLine = dodged
+    ? `${opponent.name}'s ${enemyMove.label} misses as the System-assisted movement pulls you off the line.`
+    : `${opponent.name} answers with ${enemyMove.label} for ${enemyDamage} damage.`;
+  const analysisLine = move.id === 'analyzeWeakness'
+    ? ' Next exchange gains a System analysis bonus.'
+    : fight.systemAnalysis
+      ? ' The previous analysis turns one monster habit into a target.'
+      : '';
+  fight.exchanges.unshift({
+    round: fight.round,
+    tactic: move.category,
+    moveId: move.id,
+    tacticLabel: move.label,
+    opponentTactic,
+    opponentTacticLabel: tacticLabel(opponentTactic),
+    opponentMoveId: enemyMove.id,
+    opponentMoveLabel: enemyMove.label,
+    opponentMoveText: enemyMove.text,
+    text: `Exchange ${fight.round} - ${move.label}: ${move.text} ${monsterLine} Damage: You dealt ${playerDamage}. You took ${enemyDamage}.${critical ? ' Critical System hit.' : ''}${analysisLine}`,
+    playerDamage,
+    basePlayerDamage,
+    enemyDamage,
+    baseEnemyDamage,
+    swing,
+    critical,
+    criticalChance,
+    enemyCritical: false,
+    enemyCriticalChance: 0,
+    opponentDodged: false,
+    opponentDodgeChance: 0,
+    dodged,
+    dodgeChance,
+    weakMoveHit: false,
+    momentum: fight.meters.momentum,
+  });
+
+  const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
+  if (finished) {
+    finishActiveFight(next);
+    return next;
+  }
+  fight.round += 1;
+  return next;
+}
+
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
+  if (life.activeFight.source === 'hunterQuest') return takeHunterQuestTurn(life, tactic);
   life = withNormalizedClanAwakening(life);
   const opponent = getCombatOpponent(life, life.activeFight.opponentId);
   if (!opponent) return life;
@@ -7636,12 +7899,12 @@ export function clearHunterGate(life, approach = 'balanced') {
 export function spendHunterStatPoint(life, stat) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  if (!next.hunterWorld.unlocked || next.hunterWorld.statPoints <= 0 || !(stat in next.stats)) {
+  if (!next.hunterWorld.unlocked || next.hunterWorld.statPoints <= 0 || !(stat in DEFAULT_HUNTER_STATS)) {
     return addLog(next, 'No Hunter stat point can be spent there.', 'world');
   }
   next.hunterWorld.statPoints -= 1;
-  next.stats[stat] = clampLifeStat(next, stat, next.stats[stat] + 5);
-  return addLog(next, `System stat point spent: ${stat} increased.`, 'world');
+  next.hunterWorld.stats = { ...next.hunterWorld.stats, [stat]: (next.hunterWorld.stats[stat] ?? 0) + 1 };
+  return addLog(next, `System stat point spent: Hunter ${stat} increased.`, 'world');
 }
 
 export function visitHunterAssociation(life) {

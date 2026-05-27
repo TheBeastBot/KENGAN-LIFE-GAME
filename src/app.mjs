@@ -20,6 +20,7 @@ import {
   getAvailableFights,
   getAdaptedOpponent,
   getCombatOpponent,
+  getHunterEffectiveStats,
   getLockedFights,
   getExperienceBoost,
   getOpponentArchetype,
@@ -32,6 +33,7 @@ import {
   getStatCap,
   TECHNIQUE_TRACKS,
   getUnlockedFightMoves,
+  getUnlockedHunterMoves,
   joinTournament,
   recover,
   redeemClanPassword,
@@ -86,6 +88,13 @@ const DEFAULT_HUNTER_WORLD = {
   xp: 0,
   level: 1,
   statPoints: 0,
+  stats: {
+    strength: 0,
+    agility: 0,
+    vitality: 0,
+    sense: 0,
+    intelligence: 0,
+  },
   gatesCleared: 0,
   dailyQuestsCompleted: 0,
   systemFatigue: 0,
@@ -192,6 +201,7 @@ let selectedGender = 'Male';
 let selectedFirstName = '';
 let activeTab = 'life';
 let selectedFightCategory = null;
+let hunterQuestPopupOpen = false;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
@@ -216,7 +226,6 @@ const dropdownState = createDropdownStateController({
     'social-posts': true,
     'hunter-core': true,
     'hunter-actions': true,
-    'hunter-daily-quest': true,
     'world-rumors': true,
   },
 });
@@ -317,6 +326,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     xp: Math.max(0, Math.floor(hunterWorld?.xp ?? 0)),
     level: Math.max(1, Math.floor(hunterWorld?.level ?? 1)),
     statPoints: Math.max(0, Math.floor(hunterWorld?.statPoints ?? 0)),
+    stats: Object.fromEntries(
+      Object.keys(DEFAULT_HUNTER_WORLD.stats).map((stat) => [stat, Math.max(0, Math.floor(hunterWorld?.stats?.[stat] ?? 0))])
+    ),
     gatesCleared: Math.max(0, Math.floor(hunterWorld?.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld?.dailyQuestsCompleted ?? 0)),
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
@@ -735,6 +747,7 @@ function render() {
     ${renderMoveIconBurst()}
     ${state.trainingPopup ? renderTrainingPopup() : ''}
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
+    ${renderHunterQuestPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
 }
@@ -2113,7 +2126,7 @@ function formatMentorAutoList(ids, catalog) {
 }
 
 function hunterPowerUi() {
-  const stats = state.stats ?? {};
+  const stats = getHunterEffectiveStats(state);
   const statPower = (
     (stats.strength ?? 0) +
     (stats.speed ?? 0) +
@@ -2126,6 +2139,16 @@ function hunterPowerUi() {
   ) / 8;
   const shadows = state.hunterWorld?.shadowArmy?.length ?? 0;
   return Math.round(statPower + (state.hunterWorld?.level ?? 1) * 8 + shadows * 18);
+}
+
+function hunterStatLabel(stat) {
+  return {
+    strength: 'Strength',
+    agility: 'Agility',
+    vitality: 'Vitality',
+    sense: 'Sense',
+    intelligence: 'Intelligence',
+  }[stat] ?? labelize(stat);
 }
 
 function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open' }) {
@@ -2147,8 +2170,18 @@ function renderHunterStatButtons() {
   if (!hunter.statPoints) return '<p class="muted">No System stat points available.</p>';
   return `
     <div class="compact-action-grid">
-      ${['strength', 'speed', 'durability', 'technique', 'fightIq', 'willpower', 'reflexes', 'control'].map((stat) => button(labelize(stat), `hunter-stat-${stat}`)).join('')}
+      ${Object.keys(DEFAULT_HUNTER_WORLD.stats).map((stat) => button(hunterStatLabel(stat), `hunter-stat-${stat}`)).join('')}
     </div>
+  `;
+}
+
+function renderHunterStatSheet() {
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  return `
+    <div class="world-grid hunter-stat-grid">
+      ${Object.entries(hunter.stats ?? DEFAULT_HUNTER_WORLD.stats).map(([stat, value]) => metric(hunterStatLabel(stat), value)).join('')}
+    </div>
+    <p class="muted">Each Hunter stat point adds 1 System stat. That counts as roughly +10 mapped fighter-stat power during Hunter/System checks.</p>
   `;
 }
 
@@ -2181,7 +2214,7 @@ function hunterQuestActivity(quest) {
     title: quest.title,
     subtitle: stage?.body ?? 'System objective active.',
     meta: `Stage ${(quest.stageIndex ?? 0) + 1}/${quest.stages?.length ?? 1}`,
-    action: stage?.type === 'combat' ? 'hunter-quest-fight' : 'hunter-quest-focus',
+    action: 'hunter-quest-open',
     cta: stage?.type === 'combat' ? 'Fight' : 'View',
   };
 }
@@ -2194,9 +2227,8 @@ function renderHunterQuestPanel() {
         <div>
           <p class="eyebrow">System Daily Quest</p>
           <h2>No Quest Active</h2>
-          <p>The System is quiet. Generate a daily quest to open a random event chain with choices and monster combat.</p>
+          <p>The System is quiet. Use the Daily Quest activity to generate a random event chain with choices and monster combat.</p>
         </div>
-        ${button('Generate Daily Quest', 'hunter-daily', 'primary')}
       </article>
     `;
   }
@@ -2230,6 +2262,92 @@ function renderHunterQuestPanel() {
       </div>
       ${choices}
     </article>
+  `;
+}
+
+function renderHunterQuestPopup() {
+  if (!hunterQuestPopupOpen && state.activeFight?.source !== 'hunterQuest') return '';
+  const quest = state.hunterWorld?.dailyQuest;
+  if (!quest && state.activeFight?.source !== 'hunterQuest') return '';
+  return `
+    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="event-modal hunter-quest-popup">
+        <div class="hunter-popup-header">
+          <div>
+            <p class="eyebrow">System Daily Quest</p>
+            <h2>${escapeHtml(state.activeFight?.source === 'hunterQuest' ? (quest?.title ?? 'Monster Encounter') : (quest?.title ?? 'Daily Quest'))}</h2>
+          </div>
+          <button class="small-btn" data-action="hunter-quest-close">Close</button>
+        </div>
+        ${state.activeFight?.source === 'hunterQuest' ? renderHunterMonsterFight() : renderHunterQuestPanel()}
+      </section>
+    </aside>
+  `;
+}
+
+function renderHunterMonsterFight() {
+  const fight = state.activeFight;
+  const opponent = activeFightOpponent(fight);
+  if (!opponent) return '<article class="option-card"><h2>Monster data missing</h2><p>Close this encounter and restart the quest stage.</p></article>';
+  return `
+    <section class="combat stack">
+      <article class="fight-title">
+        <div>
+          <p class="eyebrow">${fight.finished ? 'System Report' : `Exchange ${fight.round} / ${fight.maxRounds}`}</p>
+          <h2>${escapeHtml(state.identity.name)} vs ${escapeHtml(opponent.name)}</h2>
+          <p class="muted">${opponent.style} / ${opponent.threat}</p>
+        </div>
+        <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Cleared' : 'Failed') : 'Live'}</span>
+      </article>
+      ${renderHunterCombatMeters(fight)}
+      ${fight.exchanges.length === 0 ? renderHunterMonsterReadout(fight, opponent) : ''}
+      ${fight.finished ? renderFightReport(fight) : renderHunterMoves()}
+      ${renderExchanges(fight)}
+    </section>
+  `;
+}
+
+function renderHunterCombatMeters(fight) {
+  return `
+    <div class="combat-meters">
+      ${combatMeter('You', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
+      ${combatMeter('Monster', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
+      ${combatMeter('Mana', fight.meters.playerStamina, 'You')}
+      ${combatMeter('Monster Gas', fight.meters.opponentStamina, 'Enemy')}
+      ${combatMeter('Guard', fight.meters.guard, 'System')}
+      ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
+      ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
+    </div>
+  `;
+}
+
+function renderHunterMonsterReadout(fight, opponent) {
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  const quest = hunter.dailyQuest;
+  const stage = currentHunterQuestStage(quest);
+  return `
+    <article class="breakdown dossier-report system-monster-readout">
+      <h2>System Monster Read</h2>
+      <p>Quest: ${escapeHtml(quest?.title ?? 'Daily Quest')}${stage?.title ? ` / ${escapeHtml(stage.title)}` : ''}.</p>
+      <p>Target: ${escapeHtml(opponent.name)}. Threat pattern: ${escapeHtml(opponent.style)} / ${escapeHtml(opponent.threat)}.</p>
+      <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
+      <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
+      ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}
+    </article>
+  `;
+}
+
+function renderHunterMoves() {
+  const moves = getUnlockedHunterMoves(state);
+  return `
+    <section class="tactic-grid hunter-move-grid">
+      ${moves.map((move) => `
+        <button class="move-card system-move-card" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
+          <strong>${move.label}</strong>
+          <span>${move.disabledReason || move.hint}</span>
+        </button>
+      `).join('')}
+    </section>
   `;
 }
 
@@ -2361,16 +2479,10 @@ function renderHunter() {
       </div>`,
       })}
       ${renderCollapsibleSection({
-        id: 'hunter-daily-quest',
-        title: 'System Daily Quest',
-        subtitle: hunter.dailyQuest ? hunter.dailyQuest.title : 'Generate a random System event chain.',
-        body: state.activeFight?.source === 'hunterQuest' ? `<div class="hunter-combat-shell">${renderActiveFight()}</div>` : renderHunterQuestPanel(),
-      })}
-      ${renderCollapsibleSection({
         id: 'hunter-stats',
         title: 'System Stat Points',
         subtitle: `${hunter.statPoints} points available`,
-        body: `<article class="option-card"><div>${renderHunterStatButtons()}</div></article>`,
+        body: `<article class="option-card"><div>${renderHunterStatSheet()}${renderHunterStatButtons()}</div></article>`,
       })}
       ${renderCollapsibleSection({
         id: 'hunter-log',
@@ -2576,6 +2688,7 @@ function handleAction(action, source = null) {
     setState(createNewLife({ gender: selectedGender, firstName: selectedFirstName }));
     activeTab = 'life';
     selectedFightCategory = null;
+    hunterQuestPopupOpen = false;
     return;
   }
   if (!state) return;
@@ -2606,6 +2719,7 @@ function handleAction(action, source = null) {
     localStorage.removeItem(STORAGE_KEY);
     state = null;
     activeTab = 'life';
+    hunterQuestPopupOpen = false;
     render();
   }
   if (action === 'end-life') setState(endLife(state));
@@ -2654,24 +2768,33 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === 'hunter-daily') {
+    hunterQuestPopupOpen = true;
     setState(runHunterDailyQuest(state));
     return;
   }
-  if (action === 'hunter-quest-focus') {
-    if (!dropdownState.isOpen('hunter-daily-quest')) dropdownState.toggle('hunter-daily-quest');
+  if (action === 'hunter-quest-open') {
+    hunterQuestPopupOpen = true;
+    render();
+    return;
+  }
+  if (action === 'hunter-quest-close') {
+    hunterQuestPopupOpen = false;
     render();
     return;
   }
   if (action.startsWith('hunter-quest-choice-')) {
+    hunterQuestPopupOpen = true;
     setState(advanceHunterDailyQuest(state, action.replace('hunter-quest-choice-', '')));
     return;
   }
   if (action === 'hunter-quest-fight') {
     activeTab = 'hunter';
+    hunterQuestPopupOpen = true;
     setState(startHunterQuestFight(state));
     return;
   }
   if (action === 'hunter-quest-claim') {
+    hunterQuestPopupOpen = false;
     setState(claimHunterDailyQuest(state));
     return;
   }
