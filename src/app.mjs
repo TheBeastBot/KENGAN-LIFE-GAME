@@ -43,6 +43,8 @@ import {
   advanceHunterDailyQuest,
   claimHunterDailyQuest,
   dismissRetreatedHunterQuest,
+  dismissHunterDungeonResult,
+  generateHunterGateOffers,
   spendLifeChoice,
   spendMoneyAction,
   startFight,
@@ -61,13 +63,15 @@ import {
   releaseCoachedFighter,
   runHunterDailyQuest,
   scheduleCoachedFight,
-  clearHunterGate,
   toggleAutoRecovery,
   toggleAutoTraining,
   useSocialAction,
   spendHunterStatPoint,
-  enterHunterGate,
   extractShadow,
+  selectHunterGate,
+  startHunterDungeonEncounter,
+  advanceHunterDungeon,
+  retreatHunterDungeon,
   visitHunterAssociation,
 } from './sim.mjs';
 import { createDropdownStateController } from './ui-state.mjs';
@@ -102,7 +106,9 @@ const DEFAULT_HUNTER_WORLD = {
   systemFatigue: 0,
   shadowArmy: [],
   inventory: [],
-  activeGate: null,
+  gateOffers: [],
+  activeDungeon: null,
+  redGatePending: false,
   lastGateMonth: null,
   dailyQuest: null,
 };
@@ -204,6 +210,7 @@ let selectedFirstName = '';
 let activeTab = 'life';
 let selectedFightCategory = null;
 let hunterQuestPopupOpen = false;
+let hunterDungeonPopupOpen = false;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
@@ -336,7 +343,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
     shadowArmy: Array.isArray(hunterWorld?.shadowArmy) ? hunterWorld.shadowArmy : [],
     inventory: Array.isArray(hunterWorld?.inventory) ? hunterWorld.inventory : [],
-    activeGate: hunterWorld?.activeGate ?? null,
+    gateOffers: Array.isArray(hunterWorld?.gateOffers) ? hunterWorld.gateOffers.slice(0, 3) : [],
+    activeDungeon: hunterWorld?.activeDungeon ?? null,
+    redGatePending: Boolean(hunterWorld?.redGatePending),
     lastGateMonth: hunterWorld?.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
@@ -750,6 +759,7 @@ function render() {
     ${state.trainingPopup ? renderTrainingPopup() : ''}
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
     ${renderHunterQuestPopup()}
+    ${renderHunterDungeonPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
 }
@@ -2310,7 +2320,7 @@ function renderHunterQuestPopup() {
   `;
 }
 
-function renderHunterMonsterFight() {
+function renderHunterMonsterFight(mode = 'quest') {
   const fight = state.activeFight;
   const opponent = activeFightOpponent(fight);
   if (!opponent) return '<article class="option-card"><h2>Monster data missing</h2><p>Close this encounter and restart the quest stage.</p></article>';
@@ -2325,8 +2335,8 @@ function renderHunterMonsterFight() {
         <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Cleared' : 'Failed') : 'Live'}</span>
       </article>
       ${renderHunterCombatMeters(fight)}
-      ${fight.exchanges.length === 0 ? renderHunterMonsterReadout(fight, opponent) : ''}
-      ${fight.finished ? renderFightReport(fight) : renderHunterMoves()}
+      ${fight.exchanges.length === 0 ? renderHunterMonsterReadout(fight, opponent, mode) : ''}
+      ${fight.finished ? (mode === 'dungeon' ? renderHunterDungeonFightReport(fight) : renderFightReport(fight)) : renderHunterMoves(mode)}
       ${renderExchanges(fight)}
     </section>
   `;
@@ -2346,14 +2356,18 @@ function renderHunterCombatMeters(fight) {
   `;
 }
 
-function renderHunterMonsterReadout(fight, opponent) {
+function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
   const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
   const quest = hunter.dailyQuest;
   const stage = currentHunterQuestStage(quest);
+  const dungeon = hunter.activeDungeon;
+  const objective = mode === 'dungeon'
+    ? `Gate: ${escapeHtml(dungeon?.name ?? 'Dungeon Run')} / Room ${(dungeon?.encounterIndex ?? 0) + 1} of ${dungeon?.encounters?.length ?? 1}${fight.isBoss ? ' / Boss' : ''}.`
+    : `Quest: ${escapeHtml(quest?.title ?? 'Daily Quest')}${stage?.title ? ` / ${escapeHtml(stage.title)}` : ''}.`;
   return `
     <article class="breakdown dossier-report system-monster-readout">
       <h2>System Monster Read</h2>
-      <p>Quest: ${escapeHtml(quest?.title ?? 'Daily Quest')}${stage?.title ? ` / ${escapeHtml(stage.title)}` : ''}.</p>
+      <p>${objective}</p>
       <p>Target: ${escapeHtml(opponent.name)}. Threat pattern: ${escapeHtml(opponent.style)} / ${escapeHtml(opponent.threat)}.</p>
       <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
@@ -2362,8 +2376,9 @@ function renderHunterMonsterReadout(fight, opponent) {
   `;
 }
 
-function renderHunterMoves() {
+function renderHunterMoves(mode = 'quest') {
   const moves = getUnlockedHunterMoves(state);
+  const dungeon = mode === 'dungeon';
   return `
     <section class="tactic-grid hunter-move-grid">
       ${moves.map((move) => `
@@ -2372,9 +2387,9 @@ function renderHunterMoves() {
           <span>${move.disabledReason || move.hint}</span>
         </button>
       `).join('')}
-      <button class="move-card danger-btn hunter-retreat-card" data-action="hunter-quest-retreat">
+      <button class="move-card danger-btn hunter-retreat-card" data-action="${dungeon ? 'hunter-dungeon-retreat' : 'hunter-quest-retreat'}">
         <strong>Retreat</strong>
-        <span>Escape alive now. The Daily Quest fails with no reward and survival penalties.</span>
+        <span>Escape alive now. ${dungeon ? 'The Gate run ends; cleared room rewards remain, but the jackpot is lost.' : 'The Daily Quest fails with no reward and survival penalties.'}</span>
       </button>
     </section>
   `;
@@ -2387,6 +2402,128 @@ function renderHunterQuestResults(quest) {
     <ul class="quest-results">
       ${results.map((result) => `<li>${escapeHtml(result.result ?? result.label ?? 'Objective updated')}</li>`).join('')}
     </ul>
+  `;
+}
+
+function gateMoney(value) {
+  return `$${Number(value ?? 0).toLocaleString()}`;
+}
+
+function hunterGateActivity(hunter) {
+  const dungeon = hunter.activeDungeon;
+  if (dungeon) {
+    if (dungeon.completed) {
+      return {
+        title: dungeon.outcome === 'cleared' ? 'Dungeon Cleared' : 'Gate Run Ended',
+        subtitle: dungeon.resultText ?? (dungeon.bossDefeated ? 'The boss is down. Review the System clear report.' : 'Review the exit report.'),
+        meta: `${dungeon.rank}-rank / ${dungeon.isRedGate ? 'Red Gate' : dungeon.outcome}`,
+        cta: 'Review',
+      };
+    }
+    return {
+      title: dungeon.name,
+      subtitle: `Push through room ${dungeon.encounterIndex + 1} of ${dungeon.encounters.length}. Condition carries between fights.`,
+      meta: `${dungeon.rank}-rank / ${dungeon.isRedGate ? 'Red Gate' : 'Dungeon active'}`,
+      cta: state.activeFight?.source === 'hunterDungeon' ? 'Fight' : 'Continue',
+    };
+  }
+  return {
+    title: 'Gate Board',
+    subtitle: 'Choose from three dungeon signals. Every route ends in a boss fight.',
+    meta: `${hunter.gateOffers?.length ?? 0} offers / ${hunter.gatesCleared} cleared`,
+    cta: 'Open',
+  };
+}
+
+function renderHunterGateOffers() {
+  const offers = state.hunterWorld?.gateOffers ?? [];
+  return `
+    <div class="gate-offer-grid">
+      ${offers.map((offer) => `
+        <article class="gate-offer option-card ${offer.isRedGate ? 'red-gate-offer' : ''}">
+          <div>
+            <p class="eyebrow">${offer.isRedGate ? 'Emergency Red Gate' : `${escapeHtml(offer.rank)}-Rank Gate`}</p>
+            <h2>${escapeHtml(offer.name)}</h2>
+            <p>${escapeHtml(offer.theme)} / ${offer.encounters.length} encounters / Boss: ${escapeHtml(offer.bossName)}</p>
+            ${offer.danger ? '<p class="danger-copy">Danger signal: this Gate exceeds your recommended clearance.</p>' : ''}
+            <p class="muted">Rooms: +${offer.rewardsPreview.roomXp} XP, ${gateMoney(offer.rewardsPreview.roomMoney)} each / Boss: +${offer.rewardsPreview.bossXp} XP, ${gateMoney(offer.rewardsPreview.bossMoney)}, +${offer.rewardsPreview.statRewards} Hunter stat</p>
+          </div>
+          ${button('Enter Gate', `hunter-gate-select-${offer.id}`, offer.isRedGate ? 'danger' : 'primary')}
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHunterDungeonFightReport(fight) {
+  const dungeon = state.hunterWorld?.activeDungeon;
+  const action = dungeon?.bossDefeated || dungeon?.failed ? 'hunter-dungeon-dismiss' : 'hunter-dungeon-advance';
+  const label = dungeon?.bossDefeated ? 'Return to Gate Board' : dungeon?.failed ? 'Leave Failed Gate' : 'Proceed Deeper';
+  return `
+    <article class="fight-report dungeon-report">
+      <h2>${escapeHtml(fight.result.summary)}</h2>
+      <div class="report-grid">
+        <div>
+          <h3>${dungeon?.bossDefeated ? 'Dungeon Clear' : 'Room Result'}</h3>
+          <p>${escapeHtml(dungeon?.name ?? 'Dungeon Run')} / ${escapeHtml(dungeon?.rank ?? 'E')}-rank${dungeon?.isRedGate ? ' Red Gate' : ''}</p>
+          <p>Room ${(dungeon?.encounterIndex ?? 0) + 1} of ${dungeon?.encounters?.length ?? 1}${fight.isBoss ? ' / Boss Chamber' : ''}</p>
+        </div>
+        <div>
+          <h3>System Rewards</h3>
+          ${fight.result.rewards.map((reward) => `<p>${escapeHtml(reward)}</p>`).join('')}
+          ${fight.result.injuries.map((injury) => `<p>${formatInjury(injury)}</p>`).join('')}
+        </div>
+      </div>
+      ${button(label, action, 'primary wide')}
+    </article>
+  `;
+}
+
+function renderHunterDungeonPanel() {
+  const dungeon = state.hunterWorld?.activeDungeon;
+  if (!dungeon) return renderHunterGateOffers();
+  if (dungeon.completed && !state.activeFight) {
+    return `
+      <article class="option-card hunter-quest-card ${dungeon.outcome === 'cleared' ? 'complete' : 'failed'}">
+        <div>
+          <p class="eyebrow">${dungeon.outcome === 'cleared' ? 'Dungeon Cleared' : 'Run Abandoned'}</p>
+          <h2>${escapeHtml(dungeon.name)}</h2>
+          <p>${escapeHtml(dungeon.resultText ?? (dungeon.outcome === 'retreated' ? 'You survived the retreat. Cleared-room rewards were kept.' : 'The Gate run has ended.'))}</p>
+          ${dungeon.outcome === 'retreated' ? '<p class="muted">Penalties: +12 fatigue / -10 mood / -4 reputation</p>' : ''}
+          ${dungeon.outcome === 'failed' ? '<p class="muted">Penalties: +16 fatigue / -12 mood / -6 reputation</p>' : ''}
+        </div>
+        ${button('Return to Gate Board', 'hunter-dungeon-dismiss', 'primary')}
+      </article>
+    `;
+  }
+  return `
+    <article class="option-card hunter-quest-card dungeon-ready">
+      <div>
+        <p class="eyebrow">${dungeon.isRedGate ? 'Red Gate Run' : 'Dungeon Run'} / Room ${dungeon.encounterIndex + 1} of ${dungeon.encounters.length}</p>
+        <h2>${escapeHtml(dungeon.name)}</h2>
+        <p>${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'The boss chamber is ahead.' : 'A hostile signature blocks the next room.'} Health and mana do not refill between encounters.</p>
+        <p class="muted">Cleared rooms: ${dungeon.rewardsEarned.filter((reward) => reward.type === 'room').length} / Final boss: ${escapeHtml(dungeon.bossName)}</p>
+      </div>
+      ${button(dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'Enter Boss Chamber' : 'Enter Room', 'hunter-dungeon-start', 'primary')}
+    </article>
+  `;
+}
+
+function renderHunterDungeonPopup() {
+  if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
+  return `
+    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="event-modal hunter-quest-popup dungeon-popup">
+        <div class="hunter-popup-header">
+          <div>
+            <p class="eyebrow">Gate Board</p>
+            <h2>${escapeHtml(state.hunterWorld?.activeDungeon?.name ?? 'Available Dungeon Signals')}</h2>
+          </div>
+          <button class="small-btn" data-action="hunter-dungeon-close">Close</button>
+        </div>
+        ${state.activeFight?.source === 'hunterDungeon' ? renderHunterMonsterFight('dungeon') : renderHunterDungeonPanel()}
+      </section>
+    </aside>
   `;
 }
 
@@ -2405,20 +2542,21 @@ function renderHunter() {
       </section>
     `;
   }
-  const activeGate = hunter.activeGate;
+  const activeDungeon = hunter.activeDungeon;
   const canExtract = hunter.lastBossCleared && hunter.level >= 10;
   const questActivity = hunterQuestActivity(hunter.dailyQuest);
+  const gateActivity = hunterGateActivity(hunter);
   return `
     <section class="stack hunter-panel">
       ${renderCollapsibleSection({
         id: 'hunter-core',
         title: 'System Player',
-        subtitle: activeGate ? `${activeGate.name} active` : 'No active Gate',
+        subtitle: activeDungeon ? `${activeDungeon.name} active` : `${hunter.gateOffers?.length ?? 0} Gate signals available`,
         body: `<div class="hunter-header option-card">
         <div>
           <p class="eyebrow">System Player</p>
           <h2>${state.identity.name}</h2>
-          <p>${activeGate ? `${activeGate.name} is active.` : 'No active Gate. Choose an activity below.'}</p>
+          <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Gate Board signals are ready. Choose a dungeon run below.'}</p>
         </div>
         <div class="world-grid">
           ${metric('Rank', hunter.rank)}
@@ -2434,7 +2572,7 @@ function renderHunter() {
         id: 'hunter-actions',
         title: 'Hunter Activities',
         subtitle: 'Daily quests, Gates, association work, shop, and shadow growth.',
-        count: 8,
+        count: 6,
         body: `<div class="activity-list">
         ${renderHunterActivity({
           icon: 'DQ',
@@ -2447,10 +2585,11 @@ function renderHunter() {
         })}
         ${renderHunterActivity({
           icon: 'GT',
-          title: activeGate ? 'Clear Active Gate' : 'Dungeon Gate',
-          subtitle: activeGate ? 'Resolve the active dungeon with a balanced approach.' : 'Open a low-rank dungeon and prepare to clear it.',
-          meta: activeGate ? `Danger ${activeGate.danger}` : 'E-rank gate',
-          action: activeGate ? 'hunter-clear-balanced' : 'hunter-enter-eGate',
+          title: gateActivity.title,
+          subtitle: gateActivity.subtitle,
+          meta: gateActivity.meta,
+          action: 'hunter-gates-open',
+          cta: gateActivity.cta,
           tone: 'gate',
         })}
         ${renderHunterActivity({
@@ -2460,15 +2599,6 @@ function renderHunter() {
           meta: `Current ${hunter.rank}-rank`,
           action: 'hunter-association',
           tone: 'association',
-        })}
-        ${renderHunterActivity({
-          icon: 'PR',
-          title: 'Party Raid',
-          subtitle: 'Enter a tougher D-rank boss gate with better payout and higher injury risk.',
-          meta: 'Requires Level 4',
-          action: 'hunter-enter-dGate',
-          locked: hunter.level < 4,
-          tone: 'raid',
         })}
         ${renderHunterActivity({
           icon: 'SP',
@@ -2486,15 +2616,6 @@ function renderHunter() {
           action: 'hunter-extract',
           locked: !canExtract,
           tone: 'shadow',
-        })}
-        ${renderHunterActivity({
-          icon: 'RG',
-          title: 'Red Gate',
-          subtitle: 'Emergency Gate with heavy heat, injury risk, and major rewards.',
-          meta: 'Requires Level 18',
-          action: 'hunter-enter-redGate',
-          locked: hunter.level < 18,
-          tone: 'red-gate',
         })}
         ${renderHunterActivity({
           icon: 'MT',
@@ -2718,6 +2839,7 @@ function handleAction(action, source = null) {
     activeTab = 'life';
     selectedFightCategory = null;
     hunterQuestPopupOpen = false;
+    hunterDungeonPopupOpen = false;
     return;
   }
   if (!state) return;
@@ -2749,6 +2871,7 @@ function handleAction(action, source = null) {
     state = null;
     activeTab = 'life';
     hunterQuestPopupOpen = false;
+    hunterDungeonPopupOpen = false;
     render();
   }
   if (action === 'end-life') setState(endLife(state));
@@ -2837,12 +2960,40 @@ function handleAction(action, source = null) {
     setState(claimHunterDailyQuest(state));
     return;
   }
-  if (action.startsWith('hunter-enter-')) {
-    setState(enterHunterGate(state, action.replace('hunter-enter-', '')));
+  if (action === 'hunter-gates-open') {
+    activeTab = 'hunter';
+    hunterDungeonPopupOpen = true;
+    setState(generateHunterGateOffers(state));
     return;
   }
-  if (action.startsWith('hunter-clear-')) {
-    setState(clearHunterGate(state, action.replace('hunter-clear-', '')));
+  if (action === 'hunter-dungeon-close') {
+    hunterDungeonPopupOpen = false;
+    render();
+    return;
+  }
+  if (action.startsWith('hunter-gate-select-')) {
+    hunterDungeonPopupOpen = true;
+    setState(selectHunterGate(state, action.replace('hunter-gate-select-', '')));
+    return;
+  }
+  if (action === 'hunter-dungeon-start') {
+    hunterDungeonPopupOpen = true;
+    setState(startHunterDungeonEncounter(state));
+    return;
+  }
+  if (action === 'hunter-dungeon-advance') {
+    hunterDungeonPopupOpen = true;
+    setState(advanceHunterDungeon(state));
+    return;
+  }
+  if (action === 'hunter-dungeon-retreat') {
+    hunterDungeonPopupOpen = true;
+    setState(retreatHunterDungeon(state));
+    return;
+  }
+  if (action === 'hunter-dungeon-dismiss') {
+    hunterDungeonPopupOpen = true;
+    setState(dismissHunterDungeonResult(state));
     return;
   }
   if (action.startsWith('hunter-stat-')) {

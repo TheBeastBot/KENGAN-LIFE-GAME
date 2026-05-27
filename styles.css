@@ -610,6 +610,41 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+.gate-offer-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.gate-offer {
+  align-items: stretch;
+  gap: 12px;
+  border-color: rgba(87, 151, 229, 0.32);
+}
+
+.gate-offer h2 {
+  font-size: 1.02rem;
+}
+
+.red-gate-offer {
+  border-color: rgba(225, 77, 82, 0.68);
+  background:
+    linear-gradient(135deg, rgba(225, 77, 82, 0.17), rgba(229, 185, 79, 0.05)),
+    var(--panel-2);
+}
+
+.danger-copy {
+  color: #f18488;
+  font-weight: 700;
+}
+
+.dungeon-popup {
+  width: min(100%, 780px);
+}
+
+.dungeon-report .report-grid {
+  margin-top: 10px;
+}
+
 .clan-password-card {
   display: grid;
   gap: 12px;

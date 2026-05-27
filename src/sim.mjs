@@ -59,7 +59,9 @@ const DEFAULT_HUNTER_WORLD = {
   systemFatigue: 0,
   shadowArmy: [],
   inventory: [],
-  activeGate: null,
+  gateOffers: [],
+  activeDungeon: null,
+  redGatePending: false,
   lastGateMonth: null,
   dailyQuest: null,
 };
@@ -71,11 +73,40 @@ const HUNTER_RANK_REQUIREMENTS = {
   A: { level: 28, gatesCleared: 30, power: 455 },
   S: { level: 42, gatesCleared: 50, power: 650 },
 };
-const HUNTER_GATES = {
-  eGate: { id: 'eGate', name: 'E-Rank Dungeon Gate', rank: 'E', danger: 24, xp: 48, money: 180, reputation: 3, heat: 2, boss: null },
-  dGate: { id: 'dGate', name: 'D-Rank Dungeon Gate', rank: 'D', danger: 55, xp: 90, money: 520, reputation: 6, heat: 5, boss: 'steel-knight' },
-  cGate: { id: 'cGate', name: 'C-Rank Party Raid', rank: 'C', danger: 105, xp: 165, money: 1400, reputation: 11, heat: 8, boss: 'blood-ogre' },
-  redGate: { id: 'redGate', name: 'Red Gate Emergency', rank: 'B', danger: 165, xp: 260, money: 3200, reputation: 18, heat: 15, boss: 'frost-warden' },
+const HUNTER_DUNGEON_TIERS = {
+  E: { fights: 2, room: { xp: 35, money: 250, reputation: 2 }, boss: { xp: 90, money: 1000, reputation: 6, stats: 1 } },
+  D: { fights: 3, room: { xp: 65, money: 650, reputation: 4 }, boss: { xp: 170, money: 3000, reputation: 12, stats: 1 } },
+  C: { fights: 3, room: { xp: 110, money: 1500, reputation: 7 }, boss: { xp: 300, money: 8000, reputation: 20, stats: 2 } },
+  B: { fights: 4, room: { xp: 180, money: 3500, reputation: 12 }, boss: { xp: 500, money: 20000, reputation: 34, stats: 2 } },
+  A: { fights: 4, room: { xp: 290, money: 8000, reputation: 20 }, boss: { xp: 800, money: 50000, reputation: 55, stats: 3 } },
+  S: { fights: 5, room: { xp: 450, money: 18000, reputation: 32 }, boss: { xp: 1250, money: 120000, reputation: 90, stats: 4 } },
+};
+const HUNTER_DUNGEON_TEMPLATES = {
+  E: [
+    { id: 'subway-vermin-den', name: 'Subway Vermin Den', theme: 'Abandoned station', normals: ['gateCrawler', 'manaMite'], boss: 'goblinCaptain' },
+    { id: 'warehouse-crack', name: 'Warehouse Mana Crack', theme: 'Collapsed storage floor', normals: ['manaMite', 'gateCrawler'], boss: 'razorJawAlpha' },
+    { id: 'drainage-nest', name: 'Drainage Nest', theme: 'Stormwater tunnels', normals: ['gateCrawler', 'manaMite'], boss: 'goblinCaptain' },
+  ],
+  D: [
+    { id: 'stonefang-burrow', name: 'Stonefang Burrow', theme: 'Quarry tunnels', normals: ['stoneFang', 'ironImp'], boss: 'ironKnightBoss' },
+    { id: 'sunken-platform', name: 'Sunken Platform', theme: 'Flooded terminal', normals: ['ironImp', 'stoneFang'], boss: 'drownedSentinel' },
+  ],
+  C: [
+    { id: 'bloodwood-hollow', name: 'Bloodwood Hollow', theme: 'Twisted forest', normals: ['bloodApe', 'venomStalker'], boss: 'bloodOgreBoss' },
+    { id: 'cathedral-leak', name: 'Cathedral Leak', theme: 'Ruined sanctuary', normals: ['venomStalker', 'bloodApe'], boss: 'cryptMinotaur' },
+  ],
+  B: [
+    { id: 'frozen-maw', name: 'Frozen Maw', theme: 'Ice cavern', normals: ['frostStalker', 'iceRevenant'], boss: 'frostWardenBoss' },
+    { id: 'ashen-citadel', name: 'Ashen Citadel', theme: 'Burned fortress', normals: ['iceRevenant', 'frostStalker'], boss: 'ashGolemBoss' },
+  ],
+  A: [
+    { id: 'abyssal-barracks', name: 'Abyssal Barracks', theme: 'Knight tomb', normals: ['abyssKnight', 'voidCaster'], boss: 'demonKnightBoss' },
+    { id: 'black-mana-vault', name: 'Black Mana Vault', theme: 'Sealed treasury', normals: ['voidCaster', 'abyssKnight'], boss: 'archLichBoss' },
+  ],
+  S: [
+    { id: 'dragon-grave', name: 'Dragon Grave', theme: 'Ancient caldera', normals: ['dragonSpawn', 'chaosKnight'], boss: 'dragonMonarchBoss' },
+    { id: 'monarch-rift', name: 'Monarch Rift', theme: 'Shattered throne', normals: ['chaosKnight', 'dragonSpawn'], boss: 'monarchAvatarBoss' },
+  ],
 };
 
 export const HUNTER_MONSTERS = {
@@ -121,7 +152,56 @@ export const HUNTER_MONSTERS = {
     risk: 13,
     requirements: {},
   },
+  gateCrawler: { name: 'Gate Crawler', style: 'Skitter Lunge', threat: 'E-Rank Monster', tier: 'E', power: 62, temperament: 'reckless pressure', strengths: ['claws'], weakness: 'fragile shell', reward: 0, rep: 0, risk: 5, requirements: {} },
+  manaMite: { name: 'Mana Mite Swarm', style: 'Swarm Bite', threat: 'E-Rank Monster', tier: 'E', power: 68, temperament: 'reckless pressure', strengths: ['numbers'], weakness: 'wide strikes', reward: 0, rep: 0, risk: 5, requirements: {} },
+  goblinCaptain: { name: 'Goblin Captain', style: 'Rust Blade', threat: 'E-Rank Boss', tier: 'E', power: 90, temperament: 'patient counter-striker', strengths: ['dirty feints'], weakness: 'short reach', reward: 0, rep: 0, risk: 8, requirements: {} },
+  razorJawAlpha: { name: 'Razor-Jaw Alpha', style: 'Pack Charge', threat: 'E-Rank Boss', tier: 'E', power: 94, temperament: 'reckless pressure', strengths: ['bite rush'], weakness: 'overcommits', reward: 0, rep: 0, risk: 8, requirements: {} },
+  stoneFang: { name: 'Stone Fang', style: 'Crushing Bite', threat: 'D-Rank Monster', tier: 'D', power: 108, temperament: 'reckless pressure', strengths: ['armored hide'], weakness: 'slow turns', reward: 0, rep: 0, risk: 10, requirements: {} },
+  ironImp: { name: 'Iron Imp', style: 'Hooked Talons', threat: 'D-Rank Monster', tier: 'D', power: 114, temperament: 'patient counter-striker', strengths: ['metal claws'], weakness: 'thin core', reward: 0, rep: 0, risk: 10, requirements: {} },
+  ironKnightBoss: { name: 'Iron Knight', style: 'Execution Blade', threat: 'D-Rank Boss', tier: 'D', power: 145, temperament: 'patient counter-striker', strengths: ['tower guard'], weakness: 'mana joint', reward: 0, rep: 0, risk: 14, requirements: {} },
+  drownedSentinel: { name: 'Drowned Sentinel', style: 'Anchor Cleave', threat: 'D-Rank Boss', tier: 'D', power: 150, temperament: 'patient counter-striker', strengths: ['heavy reach'], weakness: 'dry footing', reward: 0, rep: 0, risk: 14, requirements: {} },
+  bloodApe: { name: 'Blood Ape', style: 'Rending Smash', threat: 'C-Rank Monster', tier: 'C', power: 168, temperament: 'reckless pressure', strengths: ['raw force'], weakness: 'rage openings', reward: 0, rep: 0, risk: 16, requirements: {} },
+  venomStalker: { name: 'Venom Stalker', style: 'Needle Ambush', threat: 'C-Rank Monster', tier: 'C', power: 174, temperament: 'patient counter-striker', strengths: ['poison angle'], weakness: 'weak guard', reward: 0, rep: 0, risk: 16, requirements: {} },
+  bloodOgreBoss: { name: 'Blood Ogre', style: 'Bone Maul', threat: 'C-Rank Boss', tier: 'C', power: 212, temperament: 'reckless pressure', strengths: ['stopping power'], weakness: 'exposed flank', reward: 0, rep: 0, risk: 21, requirements: {} },
+  cryptMinotaur: { name: 'Crypt Minotaur', style: 'Labyrinth Charge', threat: 'C-Rank Boss', tier: 'C', power: 218, temperament: 'reckless pressure', strengths: ['horn rush'], weakness: 'wall impacts', reward: 0, rep: 0, risk: 21, requirements: {} },
+  frostStalker: { name: 'Frost Stalker', style: 'Ice Fang', threat: 'B-Rank Monster', tier: 'B', power: 244, temperament: 'patient counter-striker', strengths: ['cold mist'], weakness: 'heated core', reward: 0, rep: 0, risk: 25, requirements: {} },
+  iceRevenant: { name: 'Ice Revenant', style: 'Frozen Spear', threat: 'B-Rank Monster', tier: 'B', power: 252, temperament: 'patient counter-striker', strengths: ['range'], weakness: 'shattered footing', reward: 0, rep: 0, risk: 25, requirements: {} },
+  frostWardenBoss: { name: 'Frost Warden', style: 'Glacial Sentence', threat: 'B-Rank Boss', tier: 'B', power: 304, temperament: 'patient counter-striker', strengths: ['ice armor'], weakness: 'core pulse', reward: 0, rep: 0, risk: 31, requirements: {} },
+  ashGolemBoss: { name: 'Ash Golem', style: 'Cinder Hammer', threat: 'B-Rank Boss', tier: 'B', power: 312, temperament: 'reckless pressure', strengths: ['stone body'], weakness: 'mana seams', reward: 0, rep: 0, risk: 31, requirements: {} },
+  abyssKnight: { name: 'Abyss Knight', style: 'Void Sword', threat: 'A-Rank Monster', tier: 'A', power: 350, temperament: 'patient counter-striker', strengths: ['blink slash'], weakness: 'summon lag', reward: 0, rep: 0, risk: 36, requirements: {} },
+  voidCaster: { name: 'Void Caster', style: 'Mana Lance', threat: 'A-Rank Monster', tier: 'A', power: 360, temperament: 'patient counter-striker', strengths: ['spell burst'], weakness: 'close range', reward: 0, rep: 0, risk: 36, requirements: {} },
+  demonKnightBoss: { name: 'Demon Knight', style: 'Black Flame Blade', threat: 'A-Rank Boss', tier: 'A', power: 425, temperament: 'reckless pressure', strengths: ['hellfire'], weakness: 'broken crest', reward: 0, rep: 0, risk: 44, requirements: {} },
+  archLichBoss: { name: 'Arch Lich', style: 'Death Array', threat: 'A-Rank Boss', tier: 'A', power: 438, temperament: 'patient counter-striker', strengths: ['mana traps'], weakness: 'phylactery', reward: 0, rep: 0, risk: 44, requirements: {} },
+  dragonSpawn: { name: 'Dragon Spawn', style: 'Inferno Claw', threat: 'S-Rank Monster', tier: 'S', power: 500, temperament: 'reckless pressure', strengths: ['flame breath'], weakness: 'wing joint', reward: 0, rep: 0, risk: 50, requirements: {} },
+  chaosKnight: { name: 'Chaos Knight', style: 'Space Sever', threat: 'S-Rank Monster', tier: 'S', power: 515, temperament: 'patient counter-striker', strengths: ['rift cuts'], weakness: 'anchor rune', reward: 0, rep: 0, risk: 50, requirements: {} },
+  dragonMonarchBoss: { name: 'Dragon Monarch Echo', style: 'Calamity Breath', threat: 'S-Rank Boss', tier: 'S', power: 620, temperament: 'reckless pressure', strengths: ['catastrophe'], weakness: 'heart scale', reward: 0, rep: 0, risk: 62, requirements: {} },
+  monarchAvatarBoss: { name: 'Monarch Avatar', style: 'Ruin Decree', threat: 'S-Rank Boss', tier: 'S', power: 640, temperament: 'patient counter-striker', strengths: ['domain pressure'], weakness: 'shadow breach', reward: 0, rep: 0, risk: 62, requirements: {} },
 };
+const RED_GATE_BOSS_IDS = {
+  E: 'redGoblinCaptain',
+  D: 'redIronKnight',
+  C: 'redBloodOgre',
+  B: 'redFrostWarden',
+  A: 'redDemonKnight',
+  S: 'redDragonMonarch',
+};
+for (const [rank, bossId, baseBossId] of [
+  ['E', 'redGoblinCaptain', 'goblinCaptain'],
+  ['D', 'redIronKnight', 'ironKnightBoss'],
+  ['C', 'redBloodOgre', 'bloodOgreBoss'],
+  ['B', 'redFrostWarden', 'frostWardenBoss'],
+  ['A', 'redDemonKnight', 'demonKnightBoss'],
+  ['S', 'redDragonMonarch', 'dragonMonarchBoss'],
+]) {
+  const boss = HUNTER_MONSTERS[baseBossId];
+  HUNTER_MONSTERS[bossId] = {
+    ...boss,
+    name: `Elite Red ${boss.name}`,
+    threat: `Red Gate ${rank}-Rank Boss`,
+    power: Math.round(boss.power * 1.24),
+    risk: Math.round(boss.risk * 1.2),
+  };
+}
 
 export const HUNTER_MOVES = {
   slash: {
@@ -242,11 +322,38 @@ function normalizeHunterDailyQuest(quest) {
   };
 }
 
+function normalizeHunterGateOffer(offer) {
+  if (!offer || !HUNTER_DUNGEON_TIERS[offer.rank]) return null;
+  return {
+    ...offer,
+    isRedGate: Boolean(offer.isRedGate),
+    danger: Boolean(offer.danger),
+    encounters: Array.isArray(offer.encounters) ? offer.encounters : [],
+    rewardsPreview: offer.rewardsPreview ?? {},
+  };
+}
+
+function normalizeActiveHunterDungeon(dungeon) {
+  if (!dungeon || !HUNTER_DUNGEON_TIERS[dungeon.rank]) return null;
+  return {
+    ...dungeon,
+    isRedGate: Boolean(dungeon.isRedGate),
+    encounters: Array.isArray(dungeon.encounters) ? dungeon.encounters : [],
+    encounterIndex: Math.max(0, Math.floor(dungeon.encounterIndex ?? 0)),
+    carriedHealth: dungeon.carriedHealth ?? null,
+    carriedStamina: dungeon.carriedStamina ?? null,
+    rewardsEarned: Array.isArray(dungeon.rewardsEarned) ? dungeon.rewardsEarned : [],
+    completed: Boolean(dungeon.completed),
+    retreated: Boolean(dungeon.retreated),
+    failed: Boolean(dungeon.failed),
+    bossDefeated: Boolean(dungeon.bossDefeated),
+    outcome: dungeon.outcome ?? null,
+    redGateTriggered: Boolean(dungeon.redGateTriggered),
+  };
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   const rank = HUNTER_RANKS.includes(hunterWorld.rank) ? hunterWorld.rank : DEFAULT_HUNTER_WORLD.rank;
-  const activeGate = hunterWorld.activeGate
-    ? { ...(HUNTER_GATES[hunterWorld.activeGate.id] ?? hunterWorld.activeGate) }
-    : null;
   return {
     ...defaultHunterWorld(),
     ...hunterWorld,
@@ -262,7 +369,11 @@ function normalizeHunterWorld(hunterWorld = {}) {
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
     shadowArmy: Array.isArray(hunterWorld.shadowArmy) ? hunterWorld.shadowArmy : [],
     inventory: Array.isArray(hunterWorld.inventory) ? hunterWorld.inventory : [],
-    activeGate,
+    gateOffers: Array.isArray(hunterWorld.gateOffers)
+      ? hunterWorld.gateOffers.map(normalizeHunterGateOffer).filter(Boolean).slice(0, 3)
+      : [],
+    activeDungeon: normalizeActiveHunterDungeon(hunterWorld.activeDungeon),
+    redGatePending: Boolean(hunterWorld.redGatePending),
     lastGateMonth: hunterWorld.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
@@ -3060,6 +3171,123 @@ function grantHunterXp(life, amount) {
   }
 }
 
+function normalGateRanksForHunter(hunter) {
+  return {
+    E: ['E'],
+    D: ['E', 'D'],
+    C: ['D', 'C'],
+    B: ['C', 'B'],
+    A: ['B', 'A'],
+    S: ['A', 'S'],
+  }[hunter.rank] ?? ['E'];
+}
+
+function dangerGateRankForHunter(hunter) {
+  const unlocks = {
+    E: { level: 4, rank: 'D' },
+    D: { level: 8, rank: 'C' },
+    C: { level: 15, rank: 'B' },
+    B: { level: 24, rank: 'A' },
+    A: { level: 36, rank: 'S' },
+  };
+  const danger = unlocks[hunter.rank];
+  return danger && hunter.level >= danger.level ? danger.rank : null;
+}
+
+function dungeonRewardAmount(amount, isRedGate) {
+  return Math.round(amount * (isRedGate ? 1.75 : 1));
+}
+
+function gateEncounterList(template, isRedGate) {
+  const count = Math.min(5, HUNTER_DUNGEON_TIERS[template.rank].fights + (isRedGate ? 1 : 0));
+  const encounters = [];
+  for (let index = 0; index < count - 1; index += 1) {
+    encounters.push({
+      monsterId: template.normals[index % template.normals.length],
+      room: index + 1,
+      isBoss: false,
+    });
+  }
+  encounters.push({
+    monsterId: isRedGate ? RED_GATE_BOSS_IDS[template.rank] : template.boss,
+    room: count,
+    isBoss: true,
+  });
+  return encounters;
+}
+
+function selectDungeonTemplate(life, rank, slot, isRedGate = false, excludedTemplateIds = []) {
+  const templates = HUNTER_DUNGEON_TEMPLATES[rank];
+  const eligible = templates.filter((template) => !excludedTemplateIds.includes(template.id));
+  const available = eligible.length ? eligible : templates;
+  const roll = deterministicRoll(life.rngSeed, lifeMonth(life), rank, slot, life.hunterWorld?.gatesCleared ?? 0, isRedGate ? 'red-gate' : 'gate-board');
+  return { ...available[Math.floor(roll * available.length) % available.length], rank };
+}
+
+function createGateOffer(life, rank, slot, { isRedGate = false, danger = false, excludedTemplateIds = [] } = {}) {
+  const template = selectDungeonTemplate(life, rank, slot, isRedGate, excludedTemplateIds);
+  const rewards = HUNTER_DUNGEON_TIERS[rank];
+  const encounters = gateEncounterList(template, isRedGate);
+  return {
+    id: `gate-${lifeMonth(life)}-${life.hunterWorld?.gatesCleared ?? 0}-${slot}-${template.id}${isRedGate ? '-red' : ''}`,
+    templateId: template.id,
+    name: isRedGate ? `RED GATE: ${template.name}` : template.name,
+    theme: template.theme,
+    rank,
+    isRedGate,
+    danger,
+    encounters,
+    bossName: HUNTER_MONSTERS[encounters.at(-1).monsterId].name,
+    rewardsPreview: {
+      roomXp: dungeonRewardAmount(rewards.room.xp, isRedGate),
+      roomMoney: dungeonRewardAmount(rewards.room.money, isRedGate),
+      bossXp: dungeonRewardAmount(rewards.boss.xp, isRedGate),
+      bossMoney: dungeonRewardAmount(rewards.boss.money, isRedGate),
+      statRewards: rewards.boss.stats + (isRedGate ? 1 : 0),
+    },
+  };
+}
+
+function createHunterGateBoard(life) {
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const ranks = normalGateRanksForHunter(hunter);
+  const highestRank = ranks.at(-1);
+  const offers = [];
+  const templateIds = [];
+  if (hunter.redGatePending) {
+    offers.push(createGateOffer(life, highestRank, 0, { isRedGate: true, danger: true, excludedTemplateIds: templateIds }));
+    templateIds.push(offers.at(-1).templateId);
+  }
+  const normalSlots = 3 - offers.length;
+  const dangerRank = dangerGateRankForHunter(hunter);
+  for (let index = 0; index < normalSlots; index += 1) {
+    const slot = offers.length;
+    const isDangerOffer = !hunter.redGatePending && Boolean(dangerRank) && index === normalSlots - 1;
+    const rank = isDangerOffer ? dangerRank : ranks[index % ranks.length];
+    offers.push(createGateOffer(life, rank, slot, { danger: isDangerOffer, excludedTemplateIds: templateIds }));
+    templateIds.push(offers.at(-1).templateId);
+  }
+  return offers;
+}
+
+function redGateChance(life) {
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const chance = 10 + HUNTER_RANKS.indexOf(hunter.rank) * 2 + Math.floor(hunter.gatesCleared / 5);
+  return Math.min(25, chance) / 100;
+}
+
+function randomHunterStatRewards(life, count, salt) {
+  const statNames = Object.keys(DEFAULT_HUNTER_STATS);
+  const gained = [];
+  for (let index = 0; index < count; index += 1) {
+    const roll = deterministicRoll(life.rngSeed, salt, lifeMonth(life), index, life.hunterWorld.gatesCleared);
+    const stat = statNames[Math.floor(roll * statNames.length) % statNames.length];
+    life.hunterWorld.stats[stat] += 1;
+    gained.push(stat);
+  }
+  return gained;
+}
+
 const HUNTER_DAILY_QUEST_TEMPLATES = [
   {
     id: 'penalty-zone-drill',
@@ -3270,9 +3498,69 @@ function applyHunterQuestFightResult(life, fight, won) {
   }
 }
 
-function endFatalHunterQuestFight(life, fight, opponent) {
+function applyHunterDungeonFightResult(life, fight, won) {
   life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
-  const quest = life.hunterWorld.dailyQuest;
+  const dungeon = life.hunterWorld.activeDungeon;
+  if (!dungeon || dungeon.id !== fight.dungeonId) return;
+  const encounter = dungeon.encounters[dungeon.encounterIndex];
+  const tierRewards = HUNTER_DUNGEON_TIERS[dungeon.rank];
+  const monster = HUNTER_MONSTERS[encounter?.monsterId] ?? getCombatOpponent(life, fight.opponentId);
+  if (!won) {
+    dungeon.completed = true;
+    dungeon.failed = true;
+    dungeon.outcome = 'failed';
+    dungeon.resultText = `${monster.name} forced you out before the dungeon could be cleared.`;
+    life.hunterWorld.systemFatigue = clamp(life.hunterWorld.systemFatigue + 16);
+    life.resources.mood = clamp(life.resources.mood - 12);
+    life.resources.reputation = clamp(life.resources.reputation - 6, 0, 999);
+    fight.result.rewards.push('Dungeon failed: +16 fatigue / -12 mood / -6 reputation');
+    life.hunterWorld.activeDungeon = dungeon;
+    return;
+  }
+
+  dungeon.carriedHealth = fight.meters.playerHealth;
+  dungeon.carriedStamina = clamp(fight.meters.playerStamina + (encounter.isBoss ? 0 : 5), 0, 100);
+  if (!encounter.isBoss) {
+    const xp = dungeonRewardAmount(tierRewards.room.xp, dungeon.isRedGate);
+    const money = dungeonRewardAmount(tierRewards.room.money, dungeon.isRedGate);
+    const reputation = dungeonRewardAmount(tierRewards.room.reputation, dungeon.isRedGate);
+    grantHunterXp(life, xp);
+    life.resources.money += money;
+    life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
+    dungeon.rewardsEarned.push({ type: 'room', monster: monster.name, xp, money, reputation });
+    dungeon.awaitingAdvance = true;
+    fight.result.rewards.push(`Room cleared: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
+    fight.result.rewards.push('+5 mana recovered before the next room');
+    life.hunterWorld.activeDungeon = dungeon;
+    return;
+  }
+
+  const xp = dungeonRewardAmount(tierRewards.boss.xp, dungeon.isRedGate);
+  const money = dungeonRewardAmount(tierRewards.boss.money, dungeon.isRedGate);
+  const reputation = dungeonRewardAmount(tierRewards.boss.reputation, dungeon.isRedGate);
+  const statCount = tierRewards.boss.stats + (dungeon.isRedGate ? 1 : 0);
+  grantHunterXp(life, xp);
+  life.resources.money += money;
+  life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
+  const gainedStats = randomHunterStatRewards(life, statCount, dungeon.id);
+  dungeon.rewardsEarned.push({ type: 'boss', monster: monster.name, xp, money, reputation, stats: gainedStats });
+  dungeon.completed = true;
+  dungeon.bossDefeated = true;
+  dungeon.outcome = 'cleared';
+  life.hunterWorld.gatesCleared += 1;
+  life.hunterWorld.lastBossCleared = encounter.monsterId;
+  dungeon.redGateTriggered = deterministicRoll(life.rngSeed, dungeon.id, life.hunterWorld.gatesCleared, 'red-gate-trigger') < redGateChance(life);
+  life.hunterWorld.redGatePending = dungeon.redGateTriggered;
+  fight.result.rewards.push(`Boss clear jackpot: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
+  fight.result.rewards.push(`Hunter stat growth: +${statCount} (${gainedStats.join(', ')})`);
+  if (dungeon.redGateTriggered) fight.result.rewards.push('Emergency alert: a Red Gate has appeared on the next Gate Board');
+  life.hunterWorld.activeDungeon = dungeon;
+}
+
+function endFatalHunterFight(life, fight, opponent) {
+  life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  const quest = fight.source === 'hunterQuest' ? life.hunterWorld.dailyQuest : null;
+  const dungeon = fight.source === 'hunterDungeon' ? life.hunterWorld.activeDungeon : null;
   if (quest && quest.id === fight.questId) {
     const stage = quest.stages[quest.stageIndex];
     quest.completed = true;
@@ -3285,28 +3573,35 @@ function endFatalHunterQuestFight(life, fight, opponent) {
     }].slice(-8);
     life.hunterWorld.dailyQuest = quest;
   }
+  if (dungeon && dungeon.id === fight.dungeonId) {
+    dungeon.completed = true;
+    dungeon.failed = true;
+    dungeon.outcome = 'fatal';
+    dungeon.resultText = `${opponent.name} killed you in room ${dungeon.encounterIndex + 1}.`;
+    life.hunterWorld.activeDungeon = dungeon;
+  }
   life.resources.health = 0;
   return endLife(life, {
     eyebrow: 'System Fatality',
     title: 'Killed in a System Gate',
     lines: [
       `${life.identity.name} was killed by ${opponent.name}.`,
-      `Daily Quest: ${quest?.title ?? 'Unknown System objective'}.`,
+      quest ? `Daily Quest: ${quest.title}.` : `Gate: ${dungeon?.name ?? 'Unknown dungeon'}.`,
     ],
-    logText: `Killed in a System encounter: ${opponent.name} ended your life during ${quest?.title ?? 'a Daily Quest'}.`,
+    logText: `Killed in a System encounter: ${opponent.name} ended your life during ${quest?.title ?? dungeon?.name ?? 'a Gate run'}.`,
   });
 }
 
-function unlockHunterWorld(life, { firstGate = 'eGate', protectCivilians = false } = {}) {
+function unlockHunterWorld(life, { protectCivilians = false } = {}) {
   life.hunterWorld = {
     ...normalizeHunterWorld(life.hunterWorld),
     unlocked: true,
     playerAwakened: true,
     rank: 'E',
     level: Math.max(1, life.hunterWorld?.level ?? 1),
-    activeGate: { ...(HUNTER_GATES[firstGate] ?? HUNTER_GATES.eGate) },
     lastGateMonth: lifeMonth(life),
   };
+  life.hunterWorld.gateOffers = createHunterGateBoard(life);
   life.world.rumors = [
     protectCivilians
       ? 'Gates opened downtown, and witnesses say you pulled civilians out before the hunters arrived.'
@@ -4741,7 +5036,7 @@ function resolveFightMove(life, moveId = 'pressure') {
 }
 
 export function getUnlockedFightMoves(life, category) {
-  if (life.activeFight?.source === 'hunterQuest') return [];
+  if (life.activeFight?.source === 'hunterQuest' || life.activeFight?.source === 'hunterDungeon') return [];
   const roleContext = category === 'grapple' ? grapplingRoleContext(life.activeFight) : null;
   const grappling = normalizeGrapplingState(life.activeFight);
   return Object.entries(FIGHT_MOVES)
@@ -4771,7 +5066,7 @@ export function getUnlockedFightMoves(life, category) {
 }
 
 export function getUnlockedHunterMoves(life) {
-  if (life.activeFight?.source !== 'hunterQuest') return [];
+  if (life.activeFight?.source !== 'hunterQuest' && life.activeFight?.source !== 'hunterDungeon') return [];
   return Object.entries(HUNTER_MOVES).map(([id, move]) => ({
     id,
     ...move,
@@ -4781,7 +5076,7 @@ export function getUnlockedHunterMoves(life) {
 
 function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
-  if (!fight || fight.finished || fight.source !== 'hunterQuest') return '';
+  if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   if (move.id === 'shadowAssist' && !(normalizeHunterWorld(life.hunterWorld).shadowArmy?.length)) return 'Requires at least one shadow in your army.';
   if ((fight.meters.playerStamina ?? 0) < Math.max(1, move.staminaCost - 4)) return 'Not enough stamina for this System skill.';
   return '';
@@ -6511,9 +6806,10 @@ function createActiveFight(life, opponentId, options = {}) {
   if (!opponent) return null;
   const prep = life.nextFightPrep ?? {};
   const opponentStats = getOpponentStats(opponent);
-  const playerStats = options.source === 'hunterQuest' ? getHunterEffectiveStats(life) : life.stats;
+  const isSystemFight = options.source === 'hunterQuest' || options.source === 'hunterDungeon';
+  const playerStats = isSystemFight ? getHunterEffectiveStats(life) : life.stats;
   const hunter = normalizeHunterWorld(life.hunterWorld);
-  const maxPlayerHealth = fightHealthFromStats(playerStats) + (options.source === 'hunterQuest' ? hunter.stats.vitality * 10 : 0);
+  const maxPlayerHealth = fightHealthFromStats(playerStats) + (isSystemFight ? hunter.stats.vitality * 10 : 0);
   const maxOpponentHealth = fightHealthFromStats(opponentStats);
   const breakdown = fightBreakdown(life, opponent);
   if (opponent.adaptationCount) {
@@ -6529,6 +6825,9 @@ function createActiveFight(life, opponentId, options = {}) {
     opponentId,
     source: options.source ?? 'fight',
     questId: options.questId ?? null,
+    dungeonId: options.dungeonId ?? null,
+    encounterIndex: options.encounterIndex ?? null,
+    isBoss: Boolean(options.isBoss),
     round: 1,
     maxRounds: 25,
     exchangesPerRound: 5,
@@ -6545,11 +6844,13 @@ function createActiveFight(life, opponentId, options = {}) {
       lastTransition: '',
     },
     meters: {
-      playerHealth: maxPlayerHealth,
+      playerHealth: options.carriedHealth == null ? maxPlayerHealth : clamp(options.carriedHealth, 1, maxPlayerHealth),
       opponentHealth: maxOpponentHealth,
       maxPlayerHealth,
       maxOpponentHealth,
-      playerStamina: clamp(life.resources.energy + (prep.trainingCamp ? 10 : 0) + (options.source === 'hunterQuest' ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 100),
+      playerStamina: options.carriedStamina == null
+        ? clamp(life.resources.energy + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 100)
+        : clamp(options.carriedStamina, 0, 100),
       opponentStamina: clamp(54 + (opponentStats.durability + opponentStats.willpower + opponentStats.control) / 30, 45, 100),
       momentum: (prep.trainingCamp ? 5 : 0) + (prep.scoutTape ? 8 : 0) - (activeCallout?.opponentMomentum ?? 0),
       guard: 50 + (prep.cornerman ? 12 : 0),
@@ -7009,7 +7310,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   });
 
   if (fight.meters.playerHealth <= 0) {
-    return endFatalHunterQuestFight(next, fight, opponent);
+    return endFatalHunterFight(next, fight, opponent);
   }
   const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
   if (finished) {
@@ -7022,7 +7323,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
 
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
-  if (life.activeFight.source === 'hunterQuest') return takeHunterQuestTurn(life, tactic);
+  if (life.activeFight.source === 'hunterQuest' || life.activeFight.source === 'hunterDungeon') return takeHunterQuestTurn(life, tactic);
   life = withNormalizedClanAwakening(life);
   const opponent = getCombatOpponent(life, life.activeFight.opponentId);
   if (!opponent) return life;
@@ -7444,6 +7745,7 @@ function applyTournamentResult(life, fight, won) {
 
 function finishActiveFight(life) {
   const fight = life.activeFight;
+  const systemFight = fight.source === 'hunterQuest' || fight.source === 'hunterDungeon';
   const opponent = getCombatOpponent(life, fight.opponentId);
   const playerHealthPercent = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
   const opponentHealthPercent = healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
@@ -7462,7 +7764,7 @@ function finishActiveFight(life) {
     won,
     summary,
     reasons,
-    rewards: fight.source === 'hunterQuest'
+    rewards: systemFight
       ? [won ? 'System monster defeated' : 'System objective failed']
       : (won ? [`+$${opponent.reward}`, `+${opponent.rep} reputation`] : [`+${Math.floor(opponent.rep / 4)} reputation`, 'Painful lesson']),
     injuries: [],
@@ -7471,7 +7773,7 @@ function finishActiveFight(life) {
   life.resources.energy = clamp(life.resources.energy - 28);
   const cornerCare = fight.prep?.cornerman ? 5 : 0;
   life.resources.health = clamp(life.resources.health - Math.max(1, Math.round(fight.meters.injuryRisk / (won ? 5 : 3)) - cornerCare));
-  life.world.heat = clamp(life.world.heat + (fight.source === 'hunterQuest' ? 1 : getRarity(life.clan.rarity).powerMultiplier * 2), 0, 100);
+  life.world.heat = clamp(life.world.heat + (systemFight ? 1 : getRarity(life.clan.rarity).powerMultiplier * 2), 0, 100);
 
   if (fight.meters.injuryRisk >= 15) {
     const injury = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) < 45
@@ -7487,6 +7789,11 @@ function finishActiveFight(life) {
     if (fightGrowth.length) fight.result.rewards.push(`Combat growth: ${fightGrowth.join(', ')}`);
     const techniqueGrowth = applyTechniqueGrowth(life, fight, won);
     if (techniqueGrowth.length) fight.result.rewards.push(`Technique growth: ${techniqueGrowth.join(', ')}. Archetype: ${getPlayerArchetype(life)}`);
+    life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
+    return;
+  }
+  if (fight.source === 'hunterDungeon') {
+    applyHunterDungeonFightResult(life, fight, won);
     life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
     return;
   }
@@ -7928,43 +8235,111 @@ export function claimHunterDailyQuest(life) {
   return addLog(next, `System Daily Quest claimed: ${template.title}, ${result}.`, 'world');
 }
 
-export function enterHunterGate(life, gateId = 'eGate') {
+export function generateHunterGateOffers(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate menu is still locked.', 'world');
-  const gate = HUNTER_GATES[gateId] ?? HUNTER_GATES.eGate;
-  next.hunterWorld.activeGate = { ...gate };
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate Board is still locked.', 'world');
+  if (next.hunterWorld.activeDungeon || next.hunterWorld.gateOffers.length) return next;
+  next.hunterWorld.gateOffers = createHunterGateBoard(next);
+  next.hunterWorld.redGatePending = false;
   next.hunterWorld.lastGateMonth = lifeMonth(next);
-  return addLog(next, `You entered ${gate.name}. The System marks danger ${gate.danger}.`, 'world');
+  return addLog(next, 'Gate Board updated: three dungeon signals are available.', 'world');
 }
 
-export function clearHunterGate(life, approach = 'balanced') {
+export function selectHunterGate(life, offerId) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  if (!next.hunterWorld.unlocked) return addLog(next, 'No Gate is available yet.', 'world');
-  const gate = next.hunterWorld.activeGate ?? HUNTER_GATES.eGate;
-  const approachRisk = approach === 'reckless' ? 1.3 : approach === 'cautious' ? 0.78 : 1;
-  const power = hunterPower(next);
-  const margin = power - gate.danger;
-  const injuryRisk = Math.max(0, gate.danger * approachRisk - power * 0.62);
-  const healthCost = Math.max(3, Math.round(gate.danger * 0.08 * approachRisk + Math.max(0, -margin) * 0.13 + (next.resources.energy < 25 ? 10 : 0)));
-  const energyCost = Math.max(10, Math.round(gate.danger * 0.22 * approachRisk));
-  next.resources.health = clamp(next.resources.health - healthCost);
-  next.resources.energy = clamp(next.resources.energy - energyCost);
-  next.resources.money += Math.round(gate.money * (approach === 'reckless' ? 1.12 : 1));
-  next.resources.reputation = clamp(next.resources.reputation + gate.reputation, 0, 999);
-  next.world.heat = clamp((next.world.heat ?? 0) + gate.heat);
-  next.stats.technique = clampLifeStat(next, 'technique', next.stats.technique + (approach === 'cautious' ? 2 : 1));
-  next.stats.reflexes = clampLifeStat(next, 'reflexes', next.stats.reflexes + 1);
-  next.hunterWorld.gatesCleared += 1;
-  next.hunterWorld.activeGate = null;
-  next.hunterWorld.lastGateMonth = lifeMonth(next);
-  if (gate.boss && margin >= -30) next.hunterWorld.lastBossCleared = gate.boss;
-  if (injuryRisk >= 25 || next.resources.health <= 20) {
-    addOrUpgradeInjury(next, withInjuryTier({ name: 'gate rupture bruising', text: 'A Gate fight left rupture bruising across your ribs.' }, injuryRisk >= 55 ? 'Severe' : 'Mild'));
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate Board is still locked.', 'world');
+  if (next.hunterWorld.activeDungeon) return addLog(next, 'A dungeon run is already active.', 'world');
+  const offer = next.hunterWorld.gateOffers.find((gate) => gate.id === offerId);
+  if (!offer) return addLog(next, 'That Gate signal is no longer on the Board.', 'world');
+  next.hunterWorld.activeDungeon = {
+    ...offer,
+    id: `dungeon-${offer.id}`,
+    encounterIndex: 0,
+    carriedHealth: null,
+    carriedStamina: null,
+    startedMonth: lifeMonth(next),
+    rewardsEarned: [],
+    completed: false,
+    retreated: false,
+    failed: false,
+    bossDefeated: false,
+    outcome: null,
+    awaitingAdvance: false,
+  };
+  next.hunterWorld.gateOffers = [];
+  return addLog(next, `Gate selected: ${offer.name}. ${offer.encounters.length} hostile rooms detected; the final signature is a boss.`, 'world');
+}
+
+export function startHunterDungeonEncounter(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const dungeon = next.hunterWorld.activeDungeon;
+  if (next.activeFight) return addLog(next, 'Finish the active encounter before proceeding deeper.', 'world');
+  if (!dungeon || dungeon.completed || dungeon.retreated || dungeon.failed) return addLog(next, 'No active dungeon room can be entered.', 'world');
+  const encounter = dungeon.encounters[dungeon.encounterIndex];
+  if (!encounter) return addLog(next, 'The dungeon route is already exhausted.', 'world');
+  const fight = createActiveFight(next, encounter.monsterId, {
+    source: 'hunterDungeon',
+    dungeonId: dungeon.id,
+    encounterIndex: dungeon.encounterIndex,
+    isBoss: encounter.isBoss,
+    carriedHealth: dungeon.carriedHealth,
+    carriedStamina: dungeon.carriedStamina,
+  });
+  if (!fight) return addLog(next, 'The System could not resolve the dungeon monster signature.', 'world');
+  fight.maxRounds = Math.min(fight.maxRounds, 18);
+  fight.breakdown.unshift(`${dungeon.name}: Room ${dungeon.encounterIndex + 1}/${dungeon.encounters.length}${encounter.isBoss ? ' / Boss Chamber' : ''}.`);
+  next.activeFight = fight;
+  return addLog(next, `${encounter.isBoss ? 'Boss chamber entered' : 'Dungeon room entered'}: ${HUNTER_MONSTERS[encounter.monsterId].name}.`, 'world');
+}
+
+export function advanceHunterDungeon(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const dungeon = next.hunterWorld.activeDungeon;
+  if (!dungeon || !dungeon.awaitingAdvance || !next.activeFight?.finished || !next.activeFight?.result?.won) {
+    return addLog(next, 'No cleared dungeon room is waiting for a deeper advance.', 'world');
   }
-  grantHunterXp(next, Math.round(gate.xp * (approach === 'reckless' ? 1.1 : 1)));
-  return addLog(next, `Gate cleared: ${gate.name}. XP, money, reputation, and danger all followed you home.`, 'world');
+  next.activeFight = null;
+  dungeon.awaitingAdvance = false;
+  dungeon.encounterIndex += 1;
+  next.hunterWorld.activeDungeon = dungeon;
+  return startHunterDungeonEncounter(next);
+}
+
+export function retreatHunterDungeon(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const dungeon = next.hunterWorld.activeDungeon;
+  const fight = next.activeFight;
+  if (!dungeon || !fight || fight.source !== 'hunterDungeon' || fight.finished || fight.dungeonId !== dungeon.id) {
+    return addLog(next, 'There is no live dungeon encounter to retreat from.', 'world');
+  }
+  dungeon.completed = true;
+  dungeon.retreated = true;
+  dungeon.failed = true;
+  dungeon.outcome = 'retreated';
+  dungeon.resultText = 'You escaped before the monster could attack again. Previously cleared room rewards are yours; the boss jackpot is lost.';
+  next.activeFight = null;
+  next.hunterWorld.activeDungeon = dungeon;
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 12);
+  next.resources.mood = clamp(next.resources.mood - 10);
+  next.resources.reputation = clamp(next.resources.reputation - 4, 0, 999);
+  return addLog(next, `Retreated from ${dungeon.name}. Survival cost: +12 fatigue, -10 mood, -4 reputation.`, 'world');
+}
+
+export function dismissHunterDungeonResult(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const dungeon = next.hunterWorld.activeDungeon;
+  if (!dungeon || !dungeon.completed) return addLog(next, 'There is no resolved dungeon report to dismiss.', 'world');
+  next.activeFight = null;
+  next.hunterWorld.activeDungeon = null;
+  next.hunterWorld.gateOffers = createHunterGateBoard(next);
+  next.hunterWorld.redGatePending = false;
+  return addLog(next, `Gate report closed: ${dungeon.name}. New Gate signals have appeared.`, 'world');
 }
 
 export function spendHunterStatPoint(life, stat) {

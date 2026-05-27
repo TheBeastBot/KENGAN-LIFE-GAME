@@ -51,12 +51,16 @@ import {
   claimHunterDailyQuest,
   dismissRetreatedHunterQuest,
   resolveEventChoice,
-  clearHunterGate,
+  advanceHunterDungeon,
+  dismissHunterDungeonResult,
+  generateHunterGateOffers,
+  retreatHunterDungeon,
+  selectHunterGate,
   spendMoneyAction,
   spendHunterStatPoint,
-  enterHunterGate,
   extractShadow,
   startFight,
+  startHunterDungeonEncounter,
   startHunterQuestFight,
   retreatHunterQuestFight,
   startRivalFight,
@@ -148,7 +152,8 @@ test('accepting the system awakening unlocks player hunter state', () => {
   assert.equal(next.hunterWorld.playerAwakened, true);
   assert.equal(next.hunterWorld.rank, 'E');
   assert.equal(next.hunterWorld.level, 1);
-  assert.equal(next.hunterWorld.activeGate.id, 'eGate');
+  assert.equal(next.hunterWorld.gateOffers.length, 3);
+  assert.deepEqual(next.hunterWorld.gateOffers.map((offer) => offer.rank), ['E', 'E', 'E']);
   assert.ok(next.world.rumors[0].includes('Gates'));
 });
 
@@ -451,21 +456,120 @@ test('normal fighter stoppages remain nonfatal when combat health reaches zero',
   assert.notEqual(next.ended, true);
 });
 
-test('hunter gates reward progression and can injure tired players', () => {
+test('Gate Board generates three E-rank offers and preserves an existing board', () => {
   let life = {
     ...createNewLife({ gender: 'Female', seed: 92 }),
-    resources: { ...createNewLife({ gender: 'Female', seed: 92 }).resources, energy: 18, health: 45 },
-    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 92 }).hunterWorld, unlocked: true, playerAwakened: true, level: 4 },
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 92 }).hunterWorld, unlocked: true, playerAwakened: true },
   };
 
-  life = enterHunterGate(life, 'dGate');
-  const next = clearHunterGate(life, 'reckless');
+  life = generateHunterGateOffers(life);
+  const reroll = generateHunterGateOffers(life);
 
-  assert.equal(next.hunterWorld.activeGate, null);
-  assert.equal(next.hunterWorld.gatesCleared, 1);
-  assert.ok(next.hunterWorld.xp > life.hunterWorld.xp);
-  assert.ok(next.resources.money > life.resources.money);
-  assert.ok(next.resources.health < life.resources.health);
+  assert.equal(life.hunterWorld.gateOffers.length, 3);
+  assert.deepEqual(life.hunterWorld.gateOffers.map((offer) => offer.rank), ['E', 'E', 'E']);
+  assert.equal(new Set(life.hunterWorld.gateOffers.map((offer) => offer.templateId)).size, 3);
+  assert.deepEqual(reroll.hunterWorld.gateOffers, life.hunterWorld.gateOffers);
+});
+
+test('Gate Board includes an optional danger-rank offer after the Hunter level threshold', () => {
+  const initial = createNewLife({ gender: 'Female', seed: 920 });
+  const life = generateHunterGateOffers({
+    ...initial,
+    hunterWorld: { ...initial.hunterWorld, unlocked: true, playerAwakened: true, rank: 'C', level: 15 },
+  });
+
+  assert.deepEqual(life.hunterWorld.gateOffers.map((offer) => offer.rank), ['D', 'C', 'B']);
+  assert.equal(life.hunterWorld.gateOffers.at(-1).danger, true);
+});
+
+test('selecting a Gate creates a multi-room dungeon with a final boss System fight', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 921 }),
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 921 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+
+  assert.equal(life.hunterWorld.activeDungeon.encounters.length, 2);
+  assert.equal(life.hunterWorld.activeDungeon.encounters.at(-1).isBoss, true);
+  assert.equal(life.activeFight.source, 'hunterDungeon');
+  assert.equal(life.activeFight.dungeonId, life.hunterWorld.activeDungeon.id);
+  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.keys(HUNTER_MOVES));
+  assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
+});
+
+test('dungeon room rewards pay immediately and health and mana carry into the boss encounter', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 922 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 922 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 922 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  const beforeMoney = life.resources.money;
+  life.activeFight.meters.playerHealth = 46;
+  life.activeFight.meters.playerStamina = 37;
+  life.activeFight.meters.opponentHealth = 1;
+
+  life = takeFightTurn(life, 'slash');
+  const carriedHealth = life.hunterWorld.activeDungeon.carriedHealth;
+  const carriedMana = life.hunterWorld.activeDungeon.carriedStamina;
+  assert.equal(life.resources.money, beforeMoney + 250);
+  assert.ok(life.hunterWorld.xp >= 35);
+
+  life = advanceHunterDungeon(life);
+  assert.equal(life.activeFight.isBoss, true);
+  assert.equal(life.activeFight.meters.playerHealth, carriedHealth);
+  assert.equal(life.activeFight.meters.playerStamina, carriedMana);
+});
+
+test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and shadow eligibility', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 923 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 923 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 923 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
+  life = advanceHunterDungeon(life);
+  const beforeBossMoney = life.resources.money;
+  const beforeStats = Object.values(life.hunterWorld.stats).reduce((sum, value) => sum + value, 0);
+  life.activeFight.meters.opponentHealth = 1;
+
+  const cleared = takeFightTurn(life, 'slash');
+
+  assert.equal(cleared.hunterWorld.activeDungeon.bossDefeated, true);
+  assert.equal(cleared.hunterWorld.gatesCleared, 1);
+  assert.equal(cleared.resources.money, beforeBossMoney + 1000);
+  assert.equal(Object.values(cleared.hunterWorld.stats).reduce((sum, value) => sum + value, 0), beforeStats + 1);
+  assert.ok(cleared.hunterWorld.lastBossCleared);
+  assert.ok(cleared.hunterWorld.xp >= 90);
 });
 
 test('hunter xp levels grant five Hunter stat points and spending them does not mutate fighter stats', () => {
@@ -475,13 +579,16 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
       ...createNewLife({ gender: 'Male', seed: 93 }).hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      xp: 95,
+      xp: 110,
       level: 1,
     },
   };
 
-  life = enterHunterGate(life, 'eGate');
-  life = clearHunterGate(life, 'balanced');
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
   const beforeStrength = life.stats.strength;
   const beforeHunterStrength = life.hunterWorld.stats.strength;
   const next = spendHunterStatPoint(life, 'strength');
@@ -491,6 +598,138 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
   assert.equal(next.hunterWorld.statPoints, life.hunterWorld.statPoints - 1);
   assert.equal(next.hunterWorld.stats.strength, beforeHunterStrength + 1);
   assert.equal(next.stats.strength, beforeStrength);
+});
+
+test('retreating from a dungeon keeps earned room rewards, applies survival penalties, and creates new offers after dismissal', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 924 }),
+    resources: { ...createNewLife({ gender: 'Male', seed: 924 }).resources, mood: 60, reputation: 20 },
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 924 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 924 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
+  life = advanceHunterDungeon(life);
+  const moneyAfterRoom = life.resources.money;
+  const exchangeCount = life.activeFight.exchanges.length;
+
+  const retreat = retreatHunterDungeon(life);
+  const dismissed = dismissHunterDungeonResult(retreat);
+
+  assert.equal(retreat.activeFight, null);
+  assert.equal(retreat.resources.money, moneyAfterRoom);
+  assert.equal(retreat.hunterWorld.systemFatigue, life.hunterWorld.systemFatigue + 12);
+  assert.equal(retreat.resources.mood, life.resources.mood - 10);
+  assert.equal(retreat.resources.reputation, life.resources.reputation - 4);
+  assert.equal(exchangeCount, 0);
+  assert.equal(retreat.hunterWorld.activeDungeon.outcome, 'retreated');
+  assert.equal(dismissed.hunterWorld.activeDungeon, null);
+  assert.equal(dismissed.hunterWorld.gateOffers.length, 3);
+});
+
+test('a round-limit dungeon loss fails the run with harsher penalties but does not end the life', () => {
+  const initial = createNewLife({ gender: 'Male', seed: 9241 });
+  let life = generateHunterGateOffers({
+    ...initial,
+    resources: { ...initial.resources, mood: 60, reputation: 20 },
+    hunterWorld: { ...initial.hunterWorld, unlocked: true, playerAwakened: true },
+  });
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.round = life.activeFight.maxRounds;
+  life.activeFight.meters.playerHealth = 30;
+  life.activeFight.meters.opponentHealth = life.activeFight.meters.maxOpponentHealth;
+
+  const next = takeFightTurn(life, 'manaGuard');
+
+  assert.equal(next.hunterWorld.activeDungeon.outcome, 'failed');
+  assert.equal(next.hunterWorld.systemFatigue, life.hunterWorld.systemFatigue + 16);
+  assert.equal(next.resources.mood, life.resources.mood - 12);
+  assert.equal(next.resources.reputation, life.resources.reputation - 6);
+  assert.notEqual(next.ended, true);
+});
+
+test('lethal dungeon monster damage ends the life with a Gate fatality summary', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 925 }),
+    resources: { ...createNewLife({ gender: 'Female', seed: 925 }).resources, energy: 5 },
+    hunterWorld: { ...createNewLife({ gender: 'Female', seed: 925 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.playerHealth = 1;
+
+  const next = takeFightTurn(life, 'slash');
+
+  assert.equal(next.ended, true);
+  assert.equal(next.activeFight, null);
+  assert.equal(next.legacySummary.title, 'Killed in a System Gate');
+  assert.ok(next.legacySummary.lines.some((line) => line.includes('Gate:')));
+  assert.equal(next.hunterWorld.gatesCleared, 0);
+});
+
+test('pending Red Gate events create one optional enhanced offer and two normal Gates', () => {
+  const initial = createNewLife({ gender: 'Male', seed: 926 });
+  let life = {
+    ...initial,
+    hunterWorld: {
+      ...initial.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'C',
+      level: 15,
+      redGatePending: true,
+    },
+  };
+
+  life = generateHunterGateOffers(life);
+
+  assert.equal(life.hunterWorld.gateOffers.length, 3);
+  assert.equal(life.hunterWorld.gateOffers.filter((offer) => offer.isRedGate).length, 1);
+  assert.equal(life.hunterWorld.gateOffers.find((offer) => offer.isRedGate).encounters.length, 4);
+  assert.equal(life.hunterWorld.redGatePending, false);
+});
+
+test('Red Gate room victories apply the enhanced reward multiplier', () => {
+  const initial = createNewLife({ gender: 'Male', seed: 927 });
+  let life = generateHunterGateOffers({
+    ...initial,
+    stats: {
+      ...initial.stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...initial.hunterWorld, unlocked: true, playerAwakened: true, redGatePending: true },
+  });
+  life = selectHunterGate(life, life.hunterWorld.gateOffers.find((offer) => offer.isRedGate).id);
+  life = startHunterDungeonEncounter(life);
+  const beforeMoney = life.resources.money;
+  life.activeFight.meters.opponentHealth = 1;
+
+  const next = takeFightTurn(life, 'slash');
+
+  assert.equal(next.resources.money, beforeMoney + 438);
+  assert.equal(next.hunterWorld.activeDungeon.isRedGate, true);
 });
 
 test('one Hunter stat adds ten mapped fighter-stat equivalent power', () => {
