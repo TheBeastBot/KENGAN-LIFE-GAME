@@ -55,6 +55,7 @@ import {
   runHunterDailyQuest,
   advanceHunterDailyQuest,
   claimHunterDailyQuest,
+  claimHunterLevelReward,
   dismissRetreatedHunterQuest,
   resolveEventChoice,
   advanceHunterDungeon,
@@ -293,6 +294,18 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
+test('Hunter move catalog labels every System skill as Basic or Special', () => {
+  const basicMoves = ['slash', 'dashStrike', 'manaGuard', 'conserve', 'analyzeWeakness'];
+  const specialMoves = ['execute', 'shadowAssist', 'shadowPierce', 'manaRend', 'reapingArc'];
+
+  for (const moveId of basicMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'basic');
+  for (const moveId of specialMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'special');
+  assert.deepEqual(
+    Object.entries(HUNTER_MOVES).filter(([, move]) => move.moveType !== 'basic' && move.moveType !== 'special'),
+    []
+  );
+});
+
 test('hunter quest System moves reset for every monster exchange', () => {
   let life = {
     ...createNewLife({ gender: 'Female', seed: 9123 }),
@@ -308,6 +321,43 @@ test('hunter quest System moves reset for every monster exchange', () => {
 
   assert.equal(slash.disabledReason, '');
   assert.equal(second.activeFight.round, first.activeFight.round + 1);
+});
+
+test('Basic Hunter moves stay repeatable while Special moves use Hunter exchange cooldowns', () => {
+  let life = {
+    ...createNewLife({ gender: 'Female', seed: 91231 }),
+    hunterWorld: {
+      ...createNewLife({ gender: 'Female', seed: 91231 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      stats: { strength: 20, agility: 20, vitality: 20, sense: 20, intelligence: 20 },
+    },
+  };
+  life = runHunterDailyQuest(life);
+  life = advanceHunterDailyQuest(life, life.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.playerHealth = 9999;
+  life.activeFight.meters.maxPlayerHealth = 9999;
+  life.activeFight.meters.playerStamina = 500;
+  life.activeFight.meters.maxPlayerStamina = 500;
+  life.activeFight.meters.opponentHealth = 9999;
+  life.activeFight.meters.maxOpponentHealth = 9999;
+
+  const firstSlash = takeFightTurn(life, 'slash');
+  assert.equal(firstSlash.activeFight.moveCooldowns.slash, undefined);
+  const secondSlash = takeFightTurn(firstSlash, 'slash');
+  assert.equal(secondSlash.activeFight.round, firstSlash.activeFight.round + 1);
+
+  let special = takeFightTurn(secondSlash, 'execute');
+  assert.equal(special.activeFight.moveCooldowns.execute, 5);
+  const blocked = takeFightTurn(special, 'execute');
+  assert.equal(blocked.activeFight.round, special.activeFight.round);
+  assert.match(blocked.log[0].text, /cooldown/i);
+
+  for (let index = 0; index < 5; index += 1) special = takeFightTurn(special, 'slash');
+  assert.equal(special.activeFight.moveCooldowns.execute, undefined);
+  const reused = takeFightTurn(special, 'execute');
+  assert.equal(reused.activeFight.moveCooldowns.execute, 5);
 });
 
 test('hunter quest Conserve works at zero mana, restores mana, raises guard, and deals no outgoing damage', () => {
@@ -748,9 +798,55 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
 
   assert.ok(life.hunterWorld.level > 1);
   assert.ok(life.hunterWorld.statPoints >= 5);
+  assert.equal(life.hunterWorld.pendingLevelRewards.length, 1);
+  assert.equal(life.hunterWorld.pendingLevelRewards[0].options.length, 5);
   assert.equal(next.hunterWorld.statPoints, life.hunterWorld.statPoints - 1);
   assert.equal(next.hunterWorld.stats.strength, beforeHunterStrength + 1);
   assert.equal(next.stats.strength, beforeStrength);
+});
+
+test('Hunter level reward choices apply one queued bonus at a time', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9301 });
+  const life = {
+    ...base,
+    resources: { ...base.resources, health: 50, energy: 40, reputation: 5, money: 200 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      systemFatigue: 50,
+      pendingLevelRewards: [
+        {
+          id: 'level-2-choice',
+          level: 2,
+          options: [
+            { id: 'strengthBoost', type: 'hunterStat', stat: 'strength', amount: 2, label: '+2 Hunter Strength' },
+            { id: 'fullSpread', type: 'allHunterStats', amount: 1, label: '+1 all Hunter stats' },
+            { id: 'fieldRecovery', type: 'recovery', health: 30, energy: 20, label: 'Restore 30 health and 20 stamina' },
+            { id: 'fatigueCleanse', type: 'fatigue', amount: -15, label: '-15 System Fatigue' },
+            { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', label: 'Execute cooldown -1' },
+          ],
+        },
+      ],
+      unlockedSystemPerks: [],
+    },
+  };
+
+  const boosted = claimHunterLevelReward(life, 'strengthBoost');
+
+  assert.equal(boosted.hunterWorld.stats.strength, 2);
+  assert.equal(boosted.hunterWorld.pendingLevelRewards.length, 0);
+
+  const perkLife = {
+    ...life,
+    hunterWorld: {
+      ...life.hunterWorld,
+      pendingLevelRewards: [{ ...life.hunterWorld.pendingLevelRewards[0], id: 'level-3-choice' }],
+    },
+  };
+  const perked = claimHunterLevelReward(perkLife, 'executeCooldown');
+
+  assert.deepEqual(perked.hunterWorld.unlockedSystemPerks, ['executeCooldownMinus1']);
 });
 
 test('retreating from a dungeon keeps earned room rewards, applies survival penalties, and creates new offers after dismissal', () => {

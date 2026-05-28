@@ -48,6 +48,7 @@ import {
   resolveEventChoice,
   advanceHunterDailyQuest,
   claimHunterDailyQuest,
+  claimHunterLevelReward,
   dismissRetreatedHunterQuest,
   dismissHunterDungeonResult,
   generateHunterGateOffers,
@@ -119,6 +120,8 @@ const DEFAULT_HUNTER_WORLD = {
   redGatePending: false,
   lastGateMonth: null,
   dailyQuest: null,
+  pendingLevelRewards: [],
+  unlockedSystemPerks: [],
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -229,7 +232,7 @@ let fightInfoOpen = false;
 let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
-const MOVE_ICON_BURST_DURATION_MS = 5000;
+const MOVE_ICON_BURST_DURATION_MS = 500;
 
 const app = document.querySelector('#app');
 const dropdownState = createDropdownStateController({
@@ -367,6 +370,8 @@ function normalizeHunterWorld(hunterWorld = {}) {
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
     dailyQuest: hunterWorld?.dailyQuest ?? null,
+    pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
+    unlockedSystemPerks: Array.isArray(hunterWorld?.unlockedSystemPerks) ? hunterWorld.unlockedSystemPerks.filter(Boolean) : [],
   };
 }
 
@@ -807,6 +812,7 @@ function render() {
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
     ${renderHunterQuestPopup()}
     ${renderHunterDungeonPopup()}
+    ${renderHunterLevelRewardPopup()}
     ${renderSystemShopPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
@@ -2616,22 +2622,84 @@ function renderHunterMoves(mode = 'quest') {
     analyzeWeakness: 'analysis',
     execute: 'finisher',
     shadowAssist: 'shadow',
+    shadowPierce: 'finisher',
+    manaRend: 'finisher',
+    reapingArc: 'finisher',
   };
+  const renderMoveCard = (move) => {
+    const moveTypeLabel = move.moveType === 'special' ? 'Special Move' : 'Basic Move';
+    return `
+      <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
+        <em>${escapeHtml(moveTypeLabel)}</em>
+        <strong>${escapeHtml(move.label)}</strong>
+        <span>${escapeHtml(move.disabledReason || move.hint)}</span>
+      </button>
+    `;
+  };
+  const basicMoves = moves.filter((move) => move.moveType !== 'special');
+  const specialMoves = moves.filter((move) => move.moveType === 'special');
   return `
-    <section class="tactic-grid hunter-move-grid">
-      ${moves.map((move) => `
-        <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'}" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
-          <em>${escapeHtml(moveRoles[move.id] ?? 'attack')}</em>
-          <strong>${move.label}</strong>
-          <span>${move.disabledReason || move.hint}</span>
-        </button>
-      `).join('')}
+    <section class="hunter-move-groups">
+      <details class="collapsible-section hunter-move-section" open>
+        <summary class="collapsible-summary">
+          <span><strong>Basic Moves</strong><em>Repeatable System skills for steady exchanges.</em></span>
+          <b>${basicMoves.length}</b>
+        </summary>
+        <div class="tactic-grid hunter-move-grid">${basicMoves.map(renderMoveCard).join('')}</div>
+      </details>
+      <details class="collapsible-section hunter-move-section">
+        <summary class="collapsible-summary">
+          <span><strong>Special Moves</strong><em>High-impact skills with individual cooldowns.</em></span>
+          <b>${specialMoves.length}</b>
+        </summary>
+        <div class="tactic-grid hunter-move-grid">${specialMoves.map(renderMoveCard).join('')}</div>
+      </details>
       <button class="move-card danger-btn hunter-retreat-card" data-action="${dungeon ? 'hunter-dungeon-retreat' : 'hunter-quest-retreat'}">
         <strong>Retreat</strong>
         <span>Escape alive now. ${dungeon ? 'The Gate run ends; cleared room rewards remain, but the jackpot is lost.' : 'The Daily Quest fails with no reward and survival penalties.'}</span>
       </button>
     </section>
   `;
+}
+
+function renderHunterLevelRewardPopup() {
+  const hunter = normalizeHunterWorld(state?.hunterWorld);
+  const pending = hunter.pendingLevelRewards[0];
+  if (!pending) return '';
+  return `
+    <section class="event-overlay">
+      <article class="event-modal system-popup hunter-level-reward-popup" data-scroll-key="hunter-level-reward">
+        <header class="hunter-popup-header">
+          <div>
+            <span class="system-chip">System Level Up</span>
+            <h2>Level ${pending.level} Reward</h2>
+          </div>
+        </header>
+        <p>The +5 Hunter stat points are already yours. Choose one extra System reward.</p>
+        <section class="event-choice-grid hunter-level-reward-grid">
+          ${pending.options.map((option) => `
+            <button data-action="hunter-level-reward-${option.id}">
+              <strong>${escapeHtml(option.label)}</strong>
+              <span>${escapeHtml(hunterRewardTypeLabel(option))}</span>
+            </button>
+          `).join('')}
+        </section>
+      </article>
+    </section>
+  `;
+}
+
+function hunterRewardTypeLabel(option) {
+  const labels = {
+    hunterStat: 'Hunter stat boost',
+    allHunterStats: 'Hunter stat boost',
+    fatigue: 'Fatigue reduction',
+    recovery: 'Resource recovery',
+    money: 'Money bonus',
+    reputation: 'Reputation bonus',
+    perk: 'System combat perk',
+  };
+  return labels[option.type] ?? 'System reward';
 }
 
 function renderHunterQuestResults(quest) {
@@ -3233,6 +3301,10 @@ function handleAction(action, source = null) {
   }
   if (action === 'close-social-post') {
     setState({ ...state, social: { ...state.social, lastPost: null } });
+    return;
+  }
+  if (action.startsWith('hunter-level-reward-')) {
+    setState(claimHunterLevelReward(state, action.replace('hunter-level-reward-', '')));
     return;
   }
   if (action === 'hunter-daily') {

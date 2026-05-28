@@ -65,8 +65,11 @@ const DEFAULT_HUNTER_WORLD = {
   redGatePending: false,
   lastGateMonth: null,
   dailyQuest: null,
+  pendingLevelRewards: [],
+  unlockedSystemPerks: [],
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
+const HUNTER_SPECIAL_COOLDOWN = 5;
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
   D: { level: 5, gatesCleared: 3, power: 135 },
@@ -275,6 +278,7 @@ for (const [monsterId, labels] of Object.entries(HUNTER_MONSTER_ATTACK_LABELS)) 
 export const HUNTER_MOVES = {
   slash: {
     label: 'Slash',
+    moveType: 'basic',
     category: 'attack',
     hint: 'A direct System blade line. Scales with Hunter Strength and Sense.',
     staminaCost: 14,
@@ -284,6 +288,7 @@ export const HUNTER_MOVES = {
   },
   dashStrike: {
     label: 'Dash Strike',
+    moveType: 'basic',
     category: 'attack',
     hint: 'Burst through the monster angle. Scales with Agility and Strength.',
     staminaCost: 18,
@@ -293,6 +298,7 @@ export const HUNTER_MOVES = {
   },
   manaGuard: {
     label: 'Mana Guard',
+    moveType: 'basic',
     category: 'defense',
     hint: 'Raise a System guard to reduce incoming damage and recover control.',
     staminaCost: 8,
@@ -302,6 +308,7 @@ export const HUNTER_MOVES = {
   },
   conserve: {
     label: 'Conserve',
+    moveType: 'basic',
     category: 'defense',
     hint: 'Hold position and recover 18 mana while reducing the next monster hit.',
     staminaCost: 0,
@@ -311,6 +318,7 @@ export const HUNTER_MOVES = {
   },
   analyzeWeakness: {
     label: 'Analyze Weakness',
+    moveType: 'basic',
     category: 'support',
     hint: 'Read the monster pattern. Lower damage now, stronger next exchange.',
     staminaCost: 7,
@@ -320,6 +328,8 @@ export const HUNTER_MOVES = {
   },
   execute: {
     label: 'Execute',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
     category: 'finisher',
     hint: 'High-cost finisher that grows stronger when the monster is hurt.',
     staminaCost: 28,
@@ -329,6 +339,8 @@ export const HUNTER_MOVES = {
   },
   shadowAssist: {
     label: 'Shadow Assist',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
     category: 'summon',
     hint: 'Call shadow pressure. Stronger with Intelligence and shadow army size.',
     staminaCost: 20,
@@ -338,6 +350,8 @@ export const HUNTER_MOVES = {
   },
   shadowPierce: {
     label: 'Shadow Pierce',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
     category: 'weapon',
     hint: 'Dagger weapon skill. Cheap precise thrust that scales with Sense and Agility.',
     staminaCost: 12,
@@ -348,6 +362,8 @@ export const HUNTER_MOVES = {
   },
   manaRend: {
     label: 'Mana Rend',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
     category: 'weapon',
     hint: 'Longsword weapon skill. Heavy mana cut that scales with Strength and Intelligence.',
     staminaCost: 22,
@@ -358,6 +374,8 @@ export const HUNTER_MOVES = {
   },
   reapingArc: {
     label: 'Reaping Arc',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
     category: 'weapon',
     hint: 'Scythe weapon skill. Wide execution sweep that grows nastier against wounded monsters.',
     staminaCost: 30,
@@ -417,6 +435,21 @@ export const SYSTEM_SHOP_ITEMS = {
     description: 'Unlocks Reaping Arc, a brutal late-fight execution sweep.',
     moveId: 'reapingArc',
   },
+};
+
+export const HUNTER_LEVEL_REWARD_OPTIONS = {
+  strengthBoost: { id: 'strengthBoost', type: 'hunterStat', stat: 'strength', amount: 2, label: '+2 Hunter Strength' },
+  vitalityBoost: { id: 'vitalityBoost', type: 'hunterStat', stat: 'vitality', amount: 2, label: '+2 Hunter Vitality' },
+  senseBoost: { id: 'senseBoost', type: 'hunterStat', stat: 'sense', amount: 2, label: '+2 Hunter Sense' },
+  allStatsBoost: { id: 'allStatsBoost', type: 'allHunterStats', amount: 1, label: '+1 all Hunter stats' },
+  fatigueCleanse: { id: 'fatigueCleanse', type: 'fatigue', amount: -15, label: '-15 System Fatigue' },
+  fieldRecovery: { id: 'fieldRecovery', type: 'recovery', health: 30, energy: 20, label: 'Restore 30 health and 20 stamina' },
+  moneyCache: { id: 'moneyCache', type: 'money', amount: 1000, label: '+$1,000 money' },
+  reputationPing: { id: 'reputationPing', type: 'reputation', amount: 8, label: '+8 reputation' },
+  executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', label: 'Execute cooldown -1' },
+  specialEfficiency: { id: 'specialEfficiency', type: 'perk', perk: 'specialStaminaMinus2', label: 'Special Move stamina costs -2' },
+  basicDamage: { id: 'basicDamage', type: 'perk', perk: 'basicDamagePlus5', label: 'Basic Move damage +5%' },
+  conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', label: 'Conserve restores +6 more stamina' },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -538,6 +571,8 @@ function normalizeHunterWorld(hunterWorld = {}) {
     rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
     dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
+    pendingLevelRewards: Array.isArray(hunterWorld.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
+    unlockedSystemPerks: Array.isArray(hunterWorld.unlockedSystemPerks) ? [...new Set(hunterWorld.unlockedSystemPerks.filter(Boolean))] : [],
   };
 }
 
@@ -3375,6 +3410,26 @@ function hunterXpForNextLevel(level) {
   return 100 + Math.max(1, level) * 35;
 }
 
+function hasSystemPerk(life, perk) {
+  return normalizeHunterWorld(life.hunterWorld).unlockedSystemPerks.includes(perk);
+}
+
+function createHunterLevelRewardChoice(life, level) {
+  const optionIds = Object.keys(HUNTER_LEVEL_REWARD_OPTIONS)
+    .map((id) => ({
+      id,
+      roll: deterministicRoll(life.rngSeed, 'hunter-level-reward', level, lifeMonth(life), id),
+    }))
+    .sort((a, b) => a.roll - b.roll || a.id.localeCompare(b.id))
+    .slice(0, 5)
+    .map(({ id }) => clone(HUNTER_LEVEL_REWARD_OPTIONS[id]));
+  return {
+    id: `hunter-level-${level}-${lifeMonth(life)}-${optionIds.map((option) => option.id).join('-')}`,
+    level,
+    options: optionIds,
+  };
+}
+
 function grantHunterXp(life, amount) {
   life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
   life.hunterWorld.xp += Math.max(0, Math.floor(amount));
@@ -3382,7 +3437,36 @@ function grantHunterXp(life, amount) {
     life.hunterWorld.xp -= hunterXpForNextLevel(life.hunterWorld.level);
     life.hunterWorld.level += 1;
     life.hunterWorld.statPoints += 5;
+    life.hunterWorld.pendingLevelRewards.push(createHunterLevelRewardChoice(life, life.hunterWorld.level));
   }
+}
+
+export function claimHunterLevelReward(life, rewardId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const pending = next.hunterWorld.pendingLevelRewards[0];
+  const reward = pending?.options?.find((option) => option.id === rewardId);
+  if (!pending || !reward) return addLog(life, 'No matching Hunter level reward is pending.', 'world');
+
+  if (reward.type === 'hunterStat' && DEFAULT_HUNTER_STATS[reward.stat] !== undefined) {
+    next.hunterWorld.stats[reward.stat] += Math.max(0, Math.floor(reward.amount ?? 0));
+  } else if (reward.type === 'allHunterStats') {
+    for (const stat of Object.keys(DEFAULT_HUNTER_STATS)) next.hunterWorld.stats[stat] += Math.max(0, Math.floor(reward.amount ?? 0));
+  } else if (reward.type === 'fatigue') {
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + Math.round(reward.amount ?? 0));
+  } else if (reward.type === 'recovery') {
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + Math.round(reward.health ?? 0));
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + Math.round(reward.energy ?? 0));
+  } else if (reward.type === 'money') {
+    next.resources.money += Math.max(0, Math.floor(reward.amount ?? 0));
+  } else if (reward.type === 'reputation') {
+    next.resources.reputation = clamp(next.resources.reputation + Math.round(reward.amount ?? 0));
+  } else if (reward.type === 'perk' && reward.perk) {
+    if (!next.hunterWorld.unlockedSystemPerks.includes(reward.perk)) next.hunterWorld.unlockedSystemPerks.push(reward.perk);
+  }
+
+  next.hunterWorld.pendingLevelRewards = next.hunterWorld.pendingLevelRewards.slice(1);
+  return addLog(next, `System Level Reward claimed: ${reward.label}.`, 'world');
 }
 
 function normalGateRanksForHunter(hunter) {
@@ -5397,9 +5481,32 @@ function hunterMoveDisabledReason(life, move) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunter.inventory.includes(move.requiresWeapon)) return 'Requires the matching System weapon.';
   if (move.id === 'shadowAssist' && !(hunter.shadowArmy?.length)) return 'Requires at least one shadow in your army.';
-  const staminaRequired = move.staminaCost === 0 ? 0 : Math.max(1, move.staminaCost - 4);
+  const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
+  if (move.moveType === 'special' && cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'} remaining.`;
+  const staminaCost = hunterMoveStaminaCost(life, move);
+  const staminaRequired = staminaCost === 0 ? 0 : Math.max(1, staminaCost - 4);
   if ((fight.meters.playerStamina ?? 0) < staminaRequired) return 'Not enough stamina for this System skill.';
   return '';
+}
+
+function hunterMoveStaminaCost(life, move) {
+  const discount = move.moveType === 'special' && hasSystemPerk(life, 'specialStaminaMinus2') ? 2 : 0;
+  return Math.max(0, Math.floor((move.staminaCost ?? 0) - discount));
+}
+
+function hunterSpecialCooldown(life, move) {
+  const reduction = move.id === 'execute' && hasSystemPerk(life, 'executeCooldownMinus1') ? 1 : 0;
+  return Math.max(1, Math.floor((move.cooldown ?? HUNTER_SPECIAL_COOLDOWN) - reduction));
+}
+
+function tickHunterMoveCooldowns(fight) {
+  const cooldowns = fight.moveCooldowns ?? {};
+  const nextCooldowns = {};
+  for (const [moveId, value] of Object.entries(cooldowns)) {
+    const remaining = Math.max(0, Math.floor(value) - 1);
+    if (remaining > 0) nextCooldowns[moveId] = remaining;
+  }
+  fight.moveCooldowns = nextCooldowns;
 }
 
 function fightMoveDisabledReason(life, move) {
@@ -7595,6 +7702,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const opponentStats = getOpponentStats(opponent);
   const profile = hunterMoveProfile(move, next);
   const enemyMove = chooseHunterMonsterMove(opponent, fight);
+  const staminaCost = hunterMoveStaminaCost(next, move);
   const opponentTactic = enemyMove.category;
   const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22;
   const analyzeBonus = fight.systemAnalysis ? 18 + next.hunterWorld.stats.sense * 2 : 0;
@@ -7603,7 +7711,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
   const executeBonus = move.id === 'execute' ? Math.round(hurtPercent / 4) : 0;
   const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
-  const basePlayerDamage = Math.max(1, Math.round(move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense));
+  const basicDamageMultiplier = move.moveType === 'basic' && hasSystemPerk(next, 'basicDamagePlus5') ? 1.05 : 1;
+  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
     : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004, 0.05, 0.42);
@@ -7616,11 +7725,12 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   const enemyDamage = dodged ? 0 : baseEnemyDamage;
 
-  fight.moveCooldowns = {};
+  tickHunterMoveCooldowns(fight);
+  if (move.moveType === 'special') fight.moveCooldowns[move.id] = hunterSpecialCooldown(next, move);
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   fight.meters.playerStamina = move.id === 'conserve'
-    ? clamp(fight.meters.playerStamina + 18, 0, fight.meters.maxPlayerStamina ?? 100)
-    : clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, fight.meters.maxPlayerStamina ?? 100);
+    ? clamp(fight.meters.playerStamina + (hasSystemPerk(next, 'conservePlus6') ? 24 : 18), 0, fight.meters.maxPlayerStamina ?? 100)
+    : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);

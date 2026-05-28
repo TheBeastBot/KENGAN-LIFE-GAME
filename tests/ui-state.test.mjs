@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   captureElementScroll,
@@ -67,4 +68,22 @@ test('popup scroll snapshots restore the matching rerendered surface without smo
 
   assert.equal(restored, true);
   assert.equal(next.scrollTop, 284);
+});
+
+test('normal fight move popup clears in half a second', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /const MOVE_ICON_BURST_DURATION_MS = 500;/);
+  assert.match(cssSource, /\.move-icon-burst\s*{[\s\S]*animation:\s*move-icon-burst 0\.5s ease both;/);
+});
+
+test('Hunter combat UI separates Basic and Special move dropdowns and level rewards', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /Basic Moves/);
+  assert.match(appSource, /Special Moves/);
+  assert.match(appSource, /Basic Move/);
+  assert.match(appSource, /Special Move/);
+  assert.match(appSource, /hunter-level-reward-/);
 });

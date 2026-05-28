@@ -915,6 +915,35 @@ select:focus {
   font-style: normal;
 }
 
+.hunter-move-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.hunter-move-section .hunter-move-grid {
+  padding: 10px;
+}
+
+.hunter-basic-move em,
+.hunter-special-move em {
+  justify-self: start;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 217, 255, 0.28);
+  background: rgba(120, 217, 255, 0.1);
+  color: #c9f2ff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hunter-special-move em {
+  border-color: rgba(185, 135, 255, 0.32);
+  background: rgba(185, 135, 255, 0.13);
+  color: #dfd0ff;
+}
+
 .system-move-card.role-attack::before { background: #78d9ff; }
 .system-move-card.role-defense::before { background: #8af0ba; }
 .system-move-card.role-recovery::before { background: #f1c66d; }
@@ -927,7 +956,11 @@ select:focus {
 }
 
 .hunter-retreat-card {
-  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.hunter-level-reward-grid button {
+  border-color: rgba(185, 135, 255, 0.28);
 }
 
 .gate-offer-grid {
@@ -2698,7 +2731,7 @@ button:focus-visible {
   background-position: center, center, center, center;
   background-repeat: no-repeat;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42), 0 0 34px rgba(222, 63, 79, 0.32);
-  animation: move-icon-burst 5s ease both;
+  animation: move-icon-burst 0.5s ease both;
   pointer-events: none;
 }
 
