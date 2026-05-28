@@ -234,6 +234,7 @@ let fightInfoOpen = false;
 let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
+let modalScrollLockY = null;
 const MOVE_ICON_BURST_DURATION_MS = 500;
 
 const app = document.querySelector('#app');
@@ -808,11 +809,13 @@ function renderStart() {
 
 function render() {
   if (!state) {
+    syncBodyScrollLock(false);
     renderStart();
     return;
   }
 
   if (state.ended) {
+    syncBodyScrollLock(false);
     renderEndedLife();
     return;
   }
@@ -834,6 +837,39 @@ function render() {
     ${renderSystemShopPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
+  syncBodyScrollLock();
+}
+
+function hasOpenModal() {
+  if (!state) return false;
+  return Boolean(
+    navMenuOpen ||
+    state.trainingPopup ||
+    state.social?.lastPost ||
+    state.pendingEvent ||
+    state.hunterWorld?.pendingLevelRewards?.length ||
+    systemShopPopupOpen ||
+    hunterQuestPopupOpen ||
+    hunterDungeonPopupOpen ||
+    state.activeFight?.source === 'hunterQuest' ||
+    state.activeFight?.source === 'hunterDungeon'
+  );
+}
+
+function syncBodyScrollLock(forceOpen = hasOpenModal()) {
+  if (forceOpen && modalScrollLockY === null) {
+    modalScrollLockY = window.scrollY;
+    document.body.style.top = `-${modalScrollLockY}px`;
+    document.body.classList.add('modal-open');
+    return;
+  }
+  if (!forceOpen && modalScrollLockY !== null) {
+    const restoreY = modalScrollLockY;
+    modalScrollLockY = null;
+    document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    window.scrollTo({ top: restoreY, behavior: 'auto' });
+  }
 }
 
 function renderToast() {
