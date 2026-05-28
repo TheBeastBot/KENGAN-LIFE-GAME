@@ -7568,7 +7568,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   if (fight.meters.playerHealth <= 0) {
     return endFatalHunterFight(next, fight, opponent);
   }
-  const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
+  const finished = fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
   if (finished) {
     finishActiveFight(next);
     return next;

@@ -385,7 +385,7 @@ test('winning a hunter quest monster fight advances quest progress without norma
   assert.equal(next.hunterWorld.dailyQuest.stageIndex, 2);
 });
 
-test('losing a hunter quest monster fight creates partial quest completion without normal losses', () => {
+test('hunter quest monster fights do not end by exchange count', () => {
   let life = {
     ...createNewLife({ gender: 'Female', seed: 9141 }),
     resources: { ...createNewLife({ gender: 'Female', seed: 9141 }).resources, energy: 5 },
@@ -400,11 +400,11 @@ test('losing a hunter quest monster fight creates partial quest completion witho
 
   const next = takeFightTurn(life, 'manaGuard');
 
-  assert.equal(next.activeFight.finished, true);
-  assert.equal(next.activeFight.result.won, false);
-  assert.equal(next.hunterWorld.dailyQuest.completed, true);
-  assert.equal(next.hunterWorld.dailyQuest.failed, true);
-  assert.equal(next.hunterWorld.dailyQuest.outcome, 'lost');
+  assert.equal(next.activeFight.finished, false);
+  assert.equal(next.activeFight.round, life.activeFight.round + 1);
+  assert.equal(next.hunterWorld.dailyQuest.completed, false);
+  assert.equal(next.hunterWorld.dailyQuest.failed, false);
+  assert.equal(next.hunterWorld.dailyQuest.outcome, null);
   assert.equal(next.record.losses, life.record.losses);
   assert.notEqual(next.ended, true);
 });
@@ -792,7 +792,7 @@ test('retreating from a dungeon keeps earned room rewards, applies survival pena
   assert.equal(dismissed.hunterWorld.gateOffers.length, 3);
 });
 
-test('a round-limit dungeon loss fails the run with harsher penalties but does not end the life', () => {
+test('hunter dungeon fights do not fail by exchange count', () => {
   const initial = createNewLife({ gender: 'Male', seed: 9241 });
   let life = generateHunterGateOffers({
     ...initial,
@@ -807,10 +807,12 @@ test('a round-limit dungeon loss fails the run with harsher penalties but does n
 
   const next = takeFightTurn(life, 'manaGuard');
 
-  assert.equal(next.hunterWorld.activeDungeon.outcome, 'failed');
-  assert.equal(next.hunterWorld.systemFatigue, life.hunterWorld.systemFatigue + 16);
-  assert.equal(next.resources.mood, life.resources.mood - 12);
-  assert.equal(next.resources.reputation, life.resources.reputation - 6);
+  assert.equal(next.activeFight.finished, false);
+  assert.equal(next.activeFight.round, life.activeFight.round + 1);
+  assert.equal(next.hunterWorld.activeDungeon.outcome, null);
+  assert.equal(next.hunterWorld.systemFatigue, life.hunterWorld.systemFatigue);
+  assert.equal(next.resources.mood, life.resources.mood);
+  assert.equal(next.resources.reputation, life.resources.reputation);
   assert.notEqual(next.ended, true);
 });
 

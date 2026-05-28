@@ -2543,7 +2543,7 @@ function renderHunterMonsterFight(mode = 'quest') {
     <section class="combat stack hunter-combat-shell system-combat">
       <article class="fight-title system-fight-title ${fight.finished ? (fight.result.won ? 'complete' : 'failed') : 'active'}">
         <div>
-          <p class="eyebrow">${fight.finished ? 'System Report' : `Exchange ${fight.round} / ${fight.maxRounds}`}</p>
+          <p class="eyebrow">${fight.finished ? 'System Report' : `Fight Till Death · Exchange ${fight.round}`}</p>
           <h2>${escapeHtml(state.identity.name)} vs ${escapeHtml(opponent.name)}</h2>
           <p class="muted">${opponent.style} / ${opponent.threat}</p>
         </div>
