@@ -4,6 +4,8 @@ import {
   FIGHT_TACTICS,
   FIGHT_MOVES,
   HUNTER_MONSTER_MOVES,
+  HUNTER_MOVES,
+  SYSTEM_SHOP_ITEMS,
   MENTORS,
   MONEY_ACTIONS,
   SOCIAL_ACTIONS,
@@ -111,6 +113,7 @@ const DEFAULT_HUNTER_WORLD = {
   systemFatigue: 0,
   shadowArmy: [],
   inventory: [],
+  equippedWeapon: null,
   gateOffers: [],
   activeDungeon: null,
   redGatePending: false,
@@ -216,6 +219,7 @@ let activeTab = 'life';
 let selectedFightCategory = null;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
+let systemShopPopupOpen = false;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
@@ -355,6 +359,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
     shadowArmy: Array.isArray(hunterWorld?.shadowArmy) ? hunterWorld.shadowArmy : [],
     inventory: Array.isArray(hunterWorld?.inventory) ? hunterWorld.inventory : [],
+    equippedWeapon: typeof hunterWorld?.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld?.gateOffers) ? hunterWorld.gateOffers.slice(0, 3) : [],
     activeDungeon: hunterWorld?.activeDungeon ?? null,
     redGatePending: Boolean(hunterWorld?.redGatePending),
@@ -802,6 +807,7 @@ function render() {
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
     ${renderHunterQuestPopup()}
     ${renderHunterDungeonPopup()}
+    ${renderSystemShopPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
 }
@@ -2779,6 +2785,57 @@ function renderHunterDungeonPopup() {
   `;
 }
 
+function renderSystemShopPopup() {
+  if (!systemShopPopupOpen) return '';
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  const items = Object.values(SYSTEM_SHOP_ITEMS);
+  const itemCard = (item) => {
+    const owned = hunter.inventory?.includes(item.id);
+    const equipped = hunter.equippedWeapon === item.id;
+    const canAfford = state.resources.money >= item.cost;
+    const actionLabel = item.type === 'weapon' && owned
+      ? equipped ? 'Equipped' : 'Equip'
+      : `Buy $${item.cost}`;
+    const action = item.type === 'weapon' && owned && equipped ? 'hunter-shop-open' : `hunter-shop-buy-${item.id}`;
+    const disabled = !owned && !canAfford ? 'disabled' : '';
+    const move = item.moveId ? HUNTER_MOVES[item.moveId] : null;
+    return `
+      <article class="option-card system-window shop-item ${item.type} ${equipped ? 'equipped' : ''}">
+        <div>
+          <p class="eyebrow">${item.type === 'weapon' ? 'System Weapon' : 'System Potion'}</p>
+          <h3>${escapeHtml(item.label)}</h3>
+          <p>${escapeHtml(item.description)}</p>
+          ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
+          ${owned ? `<span class="badge ${equipped ? 'green' : ''}">${equipped ? 'Equipped' : 'Owned'}</span>` : ''}
+        </div>
+        <button class="${item.type === 'weapon' ? 'primary' : ''}" data-action="${action}" ${disabled}>${actionLabel}</button>
+      </article>
+    `;
+  };
+  return `
+    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="event-modal hunter-quest-popup system-popup" data-scroll-key="system-shop">
+        <div class="hunter-popup-header">
+          <div>
+            <p class="eyebrow">System Shop</p>
+            <h2>Potions & Weapons</h2>
+            <p class="muted">$${state.resources.money} available / Fatigue ${hunter.systemFatigue}%</p>
+          </div>
+          <button class="small-btn" data-action="hunter-shop-close">Close</button>
+        </div>
+        <div class="system-chip-row">
+          ${systemChip('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
+          ${systemChip('Stamina', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
+          ${systemChip('Equipped', hunter.equippedWeapon ? SYSTEM_SHOP_ITEMS[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+        </div>
+        <div class="activity-list shop-grid">
+          ${items.map(itemCard).join('')}
+        </div>
+      </section>
+    </aside>
+  `;
+}
+
 function renderHunter() {
   const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
   if (!hunter.unlocked) {
@@ -2856,8 +2913,8 @@ function renderHunter() {
         ${renderHunterActivity({
           icon: 'SP',
           title: 'System Shop',
-          subtitle: 'Trade hunter income for recovery supplies.',
-          meta: '$400 / health and fatigue relief',
+          subtitle: 'Potions, fatigue cleanses, and System weapons with skill unlocks.',
+          meta: hunter.equippedWeapon ? `Equipped: ${SYSTEM_SHOP_ITEMS[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon)}` : `${hunter.inventory.length} item${hunter.inventory.length === 1 ? '' : 's'} owned`,
           action: 'hunter-shop',
           tone: 'shop',
         })}
@@ -3093,6 +3150,7 @@ function handleAction(action, source = null) {
     selectedFightCategory = null;
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
+    systemShopPopupOpen = false;
     return;
   }
   if (!state) return;
@@ -3125,6 +3183,7 @@ function handleAction(action, source = null) {
     activeTab = 'life';
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
+    systemShopPopupOpen = false;
     render();
   }
   if (action === 'end-life') setState(endLife(state));
@@ -3264,7 +3323,24 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === 'hunter-shop') {
-    setState(buySystemItem(state));
+    activeTab = 'hunter';
+    systemShopPopupOpen = true;
+    render();
+    return;
+  }
+  if (action === 'hunter-shop-open') {
+    systemShopPopupOpen = true;
+    render();
+    return;
+  }
+  if (action === 'hunter-shop-close') {
+    systemShopPopupOpen = false;
+    render();
+    return;
+  }
+  if (action.startsWith('hunter-shop-buy-')) {
+    systemShopPopupOpen = true;
+    setState(buySystemItem(state, action.replace('hunter-shop-buy-', '')));
     return;
   }
   if (action === 'hunter-extract') {

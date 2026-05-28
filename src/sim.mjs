@@ -59,6 +59,7 @@ const DEFAULT_HUNTER_WORLD = {
   systemFatigue: 0,
   shadowArmy: [],
   inventory: [],
+  equippedWeapon: null,
   gateOffers: [],
   activeDungeon: null,
   redGatePending: false,
@@ -335,6 +336,87 @@ export const HUNTER_MOVES = {
     guardBias: 2,
     text: 'Shadow Assist drags the monster timing off-beat for one brutal opening.',
   },
+  shadowPierce: {
+    label: 'Shadow Pierce',
+    category: 'weapon',
+    hint: 'Dagger weapon skill. Cheap precise thrust that scales with Sense and Agility.',
+    staminaCost: 12,
+    damageBias: 1.42,
+    guardBias: -3,
+    requiresWeapon: 'knightDagger',
+    text: 'Shadow Pierce drives the dagger through the monster opening marked by the System.',
+  },
+  manaRend: {
+    label: 'Mana Rend',
+    category: 'weapon',
+    hint: 'Longsword weapon skill. Heavy mana cut that scales with Strength and Intelligence.',
+    staminaCost: 22,
+    damageBias: 1.68,
+    guardBias: -5,
+    requiresWeapon: 'manaLongsword',
+    text: 'Mana Rend releases a violet sword arc that bites into the monster core.',
+  },
+  reapingArc: {
+    label: 'Reaping Arc',
+    category: 'weapon',
+    hint: 'Scythe weapon skill. Wide execution sweep that grows nastier against wounded monsters.',
+    staminaCost: 30,
+    damageBias: 1.95,
+    guardBias: -8,
+    requiresWeapon: 'reaperScythe',
+    text: 'Reaping Arc carves a crescent of System light across the monster field.',
+  },
+};
+
+export const SYSTEM_SHOP_ITEMS = {
+  recoveryPotion: {
+    id: 'recoveryPotion',
+    label: 'Recovery Potion',
+    type: 'potion',
+    cost: 400,
+    description: 'Restores health and stamina for wounded Hunters.',
+    effects: { health: 18, energy: 12 },
+  },
+  fatigueCleanse: {
+    id: 'fatigueCleanse',
+    label: 'Fatigue Cleanse',
+    type: 'potion',
+    cost: 650,
+    description: 'Reduces System fatigue and steadies mood.',
+    effects: { systemFatigue: -22, mood: 4 },
+  },
+  highPotion: {
+    id: 'highPotion',
+    label: 'High Potion',
+    type: 'potion',
+    cost: 1200,
+    description: 'A stronger emergency vial for deep dungeon damage.',
+    effects: { health: 42, energy: 24, systemFatigue: -8 },
+  },
+  knightDagger: {
+    id: 'knightDagger',
+    label: 'Knight Dagger',
+    type: 'weapon',
+    cost: 2500,
+    description: 'Unlocks Shadow Pierce, a precise low-cost weapon skill.',
+    moveId: 'shadowPierce',
+  },
+  manaLongsword: {
+    id: 'manaLongsword',
+    label: 'Mana Longsword',
+    type: 'weapon',
+    cost: 5200,
+    description: 'Unlocks Mana Rend, a heavier sword arc for armored monsters.',
+    moveId: 'manaRend',
+  },
+  reaperScythe: {
+    id: 'reaperScythe',
+    label: 'Reaper Scythe',
+    type: 'weapon',
+    cost: 9000,
+    description: 'Unlocks Reaping Arc, a brutal late-fight execution sweep.',
+    moveId: 'reapingArc',
+  },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -446,6 +528,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
     shadowArmy: Array.isArray(hunterWorld.shadowArmy) ? hunterWorld.shadowArmy : [],
     inventory: Array.isArray(hunterWorld.inventory) ? hunterWorld.inventory : [],
+    equippedWeapon: typeof hunterWorld.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld.gateOffers)
       ? hunterWorld.gateOffers.map(normalizeHunterGateOffer).filter(Boolean).slice(0, 3)
       : [],
@@ -3250,7 +3333,7 @@ export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
-  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * 10 : 0);
+  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * 16 : 0);
 }
 
 function staminaFromStats(stats = {}) {
@@ -5298,17 +5381,22 @@ export function getUnlockedFightMoves(life, category) {
 
 export function getUnlockedHunterMoves(life) {
   if (life.activeFight?.source !== 'hunterQuest' && life.activeFight?.source !== 'hunterDungeon') return [];
-  return Object.entries(HUNTER_MOVES).map(([id, move]) => ({
-    id,
-    ...move,
-    disabledReason: hunterMoveDisabledReason(life, { id, ...move }),
-  }));
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  return Object.entries(HUNTER_MOVES)
+    .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunter.inventory.includes(move.requiresWeapon))
+    .map(([id, move]) => ({
+      id,
+      ...move,
+      disabledReason: hunterMoveDisabledReason(life, { id, ...move }),
+    }));
 }
 
 function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
-  if (move.id === 'shadowAssist' && !(normalizeHunterWorld(life.hunterWorld).shadowArmy?.length)) return 'Requires at least one shadow in your army.';
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunter.inventory.includes(move.requiresWeapon)) return 'Requires the matching System weapon.';
+  if (move.id === 'shadowAssist' && !(hunter.shadowArmy?.length)) return 'Requires at least one shadow in your army.';
   const staminaRequired = move.staminaCost === 0 ? 0 : Math.max(1, move.staminaCost - 4);
   if ((fight.meters.playerStamina ?? 0) < staminaRequired) return 'Not enough stamina for this System skill.';
   return '';
@@ -6868,7 +6956,7 @@ function fightBreakdown(life, opponent) {
 }
 
 function fightHealthFromStats(stats) {
-  return clamp(100 + (stats.durability ?? 0) * 0.36 + (stats.willpower ?? 0) * 0.18, 100, 1200);
+  return clamp(100 + (stats.durability ?? 0) * 0.24 + (stats.willpower ?? 0) * 0.12, 100, 1200);
 }
 
 function healthPercent(current, max) {
@@ -7474,6 +7562,21 @@ function hunterMoveProfile(move, life) {
       stat: stats.control * 0.9 + stats.fightIq * 0.75 + shadowPower + hunter.level * 4,
       damageBonus: shadowPower,
       incomingReduction: hunter.shadowArmy.length * 2,
+    },
+    shadowPierce: {
+      stat: stats.reflexes * 0.95 + stats.speed * 0.75 + stats.technique * 0.45 + hunter.level * 5,
+      damageBonus: hunter.stats.sense * 3 + hunter.stats.agility * 2,
+      incomingReduction: 1 + hunter.stats.sense,
+    },
+    manaRend: {
+      stat: stats.strength * 1.05 + stats.control * 0.7 + stats.fightIq * 0.35 + hunter.level * 6,
+      damageBonus: hunter.stats.strength * 3 + hunter.stats.intelligence * 3,
+      incomingReduction: 0,
+    },
+    reapingArc: {
+      stat: stats.strength * 0.85 + stats.speed * 0.5 + stats.fightIq * 0.7 + hunter.level * 7,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 3 + hunter.stats.intelligence * 2,
+      incomingReduction: 0,
     },
   };
   return profiles[move.id] ?? profiles.slash;
@@ -8639,18 +8742,23 @@ export function buySystemItem(life, itemId = 'recoveryPotion') {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   if (!next.hunterWorld.unlocked) return addLog(next, 'The System Shop is still locked.', 'world');
-  const cost = itemId === 'fatigueCleanse' ? 650 : 400;
-  if (next.resources.money < cost) return addLog(next, 'Not enough money for the System Shop.', 'world');
-  next.resources.money -= cost;
-  next.hunterWorld.inventory = [...next.hunterWorld.inventory, itemId];
-  if (itemId === 'fatigueCleanse') {
-    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue - 22);
-    next.resources.mood = clamp(next.resources.mood + 4);
-  } else {
-    next.resources.health = clampLifeResource(next, 'health', next.resources.health + 18);
-    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + 12);
+  const item = SYSTEM_SHOP_ITEMS[itemId] ?? SYSTEM_SHOP_ITEMS.recoveryPotion;
+  if (item.type === 'weapon' && next.hunterWorld.inventory.includes(item.id)) {
+    next.hunterWorld.equippedWeapon = item.id;
+    return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
   }
-  return addLog(next, `System Shop purchase: ${labelFromId(itemId)}.`, 'world');
+  if (next.resources.money < item.cost) return addLog(next, 'Not enough money for the System Shop.', 'world');
+  next.resources.money -= item.cost;
+  next.hunterWorld.inventory = [...next.hunterWorld.inventory, item.id];
+  if (item.type === 'weapon') {
+    next.hunterWorld.equippedWeapon = item.id;
+  } else {
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + (item.effects.health ?? 0));
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + (item.effects.energy ?? 0));
+    next.resources.mood = clamp(next.resources.mood + (item.effects.mood ?? 0));
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + (item.effects.systemFatigue ?? 0));
+  }
+  return addLog(next, `System Shop purchase: ${item.label}.`, 'world');
 }
 
 export function extractShadow(life) {

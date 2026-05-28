@@ -12,6 +12,7 @@ import {
   HUNTER_MONSTERS,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  SYSTEM_SHOP_ITEMS,
   MENTORS,
   MONEY_ACTIONS,
   OPPONENTS,
@@ -288,7 +289,7 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
 
   const hunterMoves = getUnlockedHunterMoves(life);
 
-  assert.deepEqual(hunterMoves.map((move) => move.id), Object.keys(HUNTER_MOVES));
+  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -555,7 +556,7 @@ test('selecting a Gate creates a multi-room dungeon with a final boss System fig
   assert.equal(life.hunterWorld.activeDungeon.encounters.at(-1).isBoss, true);
   assert.equal(life.activeFight.source, 'hunterDungeon');
   assert.equal(life.activeFight.dungeonId, life.hunterWorld.activeDungeon.id);
-  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.keys(HUNTER_MOVES));
+  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -968,6 +969,37 @@ test('life health and energy caps scale with combat stats and match fight meters
   assert.equal(fight.activeFight.meters.playerStamina, maxEnergy);
 });
 
+test('durability health scaling is restrained while Hunter Vitality has stronger health value', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9332 });
+  const durable = {
+    ...base,
+    stats: {
+      ...base.stats,
+      durability: 2000,
+      willpower: 1000,
+    },
+  };
+  const awakened = {
+    ...durable,
+    hunterWorld: {
+      ...durable.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      stats: { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 },
+    },
+  };
+  const vitalHunter = {
+    ...awakened,
+    hunterWorld: {
+      ...awakened.hunterWorld,
+      stats: { ...awakened.hunterWorld.stats, vitality: 10 },
+    },
+  };
+
+  assert.ok(maxLifeHealth(durable) <= 720);
+  assert.ok(maxLifeHealth(vitalHunter) - maxLifeHealth(awakened) >= 170);
+});
+
 test('high-rank System bosses have dungeon-scale health and dangerous monster damage', () => {
   const initial = createNewLife({ gender: 'Male', seed: 9331 });
   let life = {
@@ -1032,23 +1064,49 @@ test('hunter association can promote ranks after enough gates and power', () => 
   assert.ok(next.resources.reputation > life.resources.reputation);
 });
 
-test('system shop trades money for hunter recovery supplies', () => {
+test('system shop potions heal resources and reduce System fatigue', () => {
   const life = {
     ...createNewLife({ gender: 'Male', seed: 941 }),
-    resources: { ...createNewLife({ gender: 'Male', seed: 941 }).resources, money: 1000, health: 60, energy: 45 },
+    resources: { ...createNewLife({ gender: 'Male', seed: 941 }).resources, money: 1400, health: 60, energy: 45, mood: 50 },
     hunterWorld: {
       ...createNewLife({ gender: 'Male', seed: 941 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      systemFatigue: 60,
+    },
+  };
+
+  const healed = buySystemItem(life, 'recoveryPotion');
+  const cleansed = buySystemItem(healed, 'fatigueCleanse');
+
+  assert.equal(healed.resources.money, life.resources.money - SYSTEM_SHOP_ITEMS.recoveryPotion.cost);
+  assert.ok(healed.resources.health > life.resources.health);
+  assert.ok(healed.resources.energy > life.resources.energy);
+  assert.equal(cleansed.hunterWorld.systemFatigue, 38);
+  assert.ok(cleansed.resources.mood > healed.resources.mood);
+  assert.deepEqual(cleansed.hunterWorld.inventory, ['recoveryPotion', 'fatigueCleanse']);
+});
+
+test('system shop weapons persist, equip, and unlock weapon System abilities', () => {
+  const life = {
+    ...createNewLife({ gender: 'Female', seed: 9412 }),
+    resources: { ...createNewLife({ gender: 'Female', seed: 9412 }).resources, money: 6000 },
+    hunterWorld: {
+      ...createNewLife({ gender: 'Female', seed: 9412 }).hunterWorld,
       unlocked: true,
       playerAwakened: true,
     },
   };
 
-  const next = buySystemItem(life);
+  const bought = buySystemItem(life, 'knightDagger');
 
-  assert.equal(next.resources.money, 600);
-  assert.ok(next.resources.health > life.resources.health);
-  assert.ok(next.resources.energy > life.resources.energy);
-  assert.deepEqual(next.hunterWorld.inventory, ['recoveryPotion']);
+  assert.equal(bought.hunterWorld.equippedWeapon, 'knightDagger');
+  assert.ok(bought.hunterWorld.inventory.includes('knightDagger'));
+  assert.ok(!getUnlockedHunterMoves(life).some((move) => move.id === 'shadowPierce'));
+  let fighting = runHunterDailyQuest(bought);
+  fighting = advanceHunterDailyQuest(fighting, fighting.hunterWorld.dailyQuest.stages[0].choices[0].id);
+  fighting = startHunterQuestFight(fighting);
+  assert.ok(getUnlockedHunterMoves(fighting).some((move) => move.id === 'shadowPierce'));
 });
 
 test('shadow extraction requires boss gate clearance and adds a shadow ally', () => {
@@ -2285,13 +2343,13 @@ test('defend exchanges build defense technique and defensive archetype', () => {
       strength: 110,
       aggression: 70,
       speed: 110,
-      durability: 170,
+      durability: 320,
       technique: 120,
       fightIq: 160,
       reflexes: 130,
       flexibility: 130,
       control: 190,
-      willpower: 180,
+      willpower: 320,
     },
   };
 
