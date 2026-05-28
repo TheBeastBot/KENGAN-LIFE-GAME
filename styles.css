@@ -11,6 +11,11 @@
   --green: #53b877;
   --blue: #5797e5;
   --purple: #a174e8;
+  --system-cyan: #78d9ff;
+  --system-violet: #b987ff;
+  --system-deep: #101827;
+  --system-line: rgba(120, 217, 255, 0.36);
+  --system-glow: rgba(120, 217, 255, 0.18);
   --gray: #9ba3ad;
   --focus: #e96a3a;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -480,8 +485,299 @@ select:focus {
 
 .hunter-header {
   background:
-    linear-gradient(135deg, rgba(87, 151, 229, 0.14), rgba(229, 185, 79, 0.08)),
+    linear-gradient(135deg, rgba(87, 151, 229, 0.14), rgba(161, 116, 232, 0.1)),
     var(--panel-2);
+}
+
+.hunter-panel {
+  --line: rgba(120, 217, 255, 0.2);
+}
+
+.hunter-panel .collapsible-section {
+  border-color: rgba(120, 217, 255, 0.18);
+  background:
+    linear-gradient(135deg, rgba(87, 151, 229, 0.06), rgba(161, 116, 232, 0.035)),
+    rgba(255, 255, 255, 0.018);
+}
+
+.hunter-panel .collapsible-summary {
+  background:
+    linear-gradient(90deg, rgba(120, 217, 255, 0.1), rgba(161, 116, 232, 0.055)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.hunter-panel .collapsible-summary::after {
+  color: var(--system-cyan);
+}
+
+.system-status-panel,
+.system-window,
+.system-module,
+.system-popup .fight-title,
+.system-combat .fight-report,
+.system-combat .breakdown,
+.system-combat .exchange-log article {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--system-line);
+  background:
+    linear-gradient(135deg, rgba(120, 217, 255, 0.085), rgba(185, 135, 255, 0.06)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    var(--panel-2);
+  box-shadow:
+    inset 3px 0 0 rgba(120, 217, 255, 0.42),
+    0 0 0 1px rgba(120, 217, 255, 0.045),
+    0 16px 38px rgba(0, 0, 0, 0.18);
+}
+
+.system-status-panel::before,
+.system-window::before,
+.system-module::before,
+.system-popup::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 9px),
+    linear-gradient(90deg, rgba(120, 217, 255, 0.08), transparent 22%, transparent 78%, rgba(185, 135, 255, 0.06));
+  opacity: 0.23;
+}
+
+.system-status-panel > *,
+.system-window > *,
+.system-module > *,
+.system-popup > * {
+  position: relative;
+}
+
+.system-status-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 14px;
+  border-color: rgba(120, 217, 255, 0.48);
+  background:
+    radial-gradient(circle at 0 0, rgba(120, 217, 255, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(45, 72, 120, 0.42), rgba(26, 22, 44, 0.78)),
+    var(--panel);
+}
+
+.system-window {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.gate-offer.system-window {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.system-status-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.system-status-top h2 {
+  margin: 0 0 4px;
+}
+
+.system-status-top p {
+  margin: 0;
+}
+
+.system-rank-sigil {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(120, 217, 255, 0.48);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle, rgba(120, 217, 255, 0.16), rgba(185, 135, 255, 0.08)),
+    rgba(9, 14, 24, 0.72);
+  color: var(--system-cyan);
+  font-size: 1.35rem;
+  font-weight: 1000;
+  text-shadow: 0 0 18px rgba(120, 217, 255, 0.72);
+}
+
+.system-chip-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.system-chip {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(120, 217, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(8, 13, 23, 0.56);
+}
+
+.system-chip.compact {
+  display: inline-grid;
+  width: max-content;
+  max-width: 100%;
+}
+
+.system-chip small,
+.system-scan-row span,
+.system-stat-tile span,
+.system-move-card em {
+  color: var(--system-cyan);
+  font-size: 0.62rem;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-chip strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.system-chip.rank strong,
+.system-chip.power strong,
+.system-chip.ready strong {
+  color: var(--system-cyan);
+  text-shadow: 0 0 10px rgba(120, 217, 255, 0.45);
+}
+
+.system-chip.danger {
+  border-color: rgba(222, 63, 79, 0.48);
+  background: rgba(222, 63, 79, 0.11);
+}
+
+.system-chip.danger small,
+.system-chip.danger strong {
+  color: #ff8693;
+}
+
+.system-objective-line {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(120, 217, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(8, 13, 23, 0.44);
+}
+
+.system-objective-line span {
+  color: var(--system-cyan);
+  font-size: 0.68rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.system-objective-line strong {
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.system-objective-line.danger,
+.system-window.failed,
+.system-module.danger,
+.system-window.danger-offer,
+.system-window.emergency,
+.system-fight-title.failed {
+  border-color: rgba(222, 63, 79, 0.58);
+  box-shadow:
+    inset 3px 0 0 rgba(222, 63, 79, 0.72),
+    0 0 24px rgba(222, 63, 79, 0.12);
+}
+
+.system-objective-line.danger span,
+.system-window.failed .eyebrow,
+.system-module.danger .eyebrow,
+.danger-copy {
+  color: #ff8693;
+}
+
+.system-window.complete,
+.system-module.ready,
+.system-fight-title.complete {
+  border-color: rgba(125, 243, 198, 0.48);
+  box-shadow:
+    inset 3px 0 0 rgba(125, 243, 198, 0.58),
+    0 0 22px rgba(125, 243, 198, 0.11);
+}
+
+.system-window.active,
+.system-module.active,
+.system-fight-title.active {
+  animation: systemPulse 2.8s ease-in-out infinite;
+}
+
+.system-scan-grid {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.system-scan-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(120, 217, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(8, 13, 23, 0.42);
+}
+
+.system-scan-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.system-scan-row.danger {
+  border-color: rgba(222, 63, 79, 0.36);
+  background: rgba(222, 63, 79, 0.09);
+}
+
+.system-scan-row.danger span,
+.system-scan-row.danger strong {
+  color: #ff9ba5;
+}
+
+.system-scan-row.clear span,
+.system-scan-row.clear strong {
+  color: #8af0ba;
+}
+
+.system-stat-grid {
+  margin-bottom: 12px;
+}
+
+.system-stat-tile {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(120, 217, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(8, 13, 23, 0.46);
+}
+
+.system-stat-tile strong {
+  color: var(--system-violet);
+  font-size: 1.24rem;
+  text-shadow: 0 0 10px rgba(185, 135, 255, 0.45);
+}
+
+.system-stat-tile small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .hunter-activity {
@@ -498,12 +794,15 @@ select:focus {
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(87, 151, 229, 0.42);
+  border: 1px solid rgba(120, 217, 255, 0.44);
   border-radius: 8px;
-  background: rgba(87, 151, 229, 0.14);
-  color: #cfe4ff;
+  background:
+    radial-gradient(circle, rgba(120, 217, 255, 0.17), rgba(185, 135, 255, 0.07)),
+    rgba(8, 13, 23, 0.58);
+  color: #d8f4ff;
   font-size: 0.78rem;
   font-weight: 900;
+  box-shadow: inset 0 0 16px rgba(120, 217, 255, 0.08);
 }
 
 .activity-meta,
@@ -542,7 +841,7 @@ select:focus {
 .hunter-quest-card {
   align-items: stretch;
   background:
-    linear-gradient(135deg, rgba(87, 151, 229, 0.12), rgba(125, 243, 198, 0.06)),
+    linear-gradient(135deg, rgba(87, 151, 229, 0.12), rgba(161, 116, 232, 0.075)),
     var(--panel-2);
 }
 
@@ -583,9 +882,10 @@ select:focus {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  border-color: rgba(87, 151, 229, 0.5);
+  border-color: rgba(120, 217, 255, 0.5);
   background:
-    linear-gradient(135deg, rgba(87, 151, 229, 0.13), rgba(125, 243, 198, 0.08)),
+    radial-gradient(circle at 20% 0, rgba(120, 217, 255, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(87, 151, 229, 0.13), rgba(161, 116, 232, 0.1)),
     var(--panel);
 }
 
@@ -605,7 +905,25 @@ select:focus {
 }
 
 .system-move-card {
-  border-color: rgba(87, 151, 229, 0.34);
+  border-color: rgba(120, 217, 255, 0.34);
+  background:
+    linear-gradient(135deg, rgba(120, 217, 255, 0.08), rgba(185, 135, 255, 0.035)),
+    #1b2025;
+}
+
+.system-move-card em {
+  font-style: normal;
+}
+
+.system-move-card.role-attack::before { background: #78d9ff; }
+.system-move-card.role-defense::before { background: #8af0ba; }
+.system-move-card.role-recovery::before { background: #f1c66d; }
+.system-move-card.role-analysis::before { background: #b987ff; }
+.system-move-card.role-finisher::before { background: #ff8693; }
+.system-move-card.role-shadow::before { background: #8963d8; }
+
+.system-move-card.role-finisher {
+  border-color: rgba(222, 63, 79, 0.38);
 }
 
 .hunter-retreat-card {
@@ -620,7 +938,7 @@ select:focus {
 .gate-offer {
   align-items: stretch;
   gap: 12px;
-  border-color: rgba(87, 151, 229, 0.32);
+  border-color: rgba(120, 217, 255, 0.32);
 }
 
 .gate-offer h2 {
@@ -632,6 +950,7 @@ select:focus {
   background:
     linear-gradient(135deg, rgba(225, 77, 82, 0.17), rgba(229, 185, 79, 0.05)),
     var(--panel-2);
+  animation: redGatePulse 2.4s ease-in-out infinite;
 }
 
 .danger-copy {
@@ -1068,6 +1387,38 @@ select:focus {
     box-shadow:
       0 0 0 3px rgba(83, 184, 119, 0.2),
       0 0 26px rgba(83, 184, 119, 0.32);
+  }
+}
+
+@keyframes systemPulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 3px 0 0 rgba(120, 217, 255, 0.42),
+      0 0 0 1px rgba(120, 217, 255, 0.045),
+      0 16px 38px rgba(0, 0, 0, 0.18);
+  }
+
+  50% {
+    box-shadow:
+      inset 3px 0 0 rgba(120, 217, 255, 0.68),
+      0 0 0 1px rgba(120, 217, 255, 0.12),
+      0 0 24px rgba(120, 217, 255, 0.12);
+  }
+}
+
+@keyframes redGatePulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 3px 0 0 rgba(210, 68, 72, 0.74),
+      0 0 0 1px rgba(210, 68, 72, 0.1);
+  }
+
+  50% {
+    box-shadow:
+      inset 3px 0 0 rgba(255, 104, 119, 0.92),
+      0 0 26px rgba(210, 68, 72, 0.2);
   }
 }
 
@@ -2574,6 +2925,13 @@ button:active,
   opacity: 0.75;
 }
 
+.system-move-card.role-attack::before { background: #78d9ff; }
+.system-move-card.role-defense::before { background: #8af0ba; }
+.system-move-card.role-recovery::before { background: #f1c66d; }
+.system-move-card.role-analysis::before { background: #b987ff; }
+.system-move-card.role-finisher::before { background: #ff8693; }
+.system-move-card.role-shadow::before { background: #8963d8; }
+
 .move-card strong {
   display: inline-flex;
   align-items: center;
@@ -2792,6 +3150,30 @@ button:active,
   .tactic-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px;
+  }
+
+  .system-status-top {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .system-rank-sigil {
+    width: 44px;
+    height: 44px;
+    font-size: 1.08rem;
+  }
+
+  .system-chip-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .system-chip {
+    padding: 7px;
+  }
+
+  .system-scan-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .option-card {

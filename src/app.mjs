@@ -2244,14 +2244,125 @@ function hunterStatLabel(stat) {
   }[stat] ?? labelize(stat);
 }
 
-function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open' }) {
+function hunterObjectiveSummary(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD) {
+  const quest = hunter.dailyQuest;
+  const dungeon = hunter.activeDungeon;
+  if (state.activeFight?.source === 'hunterDungeon') {
+    return {
+      label: 'Dungeon Combat',
+      text: `${dungeon?.name ?? 'Gate run'} / Room ${(dungeon?.encounterIndex ?? 0) + 1} of ${dungeon?.encounters?.length ?? 1}`,
+      tone: 'danger',
+    };
+  }
+  if (state.activeFight?.source === 'hunterQuest') {
+    return {
+      label: 'Daily Quest Combat',
+      text: quest?.title ?? 'Monster encounter active',
+      tone: 'danger',
+    };
+  }
+  if (dungeon) {
+    if (dungeon.completed) {
+      return {
+        label: dungeon.outcome === 'cleared' ? 'Gate Cleared' : 'Gate Exit',
+        text: dungeon.resultText ?? dungeon.name,
+        tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger',
+      };
+    }
+    return {
+      label: dungeon.isRedGate ? 'Red Gate Active' : 'Gate Run Active',
+      text: `${dungeon.name} / Room ${dungeon.encounterIndex + 1} of ${dungeon.encounters.length}`,
+      tone: dungeon.isRedGate ? 'danger' : 'active',
+    };
+  }
+  if (quest) {
+    if (quest.outcome === 'retreated') return { label: 'Quest Retreated', text: quest.title, tone: 'danger' };
+    if (quest.completed) return { label: quest.failed ? 'Partial Reward' : 'Reward Ready', text: quest.title, tone: quest.failed ? 'danger' : 'clear' };
+    const stage = currentHunterQuestStage(quest);
+    return {
+      label: 'Daily Quest Active',
+      text: `${quest.title}${stage?.title ? ` / ${stage.title}` : ''}`,
+      tone: 'active',
+    };
+  }
+  return {
+    label: 'Awaiting Command',
+    text: `${hunter.gateOffers?.length ?? 0} Gate signals / Daily Quest available`,
+    tone: 'idle',
+  };
+}
+
+function systemChip(label, value, tone = '') {
   return `
-    <article class="hunter-activity option-card ${locked ? 'locked' : ''} ${tone}">
+    <span class="system-chip ${tone}">
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(String(value))}</strong>
+    </span>
+  `;
+}
+
+function renderSystemScanRows(rows = []) {
+  if (!rows.length) return '';
+  return `
+    <div class="system-scan-grid">
+      ${rows.map((row) => `
+        <div class="system-scan-row ${row.tone ?? ''}">
+          <span>${escapeHtml(row.label)}</span>
+          <strong>${escapeHtml(String(row.value))}</strong>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHunterSystemStatus(hunter) {
+  const objective = hunterObjectiveSummary(hunter);
+  return `
+    <article class="system-status-panel option-card ${objective.tone}">
+      <div class="system-status-top">
+        <div>
+          <p class="eyebrow">SYSTEM STATUS</p>
+          <h2>${escapeHtml(state.identity.name)}</h2>
+          <p>${escapeHtml(objective.text)}</p>
+        </div>
+        <span class="system-rank-sigil">${escapeHtml(hunter.rank)}</span>
+      </div>
+      <div class="system-chip-row">
+        ${systemChip('Rank', `${hunter.rank}-Rank`, 'rank')}
+        ${systemChip('Level', hunter.level)}
+        ${systemChip('XP', hunter.xp)}
+        ${systemChip('Stat Pts', hunter.statPoints, hunter.statPoints ? 'ready' : '')}
+        ${systemChip('Power', hunterPowerUi(), 'power')}
+        ${systemChip('Fatigue', `${hunter.systemFatigue}%`, hunter.systemFatigue >= 70 ? 'danger' : '')}
+        ${systemChip('Gates', hunter.gatesCleared)}
+        ${systemChip('Shadows', hunter.shadowArmy?.length ?? 0)}
+      </div>
+      <div class="system-objective-line ${objective.tone}">
+        <span>${escapeHtml(objective.label)}</span>
+        <strong>${escapeHtml(objective.text)}</strong>
+      </div>
+    </article>
+  `;
+}
+
+function hunterActivityToneState({ title, locked = false, tone = '', cta = '' }) {
+  if (locked) return 'locked';
+  if (tone === 'gate' && state.hunterWorld?.activeDungeon?.isRedGate) return 'danger';
+  if (/Retreated|Failed|Ended|Red Gate/i.test(title)) return 'danger';
+  if (/Claim|Cleared|Reward/i.test(title)) return 'ready';
+  if (/Fight|Continue|Review|View/i.test(cta) || /Dungeon active|Stage \d/i.test(title)) return 'active';
+  return '';
+}
+
+function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open' }) {
+  const stateTone = hunterActivityToneState({ title, locked, tone, cta });
+  return `
+    <article class="hunter-activity option-card system-module ${locked ? 'locked' : ''} ${tone} ${stateTone}">
       <div class="hunter-icon" aria-hidden="true">${icon}</div>
       <div>
         <h2>${title}</h2>
         <p>${subtitle}</p>
-        <span class="activity-meta">${meta}</span>
+        <span class="activity-meta system-chip compact"><small>Status</small><strong>${meta}</strong></span>
       </div>
       ${locked ? '<span class="lock-pill">Locked</span>' : button(cta, action, 'activity-open')}
     </article>
@@ -2271,8 +2382,14 @@ function renderHunterStatButtons() {
 function renderHunterStatSheet() {
   const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
   return `
-    <div class="world-grid hunter-stat-grid">
-      ${Object.entries(hunter.stats ?? DEFAULT_HUNTER_WORLD.stats).map(([stat, value]) => metric(hunterStatLabel(stat), value)).join('')}
+    <div class="world-grid hunter-stat-grid system-stat-grid">
+      ${Object.entries(hunter.stats ?? DEFAULT_HUNTER_WORLD.stats).map(([stat, value]) => `
+        <div class="system-stat-tile">
+          <span>${hunterStatLabel(stat)}</span>
+          <strong>${value}</strong>
+          <small>+${value * 10} mapped power</small>
+        </div>
+      `).join('')}
     </div>
     <p class="muted">Each Hunter stat point adds 1 System stat. That counts as roughly +10 mapped fighter-stat power during Hunter/System checks.</p>
   `;
@@ -2325,7 +2442,7 @@ function renderHunterQuestPanel() {
   const quest = state.hunterWorld?.dailyQuest;
   if (!quest) {
     return `
-      <article class="option-card hunter-quest-card">
+      <article class="option-card hunter-quest-card system-window">
         <div>
           <p class="eyebrow">System Daily Quest</p>
           <h2>No Quest Active</h2>
@@ -2338,12 +2455,17 @@ function renderHunterQuestPanel() {
   const progress = `${Math.min((quest.stageIndex ?? 0) + 1, quest.stages?.length ?? 1)} / ${quest.stages?.length ?? 1}`;
   if (quest.outcome === 'retreated') {
     return `
-      <article class="option-card hunter-quest-card failed">
+      <article class="option-card hunter-quest-card system-window failed">
         <div>
           <p class="eyebrow">System Daily Quest / Retreated</p>
           <h2>${escapeHtml(quest.title)}</h2>
           <p>You escaped the monster encounter alive, but abandoned the objective. No System reward is available.</p>
           <p class="muted">Consequences: +10 fatigue / -8 mood / -3 reputation</p>
+          ${renderSystemScanRows([
+            { label: 'Outcome', value: 'Retreated', tone: 'danger' },
+            { label: 'Reward', value: 'None', tone: 'danger' },
+            { label: 'Objective', value: 'Failed', tone: 'danger' },
+          ])}
           ${renderHunterQuestResults(quest)}
         </div>
         ${button('Dismiss Failed Quest', 'hunter-quest-dismiss', 'danger')}
@@ -2352,12 +2474,16 @@ function renderHunterQuestPanel() {
   }
   if (quest.completed) {
     return `
-      <article class="option-card hunter-quest-card ${quest.failed ? 'failed' : 'complete'}">
+      <article class="option-card hunter-quest-card system-window ${quest.failed ? 'failed' : 'complete'}">
         <div>
           <p class="eyebrow">System Daily Quest</p>
           <h2>${escapeHtml(quest.title)}</h2>
           <p>${quest.failed ? 'Objective failed. The System converts survival data into a partial reward.' : 'All objectives complete. The blue reward window is waiting.'}</p>
           <p class="muted">Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+          ${renderSystemScanRows([
+            { label: 'Outcome', value: quest.failed ? 'Partial clear' : 'Complete', tone: quest.failed ? 'danger' : 'clear' },
+            { label: 'Reward Window', value: 'Ready', tone: 'clear' },
+          ])}
           ${renderHunterQuestResults(quest)}
         </div>
         ${button('Claim Reward', 'hunter-quest-claim', 'primary')}
@@ -2368,12 +2494,16 @@ function renderHunterQuestPanel() {
     ? `<div class="compact-action-grid quest-choice-grid">${(stage.choices ?? []).map((choice) => button(choice.label, `hunter-quest-choice-${choice.id}`)).join('')}</div>`
     : button('Enter Monster Fight', 'hunter-quest-fight', 'primary wide');
   return `
-    <article class="option-card hunter-quest-card">
+    <article class="option-card hunter-quest-card system-window active">
       <div>
         <p class="eyebrow">System Daily Quest / Stage ${progress}</p>
         <h2>${escapeHtml(stage?.title ?? quest.title)}</h2>
         <p>${escapeHtml(stage?.body ?? 'The System is waiting for your next action.')}</p>
         <p class="muted">Quest: ${escapeHtml(quest.title)}. Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+        ${renderSystemScanRows([
+          { label: 'Objective Progress', value: progress, tone: 'active' },
+          { label: 'Current Stage', value: stage?.type === 'combat' ? 'Monster encounter' : 'Choice event', tone: stage?.type === 'combat' ? 'danger' : 'active' },
+        ])}
         ${renderHunterQuestResults(quest)}
       </div>
       ${choices}
@@ -2387,7 +2517,7 @@ function renderHunterQuestPopup() {
   if (!quest && state.activeFight?.source !== 'hunterQuest') return '';
   return `
     <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup" data-scroll-key="hunter-quest">
+      <section class="event-modal hunter-quest-popup system-popup" data-scroll-key="hunter-quest">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">System Daily Quest</p>
@@ -2406,8 +2536,8 @@ function renderHunterMonsterFight(mode = 'quest') {
   const opponent = activeFightOpponent(fight);
   if (!opponent) return '<article class="option-card"><h2>Monster data missing</h2><p>Close this encounter and restart the quest stage.</p></article>';
   return `
-    <section class="combat stack">
-      <article class="fight-title">
+    <section class="combat stack hunter-combat-shell system-combat">
+      <article class="fight-title system-fight-title ${fight.finished ? (fight.result.won ? 'complete' : 'failed') : 'active'}">
         <div>
           <p class="eyebrow">${fight.finished ? 'System Report' : `Exchange ${fight.round} / ${fight.maxRounds}`}</p>
           <h2>${escapeHtml(state.identity.name)} vs ${escapeHtml(opponent.name)}</h2>
@@ -2449,12 +2579,15 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
     .map((moveId) => HUNTER_MONSTER_MOVES[moveId]?.label)
     .filter(Boolean)
     .join(', ');
-  return renderFightInfoDropdown('Fight Info', 'System target read and observed monster attacks.', `
+  return renderFightInfoDropdown('Fight Info', 'System scan: target, objective, observed monster attacks.', `
     <article class="breakdown dossier-report system-monster-readout">
-      <h2>System Monster Read</h2>
-      <p>${objective}</p>
-      <p>Target: ${escapeHtml(opponent.name)}. Threat pattern: ${escapeHtml(opponent.style)} / ${escapeHtml(opponent.threat)}.</p>
-      ${monsterAttacks ? `<p>Observed monster attacks: ${escapeHtml(monsterAttacks)}.</p>` : ''}
+      <h2>Target Scan</h2>
+      ${renderSystemScanRows([
+        { label: 'Objective', value: objective, tone: mode === 'dungeon' && fight.isBoss ? 'danger' : 'active' },
+        { label: 'Target', value: opponent.name, tone: 'danger' },
+        { label: 'Threat Pattern', value: `${opponent.style} / ${opponent.threat}`, tone: 'danger' },
+        ...(monsterAttacks ? [{ label: 'Observed Attacks', value: monsterAttacks, tone: 'danger' }] : []),
+      ])}
       <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Conserve, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
       ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}
@@ -2465,10 +2598,20 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
 function renderHunterMoves(mode = 'quest') {
   const moves = getUnlockedHunterMoves(state);
   const dungeon = mode === 'dungeon';
+  const moveRoles = {
+    slash: 'attack',
+    dashStrike: 'attack',
+    manaGuard: 'defense',
+    conserve: 'recovery',
+    analyzeWeakness: 'analysis',
+    execute: 'finisher',
+    shadowAssist: 'shadow',
+  };
   return `
     <section class="tactic-grid hunter-move-grid">
       ${moves.map((move) => `
-        <button class="move-card system-move-card" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
+        <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'}" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
+          <em>${escapeHtml(moveRoles[move.id] ?? 'attack')}</em>
           <strong>${move.label}</strong>
           <span>${move.disabledReason || move.hint}</span>
         </button>
@@ -2526,13 +2669,18 @@ function renderHunterGateOffers() {
   return `
     <div class="gate-offer-grid">
       ${offers.map((offer) => `
-        <article class="gate-offer option-card ${offer.isRedGate ? 'red-gate-offer' : ''}">
+        <article class="gate-offer option-card system-window ${offer.isRedGate ? 'red-gate-offer emergency' : ''} ${offer.danger ? 'danger-offer' : ''}">
           <div>
             <p class="eyebrow">${offer.isRedGate ? 'Emergency Red Gate' : `${escapeHtml(offer.rank)}-Rank Gate`}</p>
             <h2>${escapeHtml(offer.name)}</h2>
             <p>${escapeHtml(offer.theme)} / ${offer.encounters.length} encounters / Boss: ${escapeHtml(offer.bossName)}</p>
             ${offer.danger ? '<p class="danger-copy">Danger signal: this Gate exceeds your recommended clearance.</p>' : ''}
             <p class="muted">Rooms: +${offer.rewardsPreview.roomXp} XP, ${gateMoney(offer.rewardsPreview.roomMoney)} each / Boss: +${offer.rewardsPreview.bossXp} XP, ${gateMoney(offer.rewardsPreview.bossMoney)}, +${offer.rewardsPreview.statRewards} Hunter stat</p>
+            ${renderSystemScanRows([
+              { label: 'Tier', value: `${offer.rank}-Rank${offer.isRedGate ? ' Red Gate' : ''}`, tone: offer.isRedGate || offer.danger ? 'danger' : 'active' },
+              { label: 'Depth', value: `${offer.encounters.length} rooms`, tone: 'active' },
+              { label: 'Boss Signature', value: offer.bossName, tone: offer.isRedGate || offer.danger ? 'danger' : '' },
+            ])}
           </div>
           ${button('Enter Gate', `hunter-gate-select-${offer.id}`, offer.isRedGate ? 'danger' : 'primary')}
         </article>
@@ -2546,8 +2694,13 @@ function renderHunterDungeonFightReport(fight) {
   const action = dungeon?.bossDefeated || dungeon?.failed ? 'hunter-dungeon-dismiss' : 'hunter-dungeon-advance';
   const label = dungeon?.bossDefeated ? 'Return to Gate Board' : dungeon?.failed ? 'Leave Failed Gate' : 'Proceed Deeper';
   return `
-    <article class="fight-report dungeon-report">
+    <article class="fight-report dungeon-report system-window ${dungeon?.bossDefeated ? 'complete' : dungeon?.failed ? 'failed' : 'active'}">
       <h2>${escapeHtml(fight.result.summary)}</h2>
+      ${renderSystemScanRows([
+        { label: 'Gate', value: `${dungeon?.name ?? 'Dungeon Run'} / ${dungeon?.rank ?? 'E'}-Rank${dungeon?.isRedGate ? ' Red Gate' : ''}`, tone: dungeon?.isRedGate ? 'danger' : 'active' },
+        { label: 'Room', value: `${(dungeon?.encounterIndex ?? 0) + 1} of ${dungeon?.encounters?.length ?? 1}${fight.isBoss ? ' / Boss Chamber' : ''}`, tone: fight.isBoss ? 'danger' : 'active' },
+        { label: 'Result', value: dungeon?.bossDefeated ? 'Boss defeated' : dungeon?.failed ? 'Run failed' : 'Room cleared', tone: dungeon?.failed ? 'danger' : 'clear' },
+      ])}
       <div class="report-grid">
         <div>
           <h3>${dungeon?.bossDefeated ? 'Dungeon Clear' : 'Room Result'}</h3>
@@ -2570,25 +2723,34 @@ function renderHunterDungeonPanel() {
   if (!dungeon) return renderHunterGateOffers();
   if (dungeon.completed && !state.activeFight) {
     return `
-      <article class="option-card hunter-quest-card ${dungeon.outcome === 'cleared' ? 'complete' : 'failed'}">
+      <article class="option-card hunter-quest-card system-window ${dungeon.outcome === 'cleared' ? 'complete' : 'failed'}">
         <div>
           <p class="eyebrow">${dungeon.outcome === 'cleared' ? 'Dungeon Cleared' : 'Run Abandoned'}</p>
           <h2>${escapeHtml(dungeon.name)}</h2>
           <p>${escapeHtml(dungeon.resultText ?? (dungeon.outcome === 'retreated' ? 'You survived the retreat. Cleared-room rewards were kept.' : 'The Gate run has ended.'))}</p>
           ${dungeon.outcome === 'retreated' ? '<p class="muted">Penalties: +12 fatigue / -10 mood / -4 reputation</p>' : ''}
           ${dungeon.outcome === 'failed' ? '<p class="muted">Penalties: +16 fatigue / -12 mood / -6 reputation</p>' : ''}
+          ${renderSystemScanRows([
+            { label: 'Outcome', value: dungeon.outcome ?? 'Ended', tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger' },
+            { label: 'Boss', value: dungeon.bossDefeated ? 'Defeated' : 'Not cleared', tone: dungeon.bossDefeated ? 'clear' : 'danger' },
+          ])}
         </div>
         ${button('Return to Gate Board', 'hunter-dungeon-dismiss', 'primary')}
       </article>
     `;
   }
   return `
-    <article class="option-card hunter-quest-card dungeon-ready">
+    <article class="option-card hunter-quest-card dungeon-ready system-window active">
       <div>
         <p class="eyebrow">${dungeon.isRedGate ? 'Red Gate Run' : 'Dungeon Run'} / Room ${dungeon.encounterIndex + 1} of ${dungeon.encounters.length}</p>
         <h2>${escapeHtml(dungeon.name)}</h2>
         <p>${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'The boss chamber is ahead.' : 'A hostile signature blocks the next room.'} Health and mana do not refill between encounters.</p>
         <p class="muted">Cleared rooms: ${dungeon.rewardsEarned.filter((reward) => reward.type === 'room').length} / Final boss: ${escapeHtml(dungeon.bossName)}</p>
+        ${renderSystemScanRows([
+          { label: 'Condition Carry', value: 'HP and mana persist', tone: 'danger' },
+          { label: 'Next Chamber', value: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'Boss signal' : 'Monster signal', tone: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'danger' : 'active' },
+          { label: 'Retreat', value: 'Always available before death', tone: 'danger' },
+        ])}
       </div>
       ${button(dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'Enter Boss Chamber' : 'Enter Room', 'hunter-dungeon-start', 'primary')}
     </article>
@@ -2599,7 +2761,7 @@ function renderHunterDungeonPopup() {
   if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
   return `
     <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup dungeon-popup" data-scroll-key="hunter-dungeon">
+      <section class="event-modal hunter-quest-popup dungeon-popup system-popup" data-scroll-key="hunter-dungeon">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">Gate Board</p>
@@ -2634,23 +2796,24 @@ function renderHunter() {
   const gateActivity = hunterGateActivity(hunter);
   return `
     <section class="stack hunter-panel">
+      ${renderHunterSystemStatus(hunter)}
       ${renderCollapsibleSection({
         id: 'hunter-core',
         title: 'System Player',
         subtitle: activeDungeon ? `${activeDungeon.name} active` : `${hunter.gateOffers?.length ?? 0} Gate signals available`,
-        body: `<div class="hunter-header option-card">
+        body: `<div class="hunter-header option-card system-window">
         <div>
           <p class="eyebrow">System Player</p>
           <h2>${state.identity.name}</h2>
           <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Gate Board signals are ready. Choose a dungeon run below.'}</p>
         </div>
-        <div class="world-grid">
-          ${metric('Rank', hunter.rank)}
-          ${metric('Level', hunter.level)}
-          ${metric('XP', hunter.xp)}
-          ${metric('Stat Pts', hunter.statPoints)}
-          ${metric('Hunter Power', hunterPowerUi())}
-          ${metric('Fatigue', hunter.systemFatigue)}
+        <div class="system-chip-row">
+          ${systemChip('Rank', `${hunter.rank}-Rank`, 'rank')}
+          ${systemChip('Level', hunter.level)}
+          ${systemChip('XP', hunter.xp)}
+          ${systemChip('Stat Pts', hunter.statPoints, hunter.statPoints ? 'ready' : '')}
+          ${systemChip('Hunter Power', hunterPowerUi(), 'power')}
+          ${systemChip('Fatigue', `${hunter.systemFatigue}%`, hunter.systemFatigue >= 70 ? 'danger' : '')}
         </div>
       </div>`,
       })}
@@ -2718,7 +2881,7 @@ function renderHunter() {
         id: 'hunter-stats',
         title: 'System Stat Points',
         subtitle: `${hunter.statPoints} points available`,
-        body: `<article class="option-card"><div>${renderHunterStatSheet()}${renderHunterStatButtons()}</div></article>`,
+        body: `<article class="option-card system-window"><div>${renderHunterStatSheet()}${renderHunterStatButtons()}</div></article>`,
       })}
       ${renderCollapsibleSection({
         id: 'hunter-log',
