@@ -37,6 +37,8 @@ import {
   getSpecialFights,
   getExperienceBoost,
   getHunterEffectiveStats,
+  maxLifeEnergy,
+  maxLifeHealth,
   getStatCap,
   getUnlockedFightMoves,
   getUnlockedHunterMoves,
@@ -927,7 +929,85 @@ test('Hunter overlay is unavailable before awakening and strengthens ordinary fi
 
   const normalExchange = takeFightTurn(normalFight, 'pressure').activeFight.exchanges[0];
   const awakenedExchange = takeFightTurn(awakenedFight, 'pressure').activeFight.exchanges[0];
-  assert.ok(awakenedExchange.playerDamage > normalExchange.playerDamage);
+  assert.ok(awakenedExchange.swing > normalExchange.swing);
+  assert.ok(awakenedExchange.enemyDamage < normalExchange.enemyDamage);
+});
+
+test('life health and energy caps scale with combat stats and match fight meters', () => {
+  const base = createNewLife({ gender: 'Male', seed: 933 });
+  const strong = {
+    ...base,
+    stats: {
+      ...base.stats,
+      durability: 900,
+      willpower: 820,
+      control: 760,
+    },
+  };
+  const maxHealth = maxLifeHealth(strong);
+  const maxEnergy = maxLifeEnergy(strong);
+  const recovered = recover({
+    ...strong,
+    resources: { ...strong.resources, health: maxHealth - 5, energy: maxEnergy - 5 },
+  }, 'restDay');
+  const fight = startFight({
+    ...recovered,
+    resources: { ...recovered.resources, health: maxHealth, energy: maxEnergy },
+  }, 'alleyScrapper');
+
+  assert.ok(maxHealth > 100);
+  assert.ok(maxEnergy > 100);
+  assert.equal(recovered.resources.health, maxHealth);
+  assert.equal(recovered.resources.energy, maxEnergy);
+  assert.equal(fight.activeFight.meters.maxPlayerHealth, maxHealth);
+  assert.equal(fight.activeFight.meters.playerHealth, maxHealth);
+  assert.equal(fight.activeFight.meters.maxPlayerStamina, maxEnergy);
+  assert.equal(fight.activeFight.meters.playerStamina, maxEnergy);
+});
+
+test('high-rank System bosses have dungeon-scale health and dangerous monster damage', () => {
+  const initial = createNewLife({ gender: 'Male', seed: 9331 });
+  let life = {
+    ...initial,
+    stats: Object.fromEntries(Object.entries(initial.stats).map(([stat, value]) => [stat, value + 260])),
+    resources: { ...initial.resources, energy: 180, health: 220 },
+    hunterWorld: {
+      ...initial.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'A',
+      level: 30,
+      stats: { strength: 24, agility: 18, vitality: 22, sense: 18, intelligence: 16 },
+      activeDungeon: {
+        id: 'dungeon-lich-threat-test',
+        name: 'Black Mana Vault',
+        rank: 'A',
+        encounters: [{ monsterId: 'archLichBoss', isBoss: true }],
+        encounterIndex: 0,
+        carriedHealth: null,
+        carriedStamina: null,
+        startedMonth: 0,
+        rewardsEarned: [],
+        completed: false,
+        retreated: false,
+        failed: false,
+        bossDefeated: false,
+        outcome: null,
+        awaitingAdvance: false,
+      },
+    },
+  };
+  life.resources.health = maxLifeHealth(life);
+  life.resources.energy = maxLifeEnergy(life);
+  life = startHunterDungeonEncounter(life);
+
+  assert.ok(life.activeFight.meters.maxOpponentHealth >= 1200);
+
+  const next = takeFightTurn(life, 'slash');
+  const exchange = next.activeFight.exchanges[0];
+
+  assert.ok(exchange.baseEnemyDamage >= 100);
+  assert.ok(next.activeFight.meters.opponentHealth > 0);
 });
 
 test('hunter association can promote ranks after enough gates and power', () => {
@@ -2516,6 +2596,11 @@ test('durability increases fight health for both fighters', () => {
   const durable = startFight({
     ...base,
     stats: { ...base.stats, durability: 500, willpower: 300 },
+    resources: {
+      ...base.resources,
+      health: maxLifeHealth({ ...base, stats: { ...base.stats, durability: 500, willpower: 300 } }),
+      energy: maxLifeEnergy({ ...base, stats: { ...base.stats, durability: 500, willpower: 300 } }),
+    },
   }, 'localBrawler');
   const monster = startFight({
     ...base,
@@ -3075,8 +3160,8 @@ test('normal fight wins can teach basic moves from the tactics used', () => {
       aggression: 280,
       control: 220,
     },
-    resources: { ...base.resources, health: 100, energy: 100, reputation: 600 },
   };
+  life.resources = { ...base.resources, health: maxLifeHealth(life), energy: maxLifeEnergy(life), reputation: 600 };
 
   const next = simulateFight(life, 'localBrawler', 'pressure');
   const learnedBasic = next.unlockedSkills.filter((id) => BASIC_FIGHT_MOVE_IDS.includes(id));
@@ -3434,6 +3519,8 @@ test('low durability takes meaningful damage even when offense is strong', () =>
       control: 95,
     },
   };
+  glassCannon.resources = { ...glassCannon.resources, health: maxLifeHealth(glassCannon), energy: maxLifeEnergy(glassCannon) };
+  ironBody.resources = { ...ironBody.resources, health: maxLifeHealth(ironBody), energy: maxLifeEnergy(ironBody) };
 
   const glassAfter = takeFightTurn(startFight(glassCannon, 'localBrawler'), 'pressure');
   const ironAfter = takeFightTurn(startFight(ironBody, 'localBrawler'), 'pressure');

@@ -248,8 +248,8 @@ function monsterMove(id, label, index, isBoss) {
     label,
     category,
     text: `${label} tears through the Gate with inhuman force.`,
-    scoreBonus: signature ? (isBoss ? 17 : 12) : index === 1 ? 7 : 5,
-    damageMultiplier: signature ? (isBoss ? 1.52 : 1.3) : index === 1 ? 1.14 : 1.08,
+    scoreBonus: signature ? (isBoss ? 24 : 17) : index === 1 ? 11 : 8,
+    damageMultiplier: signature ? (isBoss ? 1.95 : 1.55) : index === 1 ? 1.34 : 1.22,
     staminaCost: signature ? 12 : 7,
     injury: {
       name: 'body trauma',
@@ -3246,6 +3246,48 @@ function withPlayerCombatStats(life) {
     : life;
 }
 
+export function maxLifeHealth(life) {
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const usesHunterStats = usesHunterCombatOverlay(life);
+  const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * 10 : 0);
+}
+
+function staminaFromStats(stats = {}) {
+  const staminaGrowth =
+    Math.max(0, (stats.willpower ?? 0) - 30) * 0.14 +
+    Math.max(0, (stats.durability ?? 0) - 30) * 0.07 +
+    Math.max(0, (stats.control ?? 0) - 30) * 0.07 +
+    Math.max(0, (stats.speed ?? 0) - 30) * 0.04;
+  return clamp(100 + staminaGrowth, 100, 450);
+}
+
+export function maxLifeEnergy(life) {
+  const usesHunterStats = usesHunterCombatOverlay(life);
+  const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  return staminaFromStats(stats);
+}
+
+function clampLifeResource(life, resource, value) {
+  if (resource === 'health') return clamp(value, 0, maxLifeHealth(life));
+  if (resource === 'energy') return clamp(value, 0, maxLifeEnergy(life));
+  return clamp(value);
+}
+
+function applyVitalCapGrowth(before, next) {
+  const healthGain = maxLifeHealth(next) - maxLifeHealth(before);
+  const energyGain = maxLifeEnergy(next) - maxLifeEnergy(before);
+  if (healthGain > 0) next.resources.health = clampLifeResource(next, 'health', next.resources.health + healthGain);
+  else next.resources.health = clampLifeResource(next, 'health', next.resources.health);
+  if (energyGain > 0) next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + energyGain);
+  else next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy);
+}
+
+function combatResourceValue(value, max, min = 0) {
+  if (max > 100 && Math.round(value ?? 0) === 100) return max;
+  return clamp(value ?? max, min, max);
+}
+
 function hunterXpForNextLevel(level) {
   return 100 + Math.max(1, level) * 35;
 }
@@ -3506,13 +3548,16 @@ function applyDelta(life, effects = {}) {
   }
   if (effects.resources) {
     for (const [resource, amount] of Object.entries(effects.resources)) {
-      if (resource in life.resources) life.resources[resource] = clamp(life.resources[resource] + amount, 0, resource === 'reputation' ? 999 : 1000000);
+      if (resource === 'health' || resource === 'energy') life.resources[resource] = clampLifeResource(life, resource, life.resources[resource] + amount);
+      else if (resource in life.resources) life.resources[resource] = clamp(life.resources[resource] + amount, 0, resource === 'reputation' ? 999 : 1000000);
     }
   }
   if (effects.stats) {
+    const beforeGrowth = clone(life);
     for (const [stat, amount] of Object.entries(effects.stats)) {
       if (stat in life.stats) life.stats[stat] = clampLifeStat(life, stat, life.stats[stat] + amount);
     }
+    applyVitalCapGrowth(beforeGrowth, life);
   }
   if (effects.world) {
     life.world = life.world ?? {};
@@ -3608,7 +3653,7 @@ function applyHunterDungeonFightResult(life, fight, won) {
   }
 
   dungeon.carriedHealth = fight.meters.playerHealth;
-  dungeon.carriedStamina = clamp(fight.meters.playerStamina + (encounter.isBoss ? 0 : 5), 0, 100);
+  dungeon.carriedStamina = clamp(fight.meters.playerStamina + (encounter.isBoss ? 0 : 5), 0, fight.meters.maxPlayerStamina ?? maxLifeEnergy(life));
   if (!encounter.isBoss) {
     const xp = dungeonRewardAmount(tierRewards.room.xp, dungeon.isRedGate);
     const money = dungeonRewardAmount(tierRewards.room.money, dungeon.isRedGate);
@@ -4256,7 +4301,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
   pick(LAST_NAMES, rng);
   const identity = identityFor(cleanFirstName(firstName) || fallbackFirstName, clan);
 
-  return {
+  const life = {
     version: 1,
     rngSeed: Math.floor(rng() * 999999999),
     identity: {
@@ -4277,7 +4322,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     stats,
     resources: {
       money: moneyByWealth[familyWealth],
-      health: 95,
+      health: 100,
       energy: 100,
       mood: 75,
       reputation: clan.bonuses.reputation ?? 0,
@@ -4347,6 +4392,9 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
       createLog(`Clan result: ${clan.name} [${clan.rarity}].`, 'clan'),
     ],
   };
+  life.resources.health = maxLifeHealth(life);
+  life.resources.energy = maxLifeEnergy(life);
+  return life;
 }
 
 export function rerollClan(life) {
@@ -4456,7 +4504,7 @@ export function useSocialAction(life, actionId) {
 
   if (action.reputation) next.resources.reputation = clamp(next.resources.reputation + action.reputation + Math.floor(followerScale / 2), 0, 999);
   if (action.money) next.resources.money += action.money + Math.floor(next.social.followers / 1200) * 25;
-  if (action.energy) next.resources.energy = clamp(next.resources.energy + action.energy);
+  if (action.energy) next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + action.energy);
   if (action.mood) next.resources.mood = clamp(next.resources.mood + action.mood);
   if (action.heat) next.world.heat = clamp(next.world.heat + action.heat, 0, 100);
   if (action.sponsor) next.relationships.sponsor = clamp(next.relationships.sponsor + action.sponsor + Math.floor(followerScale / 2));
@@ -4535,8 +4583,9 @@ export function train(life, actionId) {
 
   const rarity = getRarity(life.clan.rarity);
   const next = clone(life);
+  const beforeGrowth = clone(next);
   next.trainingSessionsUsed = getTrainingAllowance(next).used + 1;
-  next.resources.energy = clamp(next.resources.energy - action.cost);
+  next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy - action.cost);
   next.resources.mood = clamp(next.resources.mood + 1);
 
   for (const [stat, amount] of Object.entries(action.gains)) {
@@ -4544,10 +4593,11 @@ export function train(life, actionId) {
     const homeGymBonus = next.ownedAssets?.includes('homeGym') && stat === Object.keys(action.gains)[0] ? 1 : 0;
     next.stats[stat] = clampLifeStat(next, stat, next.stats[stat] + amount * rarity.powerMultiplier + mentorBonus + homeGymBonus);
   }
+  applyVitalCapGrowth(beforeGrowth, next);
 
   const riskScore = action.risk + next.world.heat / 12 - next.stats.control / 45;
   if (riskScore > 7) {
-    next.resources.health = clamp(next.resources.health - Math.ceil(riskScore / 2));
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health - Math.ceil(riskScore / 2));
     addOrUpgradeInjury(next, withInjuryTier({ name: 'training bruises', text: 'the session leaves bruising that makes hard contact a bad idea for a short stretch.' }, riskScore > 10 ? 'Moderate' : 'Mild'));
   }
 
@@ -4572,8 +4622,9 @@ function applyTrainingNoPopup(life, actionId) {
   const energyCost = Math.max(0, action.cost - mentorAutoEnergyDiscount(life.mentor));
   if (life.resources.energy < energyCost) return null;
   const rarity = getRarity(life.clan.rarity);
+  const beforeGrowth = clone(life);
   life.trainingSessionsUsed = getTrainingAllowance(life).used + 1;
-  life.resources.energy = clamp(life.resources.energy - energyCost);
+  life.resources.energy = clampLifeResource(life, 'energy', life.resources.energy - energyCost);
   life.resources.mood = clamp(life.resources.mood + 1);
   for (const [stat, amount] of Object.entries(action.gains)) {
     const mentorBonus = life.mentor?.focus?.includes(stat) ? 1 : 0;
@@ -4581,6 +4632,7 @@ function applyTrainingNoPopup(life, actionId) {
     const autoBonus = mentorAutoStatBonus(life.mentor, stat);
     life.stats[stat] = clampLifeStat(life, stat, life.stats[stat] + amount * rarity.powerMultiplier + mentorBonus + homeGymBonus + autoBonus);
   }
+  applyVitalCapGrowth(beforeGrowth, life);
   if (life.style === 'Unformed' && life.stats.technique >= 28) life.style = 'Hybrid Striker';
   trainRivalBesidePlayer(life, action, true);
   return action;
@@ -4590,11 +4642,11 @@ function applyRecoveryNoPopup(life, actionId) {
   const action = RECOVERY_ACTIONS[actionId];
   if (life.activeFight && !life.activeFight.finished) return null;
   if (!action || getAutoRecoveryStatus(life, actionId).locked || life.resources.money < action.cost) return null;
-  const needsRecovery = life.resources.health < 85 || life.resources.energy < 65 || (action.injuryHeal > 0 && life.injuries.length > 0);
+  const needsRecovery = life.resources.health < maxLifeHealth(life) || life.resources.energy < maxLifeEnergy(life) || (action.injuryHeal > 0 && life.injuries.length > 0);
   if (!needsRecovery) return null;
   life.resources.money -= action.cost;
-  life.resources.health = clamp(life.resources.health + action.health);
-  life.resources.energy = clamp(life.resources.energy + action.energy);
+  life.resources.health = clampLifeResource(life, 'health', life.resources.health + action.health);
+  life.resources.energy = clampLifeResource(life, 'energy', life.resources.energy + action.energy);
   life.resources.mood = clamp(life.resources.mood + action.mood);
   if (action.stat) {
     const [stat, amount] = action.stat;
@@ -4795,7 +4847,7 @@ export function specialTrain(life, actionId) {
 
   const next = clone(life);
   next.specialTrainingCaps = { ...(next.specialTrainingCaps ?? {}) };
-  next.resources.energy = clamp(next.resources.energy - action.cost.energy);
+  next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy - action.cost.energy);
   next.resources.money = Math.max(0, next.resources.money - action.cost.money);
   next.specialTrainingLastMonth = lifeMonth(next);
   for (const [stat, gain] of Object.entries(action.capGains)) {
@@ -4847,11 +4899,11 @@ function applyMoneyActionEffects(life, actionId) {
   if (actionId === 'privateSparring') {
     life.stats.technique = clampLifeStat(life, 'technique', life.stats.technique + 3);
     life.stats.reflexes = clampLifeStat(life, 'reflexes', life.stats.reflexes + 2);
-    life.resources.energy = clamp(life.resources.energy - 10);
+    life.resources.energy = clampLifeResource(life, 'energy', life.resources.energy - 10);
   }
   if (actionId === 'cleanMealPlan') {
-    life.resources.health = clamp(life.resources.health + 10);
-    life.resources.energy = clamp(life.resources.energy + 12);
+    life.resources.health = clampLifeResource(life, 'health', life.resources.health + 10);
+    life.resources.energy = clampLifeResource(life, 'energy', life.resources.energy + 12);
     life.resources.mood = clamp(life.resources.mood + 4);
   }
   if (actionId === 'familySupport') {
@@ -4867,7 +4919,7 @@ function applyMoneyActionEffects(life, actionId) {
   if (actionId === 'backAlleyDoctor') {
     if (life.injuries.length > 0) life.injuries = life.injuries.slice(1);
     if (life.injuries.length === 0) life.medicalSuspensionUntil = 0;
-    life.resources.health = clamp(life.resources.health + 18);
+    life.resources.health = clampLifeResource(life, 'health', life.resources.health + 18);
     life.resources.mood = clamp(life.resources.mood - 3);
     life.world.heat = clamp(life.world.heat + 8);
   }
@@ -4878,10 +4930,12 @@ function applyMoneyActionEffects(life, actionId) {
     life.world.heat = clamp(life.world.heat + 12);
   }
   if (actionId === 'experimentalConditioning') {
+    const beforeGrowth = clone(life);
     life.stats.strength = clampLifeStat(life, 'strength', life.stats.strength + 5);
     life.stats.durability = clampLifeStat(life, 'durability', life.stats.durability + 5);
     life.stats.willpower = clampLifeStat(life, 'willpower', life.stats.willpower + 4);
-    life.resources.health = clamp(life.resources.health - 14);
+    applyVitalCapGrowth(beforeGrowth, life);
+    life.resources.health = clampLifeResource(life, 'health', life.resources.health - 14);
     life.world.heat = clamp(life.world.heat + 6);
     const injuryRoll = deterministicRoll(life.rngSeed, life.resources.money, 'experimental-conditioning');
     if (injuryRoll < 0.45) addOrUpgradeInjury(life, withInjuryTier({ name: 'black-market strain', text: 'the shortcut leaves something in the body feeling wrong.' }, 'Moderate'));
@@ -4902,13 +4956,15 @@ export function recover(life, actionId) {
   const next = clone(life);
   const hadInjury = next.injuries.length > 0;
   next.resources.money -= action.cost;
-  next.resources.health = clamp(next.resources.health + action.health);
-  next.resources.energy = clamp(next.resources.energy + action.energy);
+  next.resources.health = clampLifeResource(next, 'health', next.resources.health + action.health);
+  next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + action.energy);
   next.resources.mood = clamp(next.resources.mood + action.mood);
 
   if (action.stat) {
+    const beforeGrowth = clone(next);
     const [stat, amount] = action.stat;
     next.stats[stat] = clampStat(next.stats[stat] + amount);
+    applyVitalCapGrowth(beforeGrowth, next);
   }
 
   if (action.injuryHeal > 0 && next.injuries.length > 0) {
@@ -5012,18 +5068,34 @@ export function getOpponentStats(opponent) {
 }
 
 const SYSTEM_MONSTER_POWER_MULTIPLIERS = {
-  'Hunter Quest': 1.4,
-  E: 1.75,
-  D: 1.85,
-  C: 2.05,
-  B: 2.3,
-  A: 2.55,
-  S: 2.8,
+  'Hunter Quest': 1.85,
+  E: 2.35,
+  D: 2.55,
+  C: 2.85,
+  B: 3.2,
+  A: 3.65,
+  S: 4.15,
 };
 
 function resolvedOpponentPower(opponent) {
   if (!opponent?.systemMonster) return opponent.power;
   return Math.round(opponent.power * (SYSTEM_MONSTER_POWER_MULTIPLIERS[opponent.tier] ?? 1));
+}
+
+function systemMonsterHealthMultiplier(opponent) {
+  if (!opponent?.systemMonster) return 1;
+  const tierMultiplier = {
+    'Hunter Quest': 1.45,
+    E: 1.65,
+    D: 1.8,
+    C: 2.0,
+    B: 2.25,
+    A: 2.55,
+    S: 2.9,
+  }[opponent.tier] ?? 1.6;
+  const bossMultiplier = opponent.threat?.includes('Boss') ? 1.35 : 1;
+  const redMultiplier = opponent.threat?.includes('Red Gate') ? 1.2 : 1;
+  return tierMultiplier * bossMultiplier * redMultiplier;
 }
 
 function opponentTacticStat(stats, intent) {
@@ -6786,7 +6858,7 @@ function fightBreakdown(life, opponent) {
 }
 
 function fightHealthFromStats(stats) {
-  return clamp(100 + (stats.durability ?? 0) * 0.12 + (stats.willpower ?? 0) * 0.05, 100, 650);
+  return clamp(100 + (stats.durability ?? 0) * 0.36 + (stats.willpower ?? 0) * 0.18, 100, 1200);
 }
 
 function healthPercent(current, max) {
@@ -6970,8 +7042,10 @@ function createActiveFight(life, opponentId, options = {}) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const usesHunterStats = isSystemFight || usesHunterCombatOverlay(life);
   const playerStats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
-  const maxPlayerHealth = fightHealthFromStats(playerStats) + (usesHunterStats ? hunter.stats.vitality * 10 : 0);
-  const maxOpponentHealth = fightHealthFromStats(opponentStats);
+  const maxPlayerHealth = maxLifeHealth(life);
+  const maxOpponentHealth = Math.round(fightHealthFromStats(opponentStats) * systemMonsterHealthMultiplier(opponent));
+  const maxPlayerStamina = clamp(maxLifeEnergy(life) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 520);
+  const maxOpponentStamina = clamp(staminaFromStats(opponentStats), 45, 520);
   const breakdown = fightBreakdown(life, opponent);
   if (opponent.adaptationCount) {
     const titleLine = opponent.growthTitle ? ` They are now filed as ${opponent.growthTitle}.` : '';
@@ -7005,14 +7079,16 @@ function createActiveFight(life, opponentId, options = {}) {
       lastTransition: '',
     },
     meters: {
-      playerHealth: options.carriedHealth == null ? maxPlayerHealth : clamp(options.carriedHealth, 1, maxPlayerHealth),
+      playerHealth: options.carriedHealth == null ? combatResourceValue(life.resources.health, maxPlayerHealth, 1) : clamp(options.carriedHealth, 1, maxPlayerHealth),
       opponentHealth: maxOpponentHealth,
       maxPlayerHealth,
       maxOpponentHealth,
+      maxPlayerStamina,
+      maxOpponentStamina,
       playerStamina: options.carriedStamina == null
-        ? clamp(life.resources.energy + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 100)
-        : clamp(options.carriedStamina, 0, 100),
-      opponentStamina: clamp(54 + (opponentStats.durability + opponentStats.willpower + opponentStats.control) / 30, 45, 100),
+        ? clamp(combatResourceValue(life.resources.energy, maxLifeEnergy(life), 25) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, maxPlayerStamina)
+        : clamp(options.carriedStamina, 0, maxPlayerStamina),
+      opponentStamina: maxOpponentStamina,
       momentum: (prep.trainingCamp ? 5 : 0) + (prep.scoutTape ? 8 : 0) - (activeCallout?.opponentMomentum ?? 0),
       guard: 50 + (prep.cornerman ? 12 : 0),
       injuryRisk: Math.max(0, opponent.risk - (prep.trainingCamp ? 3 : 0)),
@@ -7312,7 +7388,7 @@ function resolveBottomConserveExchange({ life, opponent, fight, move, playerScor
   const margin = survivalScore - topPressure;
   const damageReduction = clampFloat(0.38 + Math.max(0, margin) / 420, 0.35, 0.78);
   const staminaRecovery = move.id === 'lockdownStall' ? 12 : move.id === 'closedGuardShell' ? 10 : 8;
-  fight.meters.playerStamina = clamp(fight.meters.playerStamina + staminaRecovery, 0, 100);
+  fight.meters.playerStamina = clamp(fight.meters.playerStamina + staminaRecovery, 0, fight.meters.maxPlayerStamina ?? 100);
 
   const result = {
     playerDamage: Math.max(0, Math.round(playerDamage * 0.12)),
@@ -7430,9 +7506,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   fight.moveCooldowns = {};
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   fight.meters.playerStamina = move.id === 'conserve'
-    ? clamp(fight.meters.playerStamina + 18, 0, 100)
-    : clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, 100);
-  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, 100);
+    ? clamp(fight.meters.playerStamina + 18, 0, fight.meters.maxPlayerStamina ?? 100)
+    : clamp(fight.meters.playerStamina - move.staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, fight.meters.maxPlayerStamina ?? 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
   fight.meters.guard = clamp(fight.meters.guard + move.guardBias, 0, 100);
@@ -7642,8 +7718,8 @@ export function takeFightTurn(life, tactic = 'pressure') {
     };
   }
 
-  fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, 100);
-  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - (tactic === 'grapple' ? 16 : 9) - (weakMoveHit ? 5 : 0) - passive.opponentStaminaDamage - optimalBoost.opponentStaminaDamage - (enemyMove.staminaCost ?? 0), 0, 100);
+  fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina ?? 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - (tactic === 'grapple' ? 16 : 9) - (weakMoveHit ? 5 : 0) - passive.opponentStaminaDamage - optimalBoost.opponentStaminaDamage - (enemyMove.staminaCost ?? 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
   if (submissionFinished) fight.meters.opponentHealth = 0;
@@ -7942,9 +8018,8 @@ function finishActiveFight(life) {
     injuries: [],
   };
 
-  life.resources.energy = clamp(life.resources.energy - 28);
-  const cornerCare = fight.prep?.cornerman ? 5 : 0;
-  life.resources.health = clamp(life.resources.health - Math.max(1, Math.round(fight.meters.injuryRisk / (won ? 5 : 3)) - cornerCare));
+  life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
+  life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth);
   life.world.heat = clamp(life.world.heat + (systemFight ? 1 : getRarity(life.clan.rarity).powerMultiplier * 2), 0, 100);
 
   if (fight.meters.injuryRisk >= 15) {
@@ -8097,7 +8172,9 @@ function unlockBasicMoveFromFight(life, fight, opponent) {
     'Special Fight': 0.18,
   }[opponent.tier] ?? 0.04;
   const experienceBonus = Math.min(0.18, life.record.wins * 0.012 + life.resources.reputation * 0.00025);
-  const unlockChance = clampFloat(0.14 + tierBonus + experienceBonus, 0.12, 0.5);
+  const unlockChance = life.record.wins >= 20
+    ? 1
+    : clampFloat(0.14 + tierBonus + experienceBonus, 0.12, 0.65);
   const roll = deterministicRoll(life.rngSeed, fight.opponentId, life.record.wins, fight.exchanges.length, candidates.join(','), 'basic-move-unlock');
   if (roll >= unlockChance) return null;
 
@@ -8194,8 +8271,8 @@ export function ageUp(life) {
   const next = clone(life);
   next.trainingSessionsUsed = 0;
   const ageStep = advanceLifeClock(next);
-  next.resources.energy = 100;
-  next.resources.health = clamp(next.resources.health + (ageStep === 'month' ? 2 : 4));
+  next.resources.energy = maxLifeEnergy(next);
+  next.resources.health = clampLifeResource(next, 'health', next.resources.health + (ageStep === 'month' ? 2 : 4));
   next.resources.mood = clamp(next.resources.mood + (ageStep === 'month' ? 1 : 2));
   next.resources.money += next.identity.age < 18 ? 20 : ageStep === 'month' ? 60 : 120;
   const followerIncome = applyFollowerAgeUpIncome(next);
@@ -8290,13 +8367,15 @@ export function spendLifeChoice(life, choice) {
   if (choice === 'street') {
     next.stats.aggression = clampLifeStat(next, 'aggression', next.stats.aggression + 3);
     next.resources.reputation = clamp(next.resources.reputation + 4);
-    next.resources.health = clamp(next.resources.health - 3);
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health - 3);
     return addLog(next, 'You take a street fight. It is stupid, useful, and hard to forget.', 'life');
   }
   if (choice === 'job') {
     next.resources.money += 180;
+    const beforeGrowth = clone(next);
     next.stats.durability = clampLifeStat(next, 'durability', next.stats.durability + 1);
-    next.resources.energy = clamp(next.resources.energy - 12);
+    applyVitalCapGrowth(beforeGrowth, next);
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy - 12);
     return addLog(next, 'You work a rough shift and trade energy for money.', 'life');
   }
   if (choice === 'mentor') {
@@ -8558,8 +8637,8 @@ export function buySystemItem(life, itemId = 'recoveryPotion') {
     next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue - 22);
     next.resources.mood = clamp(next.resources.mood + 4);
   } else {
-    next.resources.health = clamp(next.resources.health + 18);
-    next.resources.energy = clamp(next.resources.energy + 12);
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + 18);
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + 12);
   }
   return addLog(next, `System Shop purchase: ${labelFromId(itemId)}.`, 'world');
 }
@@ -8743,7 +8822,7 @@ function findTriggeredEvent(life, trigger, context) {
       flag: 'overtrainingWarning',
       title: 'Your Body Refuses',
       body: 'Your joints feel hot and your sleep gets shallow. You can force one more brutal session, or recover before the damage becomes permanent.',
-      trigger: trigger === 'train' && life.resources.energy <= 40 && life.resources.health <= 95 && !flags.overtrainingWarning,
+      trigger: trigger === 'train' && life.resources.energy <= 40 && healthPercent(life.resources.health, maxLifeHealth(life)) <= 95 && !flags.overtrainingWarning,
       choices: [
         {
           id: 'recover-now',

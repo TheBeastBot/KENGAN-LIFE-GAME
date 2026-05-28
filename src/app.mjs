@@ -24,6 +24,8 @@ import {
   getHunterEffectiveStats,
   getLockedFights,
   getExperienceBoost,
+  maxLifeEnergy,
+  maxLifeHealth,
   getOpponentArchetype,
   getPlayerArchetype,
   getAutoRecoveryStatus,
@@ -410,6 +412,8 @@ function normalizeFight(fight) {
       ...meters,
       maxPlayerHealth: meters.maxPlayerHealth ?? 100,
       maxOpponentHealth: meters.maxOpponentHealth ?? 100,
+      maxPlayerStamina: meters.maxPlayerStamina ?? 100,
+      maxOpponentStamina: meters.maxOpponentStamina ?? 100,
     },
   };
 }
@@ -850,8 +854,8 @@ function renderHeader() {
         <button class="danger small-btn" data-action="reset">Reset Life</button>
       </div>
       <div class="status-grid resource-chips">
-        ${metric('Health', state.resources.health)}
-        ${metric('Energy', state.resources.energy)}
+        ${metric('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
+        ${metric('Energy', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
         ${metric('Mood', state.resources.mood)}
         ${metric('Rep', state.resources.reputation)}
         ${metric('Money', `$${state.resources.money}`)}
@@ -1546,8 +1550,8 @@ function renderCombatMeters(fight) {
     <div class="combat-meters">
       ${combatMeter('You', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
       ${combatMeter('Opponent', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
-      ${combatMeter('Stamina', fight.meters.playerStamina, 'You')}
-      ${combatMeter('Enemy Gas', fight.meters.opponentStamina, 'Opponent')}
+      ${combatMeter('Stamina', fight.meters.playerStamina, `${fight.meters.playerStamina}/${fight.meters.maxPlayerStamina ?? 100}`, fight.meters.maxPlayerStamina ?? 100)}
+      ${combatMeter('Enemy Gas', fight.meters.opponentStamina, `${fight.meters.opponentStamina}/${fight.meters.maxOpponentStamina ?? 100}`, fight.meters.maxOpponentStamina ?? 100)}
       ${combatMeter('Guard', fight.meters.guard, 'Control')}
       ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
       ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
@@ -2558,8 +2562,8 @@ function renderHunterCombatMeters(fight) {
     <div class="combat-meters">
       ${combatMeter('You', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
       ${combatMeter('Monster', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
-      ${combatMeter('Mana', fight.meters.playerStamina, 'You')}
-      ${combatMeter('Monster Gas', fight.meters.opponentStamina, 'Enemy')}
+      ${combatMeter('Mana', fight.meters.playerStamina, `${fight.meters.playerStamina}/${fight.meters.maxPlayerStamina ?? 100}`, fight.meters.maxPlayerStamina ?? 100)}
+      ${combatMeter('Monster Gas', fight.meters.opponentStamina, `${fight.meters.opponentStamina}/${fight.meters.maxOpponentStamina ?? 100}`, fight.meters.maxOpponentStamina ?? 100)}
       ${combatMeter('Guard', fight.meters.guard, 'System')}
       ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
       ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
