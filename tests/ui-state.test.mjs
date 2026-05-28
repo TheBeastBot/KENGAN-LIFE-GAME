@@ -102,3 +102,15 @@ test('Hunter activity and quest cards override generic option-card grids', async
   assert.match(cssSource, /\.hunter-quest-card\.option-card,[\s\S]*\.system-popup \.hunter-quest-card\.option-card\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   assert.match(cssSource, /\.quest-choice-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(160px,\s*1fr\)\);/);
 });
+
+test('main navigation uses menu with four favorite section slots', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /NAV_FAVORITES_STORAGE_KEY/);
+  assert.match(appSource, /favorites\.length >= 4/);
+  assert.match(appSource, /<button class="small-btn menu-btn" data-action="nav-menu-open">Menu<\/button>/);
+  assert.match(appSource, /<button class="danger wide" data-action="reset">Reset Life<\/button>/);
+  assert.match(appSource, /<button class="tab-btn menu-tab-btn" data-action="nav-menu-open"><span>Menu<\/span><\/button>/);
+  assert.match(cssSource, /\.nav-menu-row\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\) 48px;/);
+});

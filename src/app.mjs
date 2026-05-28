@@ -86,6 +86,7 @@ import { captureElementScroll, createDropdownStateController, restoreElementScro
 
 const STORAGE_KEY = 'underground-life-sim-save-v1';
 const DROPDOWN_STORAGE_KEY = 'underground-life-sim-dropdowns-v1';
+const NAV_FAVORITES_STORAGE_KEY = 'underground-life-sim-nav-favorites-v1';
 const LOG_LIMIT = 8;
 const AUTO_ROUTINE_INTERVAL_MS = 1000;
 const DEVIL_GENE_CLAN_NAME = 'Mishime';
@@ -223,6 +224,7 @@ let selectedFightCategory = null;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
+let navMenuOpen = false;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
@@ -253,6 +255,21 @@ const dropdownState = createDropdownStateController({
     'world-rumors': true,
   },
 });
+
+const NAV_SECTIONS = [
+  ['life', 'Life'],
+  ['train', 'Train'],
+  ['recover', 'Recover'],
+  ['body', 'Body'],
+  ['money', 'Money'],
+  ['fight', 'Fight'],
+  ['tournament', 'Tournaments'],
+  ['rival', 'Rival'],
+  ['coach', 'Coach'],
+  ['social', 'Social'],
+  ['hunter', 'Hunter'],
+  ['world', 'World'],
+];
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -806,6 +823,7 @@ function render() {
       ${renderTabs()}
       <section class="content-panel dossier-panel">${renderActiveTab()}</section>
     </main>
+    ${navMenuOpen ? renderNavMenu() : ''}
     ${renderToast()}
     ${renderMoveIconBurst()}
     ${state.trainingPopup ? renderTrainingPopup() : ''}
@@ -863,7 +881,7 @@ function renderHeader() {
       </div>
       <div class="header-actions">
         <span class="badge ${rarity.color}">${state.clan.rarity}</span>
-        <button class="danger small-btn" data-action="reset">Reset Life</button>
+        <button class="small-btn menu-btn" data-action="nav-menu-open">Menu</button>
       </div>
       <div class="status-grid resource-chips">
         ${metric('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
@@ -884,24 +902,80 @@ function metric(label, value) {
 }
 
 function renderTabs() {
-  const tabs = [
-    ['life', 'Life'],
-    ['train', 'Train'],
-    ['recover', 'Recover'],
-    ['body', 'Body'],
-    ['money', 'Money'],
-    ['fight', 'Fight'],
-    ['tournament', 'Tournaments'],
-    ['rival', 'Rival'],
-    ['coach', 'Coach'],
-    ['social', 'Social'],
-    ...(state.hunterWorld?.unlocked ? [['hunter', 'Hunter']] : []),
-    ['world', 'World'],
-  ];
+  const available = availableNavSections();
+  const favorites = favoriteNavTabs().map((id) => available.find(([tabId]) => tabId === id)).filter(Boolean);
+  const tabs = [available.find(([id]) => id === 'life'), ...favorites].filter(Boolean);
   return `
     <nav class="tabs bottom-nav" aria-label="Main game sections">
       ${tabs.map(([id, label]) => `<button class="tab-btn ${activeTab === id ? 'active' : ''}" data-tab="${id}"><span>${label}</span></button>`).join('')}
+      <button class="tab-btn menu-tab-btn" data-action="nav-menu-open"><span>Menu</span></button>
     </nav>
+  `;
+}
+
+function availableNavSections() {
+  return NAV_SECTIONS.filter(([id]) => id !== 'hunter' || state.hunterWorld?.unlocked);
+}
+
+function favoriteNavTabs() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(NAV_FAVORITES_STORAGE_KEY) ?? '[]');
+    const available = new Set(availableNavSections().map(([id]) => id));
+    return Array.isArray(ids) ? ids.filter((id) => id !== 'life' && available.has(id)).slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavoriteNavTabs(ids) {
+  localStorage.setItem(NAV_FAVORITES_STORAGE_KEY, JSON.stringify(ids.slice(0, 4)));
+}
+
+function toggleFavoriteNavTab(id) {
+  if (id === 'life') return;
+  const favorites = favoriteNavTabs();
+  const next = favorites.includes(id)
+    ? favorites.filter((tabId) => tabId !== id)
+    : favorites.length >= 4
+      ? favorites
+      : [...favorites, id];
+  saveFavoriteNavTabs(next);
+}
+
+function renderNavMenu() {
+  const favorites = new Set(favoriteNavTabs());
+  const favoriteCount = favorites.size;
+  return `
+    <aside class="event-backdrop nav-menu-modal" role="dialog" aria-modal="true">
+      <section class="event-modal nav-menu-panel">
+        <header class="nav-menu-header">
+          <div>
+            <p class="eyebrow">Navigation Menu</p>
+            <h2>Game Sections</h2>
+          </div>
+          <button class="small-btn" data-action="nav-menu-close">Close</button>
+        </header>
+        <p class="muted">Favorite up to 4 sections. Favorites stay beside Life on the main screen.</p>
+        <div class="nav-menu-list">
+          ${availableNavSections().map(([id, label]) => {
+            const favorite = favorites.has(id);
+            const lockedFavorite = id === 'life' || (!favorite && favoriteCount >= 4);
+            return `
+              <article class="nav-menu-row ${activeTab === id ? 'active' : ''}">
+                <button class="nav-menu-section" data-tab="${id}">
+                  <strong>${label}</strong>
+                  <span>${id === 'life' ? 'Always shown' : favorite ? 'Shown on main bar' : 'In menu'}</span>
+                </button>
+                <button class="favorite-nav-toggle ${favorite ? 'selected' : ''}" data-action="favorite-nav-${id}" ${lockedFavorite ? 'disabled' : ''} aria-label="${favorite ? 'Remove' : 'Add'} ${label} ${favorite ? 'from' : 'to'} favorites" title="${id === 'life' ? 'Life is always shown' : favorite ? 'Remove from favorites' : favoriteCount >= 4 ? 'Favorite limit reached' : 'Add to favorites'}">
+                  ${favorite ? '★' : '☆'}
+                </button>
+              </article>
+            `;
+          }).join('')}
+        </div>
+        <button class="danger wide" data-action="reset">Reset Life</button>
+      </section>
+    </aside>
   `;
 }
 
@@ -3219,9 +3293,25 @@ function handleAction(action, source = null) {
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
     systemShopPopupOpen = false;
+    navMenuOpen = false;
     return;
   }
   if (!state) return;
+  if (action === 'nav-menu-open') {
+    navMenuOpen = true;
+    render();
+    return;
+  }
+  if (action === 'nav-menu-close') {
+    navMenuOpen = false;
+    render();
+    return;
+  }
+  if (action.startsWith('favorite-nav-')) {
+    toggleFavoriteNavTab(action.replace('favorite-nav-', ''));
+    render();
+    return;
+  }
   if (action === 'age-up') setState(ageUp(state));
   if (action === 'reroll-clan') {
     if (requiresClanRerollConfirmation(state)) {
@@ -3252,6 +3342,7 @@ function handleAction(action, source = null) {
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
     systemShopPopupOpen = false;
+    navMenuOpen = false;
     render();
   }
   if (action === 'end-life') setState(endLife(state));
@@ -3562,6 +3653,7 @@ document.addEventListener('click', (event) => {
   const tab = event.target.closest('[data-tab]');
   if (tab) {
     activeTab = tab.dataset.tab;
+    navMenuOpen = false;
     render();
     return;
   }
