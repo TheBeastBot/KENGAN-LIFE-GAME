@@ -4574,8 +4574,9 @@ export function endLife(life, ending = {}) {
 export function train(life, actionId) {
   const action = TRAINING_ACTIONS[actionId];
   if (!action) return life;
-  if (getTrainingAllowance(life).exhausted) {
-    return addLog(life, `Training limit reached: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train');
+  const allowance = getTrainingAllowance(life);
+  if (allowance.exhausted) {
+    return addLog(life, `Training limit reached: ${allowance.used}/${allowance.limit} sessions used. Age Up before training again.`, 'train');
   }
   if (life.resources.energy < action.cost) {
     return queueTriggeredEvents(addLog(life, `You are too exhausted for ${action.name}.`, 'train'), 'train', { actionId });
@@ -4713,12 +4714,17 @@ export function getAutoRecoveryStatus(life, actionId) {
 }
 
 export function getTrainingAllowance(life) {
-  const used = clamp(Math.floor(life.trainingSessionsUsed ?? 0), 0, TRAINING_SESSION_LIMIT);
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const vitalityBonus = hunter.unlocked && hunter.playerAwakened
+    ? Math.max(0, Math.floor(hunter.stats?.vitality ?? 0))
+    : 0;
+  const limit = TRAINING_SESSION_LIMIT + vitalityBonus;
+  const used = clamp(Math.floor(life.trainingSessionsUsed ?? 0), 0, limit);
   return {
     used,
-    limit: TRAINING_SESSION_LIMIT,
-    remaining: TRAINING_SESSION_LIMIT - used,
-    exhausted: used >= TRAINING_SESSION_LIMIT,
+    limit,
+    remaining: limit - used,
+    exhausted: used >= limit,
   };
 }
 
@@ -4741,7 +4747,8 @@ function runAutoUpkeep(life) {
   }
   if (trained.length) life.log = [createLog(`Auto training: ${trained.join(', ')} completed without popups.`, 'train'), ...life.log].slice(0, 60);
   if (blockedByLimit && !life.log?.[0]?.text?.includes('Auto training paused')) {
-    life.log = [createLog(`Auto training paused: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train'), ...life.log].slice(0, 60);
+    const allowance = getTrainingAllowance(life);
+    life.log = [createLog(`Auto training paused: ${allowance.used}/${allowance.limit} sessions used. Age Up before training again.`, 'train'), ...life.log].slice(0, 60);
   }
   if (recovered.length) life.log = [createLog(`Auto recovery: ${recovered.join(', ')} completed without popups.`, 'recovery'), ...life.log].slice(0, 60);
   return life;
@@ -4765,7 +4772,10 @@ export function toggleAutoTraining(life, actionId) {
   let result = addLog(next, `Auto training ${enabled ? 'enabled' : 'disabled'}: ${TRAINING_ACTIONS[actionId].name}.`, 'train');
   if (!enabled) return result;
   const trained = applyTrainingNoPopup(result, actionId);
-  if (trained === 'limit') return addLog(result, `Auto training paused: ${TRAINING_SESSION_LIMIT}/${TRAINING_SESSION_LIMIT} sessions used. Age Up before training again.`, 'train');
+  if (trained === 'limit') {
+    const allowance = getTrainingAllowance(result);
+    return addLog(result, `Auto training paused: ${allowance.used}/${allowance.limit} sessions used. Age Up before training again.`, 'train');
+  }
   if (!trained) return addLog(result, `Auto training queued: ${TRAINING_ACTIONS[actionId].name} will run when you have enough energy.`, 'train');
   return addLog(result, `Auto training: ${TRAINING_ACTIONS[actionId].name} ran immediately without popups.`, 'train');
 }

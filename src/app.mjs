@@ -286,7 +286,7 @@ function normalizeSave(save) {
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
-    trainingSessionsUsed: Math.max(0, Math.min(20, Math.floor(save.trainingSessionsUsed ?? 0))),
+    trainingSessionsUsed: Math.max(0, Math.floor(save.trainingSessionsUsed ?? 0)),
     favoriteTrainingIds: Array.isArray(save.favoriteTrainingIds)
       ? save.favoriteTrainingIds.filter((id) => Boolean(TRAINING_ACTIONS[id]))
       : [],

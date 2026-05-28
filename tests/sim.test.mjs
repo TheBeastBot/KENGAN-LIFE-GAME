@@ -30,6 +30,7 @@ import {
   getLockedFights,
   getOpponentStats,
   getOpponentArchetype,
+  getTrainingAllowance,
   getAutoTrainingStatus,
   getCoachedFightOptions,
   getPlayerArchetype,
@@ -1375,6 +1376,35 @@ test('normal training allows twenty completed sessions and blocks the twenty-fir
   assert.equal(blocked.stats.strength, beforeBlocked.strength);
   assert.equal(blocked.resources.energy, beforeBlocked.energy);
   assert.ok(blocked.log[0].text.includes('Age Up'));
+});
+
+test('Hunter Vitality adds one normal training session allowance per point', () => {
+  const base = createNewLife({ gender: 'Female', seed: 1111 });
+  let life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      stats: { ...base.hunterWorld.stats, vitality: 5 },
+    },
+  };
+
+  assert.equal(getTrainingAllowance(life).limit, 25);
+
+  for (let session = 0; session < 25; session += 1) {
+    life = train({ ...life, resources: { ...life.resources, energy: 1000 } }, 'ironBody');
+  }
+  const beforeBlocked = {
+    energy: 1000,
+    durability: life.stats.durability,
+  };
+  const blocked = train({ ...life, resources: { ...life.resources, energy: beforeBlocked.energy } }, 'ironBody');
+
+  assert.equal(life.trainingSessionsUsed, 25);
+  assert.equal(blocked.trainingSessionsUsed, 25);
+  assert.equal(blocked.stats.durability, beforeBlocked.durability);
+  assert.equal(blocked.resources.energy, beforeBlocked.energy);
 });
 
 test('manual and automatic training share one twenty-session allowance', () => {
