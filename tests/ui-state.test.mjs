@@ -87,3 +87,10 @@ test('Hunter combat UI separates Basic and Special move dropdowns and level rewa
   assert.match(appSource, /Special Move/);
   assert.match(appSource, /hunter-level-reward-/);
 });
+
+test('Hunter System Status overrides generic option-card desktop grid', async () => {
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(cssSource, /\.system-status-panel\.option-card\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(cssSource, /\.system-status-panel \.system-chip-row,[\s\S]*\.system-status-panel \.system-objective-line\s*{[\s\S]*grid-column:\s*1 \/ -1;/);
+});
