@@ -44,11 +44,16 @@ body {
 }
 
 body.modal-open {
-  position: fixed;
-  left: 0;
-  right: 0;
-  width: 100%;
   overflow: hidden;
+}
+
+@media (max-width: 560px) {
+  body.modal-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
 }
 
 button {
@@ -2375,6 +2380,7 @@ select:focus {
   place-items: end center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.62);
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 
@@ -2840,9 +2846,13 @@ button:active,
 .nav-menu-panel {
   width: min(100%, 560px);
   max-height: min(86vh, 720px);
-  overflow: auto;
-  overscroll-behavior: contain;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   border-color: rgba(120, 217, 255, 0.42);
   background:
     radial-gradient(circle at 0 0, rgba(120, 217, 255, 0.16), transparent 30%),

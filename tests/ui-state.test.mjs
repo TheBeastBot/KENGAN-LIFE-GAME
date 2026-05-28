@@ -121,6 +121,9 @@ test('popup menus lock background scroll and scroll inside the modal', async () 
 
   assert.match(appSource, /function syncBodyScrollLock/);
   assert.match(appSource, /document\.body\.classList\.add\('modal-open'\)/);
-  assert.match(cssSource, /body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
-  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow:\s*auto;/);
+  assert.match(cssSource, /body\.modal-open\s*{[\s\S]*overflow:\s*hidden;/);
+  assert.match(cssSource, /@media\s*\(max-width:\s*560px\)\s*{[\s\S]*body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
+  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow-y:\s*auto;/);
+  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*touch-action:\s*pan-y;/);
+  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*-webkit-overflow-scrolling:\s*touch;/);
 });
