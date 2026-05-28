@@ -2386,8 +2386,17 @@ select:focus {
 
 .event-modal {
   width: min(100%, 560px);
+  max-height: min(86vh, 720px);
+  max-height: min(86dvh, 720px);
+  min-height: 0;
   display: grid;
   gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   padding: 18px;
   border-radius: 8px;
   border: 1px solid rgba(229, 185, 79, 0.48);
@@ -2845,14 +2854,6 @@ button:active,
 
 .nav-menu-panel {
   width: min(100%, 560px);
-  max-height: min(86vh, 720px);
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
   border-color: rgba(120, 217, 255, 0.42);
   background:
     radial-gradient(circle at 0 0, rgba(120, 217, 255, 0.16), transparent 30%),

@@ -253,6 +253,8 @@ const dropdownState = createDropdownStateController({
     'social-posts': true,
     'hunter-core': true,
     'hunter-actions': true,
+    'hunter-basic-moves': true,
+    'hunter-special-moves': false,
     'world-rumors': true,
   },
 });
@@ -2748,16 +2750,18 @@ function renderHunterMoves(mode = 'quest') {
   };
   const basicMoves = moves.filter((move) => move.moveType !== 'special');
   const specialMoves = moves.filter((move) => move.moveType === 'special');
+  const basicOpen = dropdownState.isOpen('hunter-basic-moves');
+  const specialOpen = dropdownState.isOpen('hunter-special-moves');
   return `
     <section class="hunter-move-groups">
-      <details class="collapsible-section hunter-move-section" open>
+      <details class="collapsible-section hunter-move-section" data-dropdown-id="hunter-basic-moves" ${basicOpen ? 'open' : ''}>
         <summary class="collapsible-summary">
           <span><strong>Basic Moves</strong><em>Repeatable System skills for steady exchanges.</em></span>
           <b>${basicMoves.length}</b>
         </summary>
         <div class="tactic-grid hunter-move-grid">${basicMoves.map(renderMoveCard).join('')}</div>
       </details>
-      <details class="collapsible-section hunter-move-section">
+      <details class="collapsible-section hunter-move-section" data-dropdown-id="hunter-special-moves" ${specialOpen ? 'open' : ''}>
         <summary class="collapsible-summary">
           <span><strong>Special Moves</strong><em>High-impact skills with individual cooldowns.</em></span>
           <b>${specialMoves.length}</b>

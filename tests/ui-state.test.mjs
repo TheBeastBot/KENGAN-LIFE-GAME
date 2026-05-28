@@ -85,6 +85,10 @@ test('Hunter combat UI separates Basic and Special move dropdowns and level rewa
   assert.match(appSource, /Special Moves/);
   assert.match(appSource, /Basic Move/);
   assert.match(appSource, /Special Move/);
+  assert.match(appSource, /'hunter-basic-moves': true/);
+  assert.match(appSource, /'hunter-special-moves': false/);
+  assert.match(appSource, /data-dropdown-id="hunter-basic-moves"/);
+  assert.match(appSource, /data-dropdown-id="hunter-special-moves"/);
   assert.match(appSource, /hunter-level-reward-/);
 });
 
@@ -123,7 +127,7 @@ test('popup menus lock background scroll and scroll inside the modal', async () 
   assert.match(appSource, /document\.body\.classList\.add\('modal-open'\)/);
   assert.match(cssSource, /body\.modal-open\s*{[\s\S]*overflow:\s*hidden;/);
   assert.match(cssSource, /@media\s*\(max-width:\s*560px\)\s*{[\s\S]*body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
-  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow-y:\s*auto;/);
-  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*touch-action:\s*pan-y;/);
-  assert.match(cssSource, /\.nav-menu-panel\s*{[\s\S]*-webkit-overflow-scrolling:\s*touch;/);
+  assert.match(cssSource, /\.event-modal\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow-y:\s*auto;/);
+  assert.match(cssSource, /\.event-modal\s*{[\s\S]*touch-action:\s*pan-y;/);
+  assert.match(cssSource, /\.event-modal\s*{[\s\S]*-webkit-overflow-scrolling:\s*touch;/);
 });
