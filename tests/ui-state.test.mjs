@@ -94,3 +94,11 @@ test('Hunter System Status overrides generic option-card desktop grid', async ()
   assert.match(cssSource, /\.system-status-panel\.option-card\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   assert.match(cssSource, /\.system-status-panel \.system-chip-row,[\s\S]*\.system-status-panel \.system-objective-line\s*{[\s\S]*grid-column:\s*1 \/ -1;/);
 });
+
+test('Hunter activity and quest cards override generic option-card grids', async () => {
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(cssSource, /\.hunter-activity\.option-card\s*{[\s\S]*grid-template-areas:\s*"icon body action";/);
+  assert.match(cssSource, /\.hunter-quest-card\.option-card,[\s\S]*\.system-popup \.hunter-quest-card\.option-card\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(cssSource, /\.quest-choice-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(160px,\s*1fr\)\);/);
+});

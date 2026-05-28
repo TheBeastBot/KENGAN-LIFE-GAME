@@ -2486,6 +2486,28 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  .hunter-activity.option-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "icon body"
+      "action action";
+    gap: 10px;
+  }
+
+  .hunter-activity > .activity-open,
+  .hunter-activity > .lock-pill {
+    justify-self: stretch;
+  }
+
+  .hunter-activity > .activity-open {
+    width: 100%;
+    max-width: none;
+  }
+
+  .gate-offer.option-card {
+    grid-template-columns: 1fr;
+  }
+
   .header-actions {
     justify-items: start;
     grid-template-columns: auto auto;
@@ -2842,6 +2864,59 @@ button:active,
 .system-status-panel .system-chip-row,
 .system-status-panel .system-objective-line {
   grid-column: 1 / -1;
+}
+
+.hunter-activity.option-card {
+  grid-template-columns: 58px minmax(0, 1fr) minmax(96px, auto);
+  grid-template-areas: "icon body action";
+  align-items: center;
+  gap: 14px;
+}
+
+.hunter-activity .hunter-icon {
+  grid-area: icon;
+}
+
+.hunter-activity > div:not(.hunter-icon) {
+  grid-area: body;
+  min-width: 0;
+}
+
+.hunter-activity > .activity-open,
+.hunter-activity > .lock-pill {
+  grid-area: action;
+  justify-self: end;
+}
+
+.hunter-activity > .activity-open {
+  width: auto;
+  min-width: 96px;
+  max-width: 180px;
+}
+
+.hunter-quest-card.option-card,
+.system-popup .hunter-quest-card.option-card {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.hunter-quest-card > .compact-action-grid,
+.hunter-quest-card > .wide,
+.hunter-quest-card > button {
+  grid-column: 1 / -1;
+}
+
+.quest-choice-grid {
+  width: 100%;
+  max-width: 640px;
+  justify-self: stretch;
+  align-self: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.gate-offer.option-card {
+  grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+  align-items: center;
 }
 
 .exchange-log article.new-exchange {
