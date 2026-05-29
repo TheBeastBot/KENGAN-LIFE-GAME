@@ -891,10 +891,6 @@ select:focus {
 
 .hunter-quest-popup {
   width: min(100%, 720px);
-  max-height: min(86vh, 820px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   border-color: rgba(120, 217, 255, 0.5);
   background:
     radial-gradient(circle at 20% 0, rgba(120, 217, 255, 0.14), transparent 34%),
@@ -2380,24 +2376,13 @@ select:focus {
   place-items: end center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.62);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
 }
 
 .event-modal {
   width: min(100%, 560px);
-  max-height: min(86vh, 720px);
-  max-height: min(86dvh, 720px);
-  min-height: 0;
   display: grid;
   gap: 14px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
   padding: 18px;
   border-radius: 8px;
   border: 1px solid rgba(229, 185, 79, 0.48);
@@ -2405,6 +2390,35 @@ select:focus {
     linear-gradient(135deg, rgba(229, 185, 79, 0.12), rgba(222, 63, 79, 0.1)),
     var(--panel);
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55);
+}
+
+.screen-view {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+}
+
+.screen-panel {
+  width: min(100%, 860px);
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+  border-inline: 1px solid rgba(229, 185, 79, 0.24);
+  background:
+    linear-gradient(180deg, rgba(222, 63, 79, 0.09), transparent 22rem),
+    var(--panel);
 }
 
 .event-modal h2 {
@@ -2855,6 +2869,8 @@ button:active,
 
 .nav-menu-panel {
   width: min(100%, 560px);
+  min-height: 100vh;
+  min-height: 100dvh;
   border-color: rgba(120, 217, 255, 0.42);
   background:
     radial-gradient(circle at 0 0, rgba(120, 217, 255, 0.16), transparent 30%),

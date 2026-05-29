@@ -134,19 +134,22 @@ test('main navigation uses menu with four favorite section slots', async () => {
   assert.match(cssSource, /\.nav-menu-row\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\) 48px;/);
 });
 
-test('popup menus lock background scroll and scroll inside the modal', async () => {
+test('large popup menus use full-screen scroll views while small popups stay modal cards', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
   assert.match(appSource, /function syncBodyScrollLock/);
   assert.match(appSource, /document\.body\.classList\.add\('modal-open'\)/);
-  assert.match(appSource, /function activeScrollableModalFromEvent/);
-  assert.match(appSource, /document\.addEventListener\('wheel'[\s\S]*passive:\s*false/);
-  assert.match(appSource, /document\.addEventListener\('touchmove'[\s\S]*passive:\s*false/);
+  assert.doesNotMatch(appSource, /function activeScrollableModalFromEvent/);
+  assert.doesNotMatch(appSource, /function clampModalScroll/);
+  assert.match(appSource, /<aside class="screen-view nav-menu-modal"/);
+  assert.match(appSource, /<aside class="screen-view hunter-quest-modal"/);
+  assert.match(appSource, /<section class="screen-view">/);
+  assert.match(appSource, /<section class="event-backdrop" role="dialog" aria-modal="true">\s*<article class="event-modal training-modal">/);
   assert.match(cssSource, /body\.modal-open\s*{[\s\S]*overflow:\s*hidden;/);
   assert.match(cssSource, /@media\s*\(max-width:\s*560px\)\s*{[\s\S]*body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
-  assert.match(cssSource, /\.event-backdrop\s*{[\s\S]*overflow-y:\s*auto;/);
-  assert.match(cssSource, /\.event-modal\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow-y:\s*auto;/);
-  assert.match(cssSource, /\.event-modal\s*{[\s\S]*touch-action:\s*pan-y;/);
-  assert.match(cssSource, /\.event-modal\s*{[\s\S]*-webkit-overflow-scrolling:\s*touch;/);
+  assert.match(cssSource, /\.event-backdrop\s*{[\s\S]*overflow:\s*hidden;/);
+  assert.match(cssSource, /\.screen-view\s*{[\s\S]*overflow-y:\s*auto;/);
+  assert.match(cssSource, /\.screen-view\s*{[\s\S]*touch-action:\s*pan-y;/);
+  assert.match(cssSource, /\.screen-panel\s*{[\s\S]*min-height:\s*100dvh;/);
 });

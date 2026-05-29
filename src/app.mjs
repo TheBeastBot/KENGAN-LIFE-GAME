@@ -235,7 +235,6 @@ let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
 let modalScrollLockY = null;
-let modalTouchScroll = null;
 const MOVE_ICON_BURST_DURATION_MS = 500;
 
 const app = document.querySelector('#app');
@@ -875,20 +874,6 @@ function syncBodyScrollLock(forceOpen = hasOpenModal()) {
   }
 }
 
-function activeScrollableModalFromEvent(event) {
-  if (!document.body.classList.contains('modal-open')) return null;
-  return event.target?.closest?.('.event-modal') ?? null;
-}
-
-function clampModalScroll(modal, deltaY) {
-  if (!modal || !Number.isFinite(deltaY)) return 0;
-  const maxScroll = Math.max(0, modal.scrollHeight - modal.clientHeight);
-  const nextScroll = Math.min(maxScroll, Math.max(0, modal.scrollTop + deltaY));
-  const applied = nextScroll - modal.scrollTop;
-  modal.scrollTop = nextScroll;
-  return applied;
-}
-
 function renderToast() {
   if (!uiFeedback.toast) return '';
   return `<aside class="action-toast" aria-live="polite">${escapeHtml(uiFeedback.toast)}</aside>`;
@@ -999,8 +984,8 @@ function renderNavMenu() {
   const favorites = new Set(favoriteNavTabs());
   const favoriteCount = favorites.size;
   return `
-    <aside class="event-backdrop nav-menu-modal" role="dialog" aria-modal="true">
-      <section class="event-modal nav-menu-panel">
+    <aside class="screen-view nav-menu-modal" role="dialog" aria-modal="true">
+      <section class="screen-panel nav-menu-panel">
         <header class="nav-menu-header">
           <div>
             <p class="eyebrow">Navigation Menu</p>
@@ -2659,8 +2644,8 @@ function renderHunterQuestPopup() {
   const quest = state.hunterWorld?.dailyQuest;
   if (!quest && state.activeFight?.source !== 'hunterQuest') return '';
   return `
-    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup system-popup" data-scroll-key="hunter-quest">
+    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="hunter-quest">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">System Daily Quest</p>
@@ -2796,8 +2781,8 @@ function renderHunterLevelRewardPopup() {
   const pending = hunter.pendingLevelRewards[0];
   if (!pending) return '';
   return `
-    <section class="event-overlay">
-      <article class="event-modal system-popup hunter-level-reward-popup" data-scroll-key="hunter-level-reward">
+    <section class="screen-view">
+      <article class="screen-panel system-popup hunter-level-reward-popup" data-scroll-key="hunter-level-reward">
         <header class="hunter-popup-header">
           <div>
             <span class="system-chip">System Level Up</span>
@@ -2967,8 +2952,8 @@ function renderHunterDungeonPanel() {
 function renderHunterDungeonPopup() {
   if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
   return `
-    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup dungeon-popup system-popup" data-scroll-key="hunter-dungeon">
+    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="screen-panel hunter-quest-popup dungeon-popup system-popup" data-scroll-key="hunter-dungeon">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">Gate Board</p>
@@ -3010,8 +2995,8 @@ function renderSystemShopPopup() {
     `;
   };
   return `
-    <aside class="event-backdrop hunter-quest-modal" role="dialog" aria-modal="true">
-      <section class="event-modal hunter-quest-popup system-popup" data-scroll-key="system-shop">
+    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+      <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="system-shop">
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">System Shop</p>
@@ -3732,34 +3717,6 @@ document.addEventListener('toggle', (event) => {
   const id = dropdown.dataset.dropdownId;
   if (dropdownState.isOpen(id) !== dropdown.open) dropdownState.setOpen(id, dropdown.open);
 }, true);
-
-document.addEventListener('wheel', (event) => {
-  const modal = activeScrollableModalFromEvent(event);
-  if (!document.body.classList.contains('modal-open')) return;
-  if (modal) clampModalScroll(modal, event.deltaY);
-  if (event.cancelable) event.preventDefault();
-}, { capture: true, passive: false });
-
-document.addEventListener('touchstart', (event) => {
-  const modal = activeScrollableModalFromEvent(event);
-  modalTouchScroll = modal && event.touches?.length ? { modal, y: event.touches[0].clientY } : null;
-}, { capture: true, passive: true });
-
-document.addEventListener('touchmove', (event) => {
-  if (!document.body.classList.contains('modal-open')) return;
-  const modal = activeScrollableModalFromEvent(event) ?? modalTouchScroll?.modal;
-  if (modal && event.touches?.length) {
-    const y = event.touches[0].clientY;
-    const previousY = modalTouchScroll?.y ?? y;
-    clampModalScroll(modal, previousY - y);
-    modalTouchScroll = { modal, y };
-  }
-  if (event.cancelable) event.preventDefault();
-}, { capture: true, passive: false });
-
-document.addEventListener('touchend', () => {
-  modalTouchScroll = null;
-}, { capture: true, passive: true });
 
 document.addEventListener('pointerdown', (event) => {
   if (!moveIconBurst) return;
