@@ -20,6 +20,11 @@ export function createDropdownStateController({ storage, storageKey, defaults = 
       persist();
       return saved[id];
     },
+    setOpen(id, open) {
+      saved[id] = Boolean(open);
+      persist();
+      return saved[id];
+    },
   };
 }
 

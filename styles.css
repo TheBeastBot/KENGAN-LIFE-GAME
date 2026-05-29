@@ -2380,7 +2380,8 @@ select:focus {
   place-items: end center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.62);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
 }
 

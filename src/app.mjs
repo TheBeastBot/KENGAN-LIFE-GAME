@@ -235,6 +235,7 @@ let feedbackTimer = null;
 let autoRoutineTimer = null;
 let moveIconBurstTimer = null;
 let modalScrollLockY = null;
+let modalTouchScroll = null;
 const MOVE_ICON_BURST_DURATION_MS = 500;
 
 const app = document.querySelector('#app');
@@ -872,6 +873,20 @@ function syncBodyScrollLock(forceOpen = hasOpenModal()) {
     document.body.style.top = '';
     window.scrollTo({ top: restoreY, behavior: 'auto' });
   }
+}
+
+function activeScrollableModalFromEvent(event) {
+  if (!document.body.classList.contains('modal-open')) return null;
+  return event.target?.closest?.('.event-modal') ?? null;
+}
+
+function clampModalScroll(modal, deltaY) {
+  if (!modal || !Number.isFinite(deltaY)) return 0;
+  const maxScroll = Math.max(0, modal.scrollHeight - modal.clientHeight);
+  const nextScroll = Math.min(maxScroll, Math.max(0, modal.scrollTop + deltaY));
+  const applied = nextScroll - modal.scrollTop;
+  modal.scrollTop = nextScroll;
+  return applied;
 }
 
 function renderToast() {
@@ -3715,8 +3730,36 @@ document.addEventListener('toggle', (event) => {
   const dropdown = event.target?.closest?.('[data-dropdown-id]');
   if (!dropdown || event.target !== dropdown) return;
   const id = dropdown.dataset.dropdownId;
-  if (dropdownState.isOpen(id) !== dropdown.open) dropdownState.toggle(id);
+  if (dropdownState.isOpen(id) !== dropdown.open) dropdownState.setOpen(id, dropdown.open);
 }, true);
+
+document.addEventListener('wheel', (event) => {
+  const modal = activeScrollableModalFromEvent(event);
+  if (!document.body.classList.contains('modal-open')) return;
+  if (modal) clampModalScroll(modal, event.deltaY);
+  if (event.cancelable) event.preventDefault();
+}, { capture: true, passive: false });
+
+document.addEventListener('touchstart', (event) => {
+  const modal = activeScrollableModalFromEvent(event);
+  modalTouchScroll = modal && event.touches?.length ? { modal, y: event.touches[0].clientY } : null;
+}, { capture: true, passive: true });
+
+document.addEventListener('touchmove', (event) => {
+  if (!document.body.classList.contains('modal-open')) return;
+  const modal = activeScrollableModalFromEvent(event) ?? modalTouchScroll?.modal;
+  if (modal && event.touches?.length) {
+    const y = event.touches[0].clientY;
+    const previousY = modalTouchScroll?.y ?? y;
+    clampModalScroll(modal, previousY - y);
+    modalTouchScroll = { modal, y };
+  }
+  if (event.cancelable) event.preventDefault();
+}, { capture: true, passive: false });
+
+document.addEventListener('touchend', () => {
+  modalTouchScroll = null;
+}, { capture: true, passive: true });
 
 document.addEventListener('pointerdown', (event) => {
   if (!moveIconBurst) return;

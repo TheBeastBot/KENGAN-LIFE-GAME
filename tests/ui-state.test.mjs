@@ -53,6 +53,21 @@ test('dropdown toggles are persisted and override defaults', () => {
   assert.equal(reloaded.isOpen('history'), true);
 });
 
+test('dropdown state can be set explicitly without double-toggle drift', () => {
+  const storage = memoryStorage();
+  const controller = createDropdownStateController({
+    storage,
+    storageKey: 'test-dropdowns',
+    defaults: { special: false },
+  });
+
+  assert.equal(controller.setOpen('special', true), true);
+  assert.equal(controller.setOpen('special', true), true);
+  assert.equal(controller.isOpen('special'), true);
+  assert.equal(controller.setOpen('special', false), false);
+  assert.equal(controller.isOpen('special'), false);
+});
+
 test('popup scroll snapshots restore the matching rerendered surface without smooth scrolling', () => {
   const previous = { scrollTop: 284, dataset: { scrollKey: 'hunter-dungeon' } };
   const next = { scrollTop: 0 };
@@ -125,8 +140,12 @@ test('popup menus lock background scroll and scroll inside the modal', async () 
 
   assert.match(appSource, /function syncBodyScrollLock/);
   assert.match(appSource, /document\.body\.classList\.add\('modal-open'\)/);
+  assert.match(appSource, /function activeScrollableModalFromEvent/);
+  assert.match(appSource, /document\.addEventListener\('wheel'[\s\S]*passive:\s*false/);
+  assert.match(appSource, /document\.addEventListener\('touchmove'[\s\S]*passive:\s*false/);
   assert.match(cssSource, /body\.modal-open\s*{[\s\S]*overflow:\s*hidden;/);
   assert.match(cssSource, /@media\s*\(max-width:\s*560px\)\s*{[\s\S]*body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
+  assert.match(cssSource, /\.event-backdrop\s*{[\s\S]*overflow-y:\s*auto;/);
   assert.match(cssSource, /\.event-modal\s*{[\s\S]*max-height:\s*min\(86vh,\s*720px\);[\s\S]*overflow-y:\s*auto;/);
   assert.match(cssSource, /\.event-modal\s*{[\s\S]*touch-action:\s*pan-y;/);
   assert.match(cssSource, /\.event-modal\s*{[\s\S]*-webkit-overflow-scrolling:\s*touch;/);
