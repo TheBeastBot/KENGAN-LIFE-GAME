@@ -885,12 +885,7 @@ select:focus {
   gap: 10px;
 }
 
-.hunter-quest-modal {
-  z-index: 12;
-}
-
 .hunter-quest-popup {
-  width: min(100%, 720px);
   border-color: rgba(120, 217, 255, 0.5);
   background:
     radial-gradient(circle at 20% 0, rgba(120, 217, 255, 0.14), transparent 34%),
@@ -998,10 +993,6 @@ select:focus {
 .danger-copy {
   color: #f18488;
   font-weight: 700;
-}
-
-.dungeon-popup {
-  width: min(100%, 780px);
 }
 
 .dungeon-report .report-grid {
@@ -2393,16 +2384,8 @@ select:focus {
 }
 
 .screen-view {
-  position: fixed;
-  inset: 0;
-  z-index: 12;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
   background: var(--bg);
 }
 
@@ -2863,12 +2846,7 @@ button:active,
   margin-left: auto;
 }
 
-.nav-menu-modal {
-  z-index: 14;
-}
-
 .nav-menu-panel {
-  width: min(100%, 560px);
   min-height: 100vh;
   min-height: 100dvh;
   border-color: rgba(120, 217, 255, 0.42);

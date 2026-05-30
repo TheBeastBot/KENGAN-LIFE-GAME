@@ -134,7 +134,7 @@ test('main navigation uses menu with four favorite section slots', async () => {
   assert.match(cssSource, /\.nav-menu-row\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\) 48px;/);
 });
 
-test('large popup menus use full-screen scroll views while small popups stay modal cards', async () => {
+test('large popup menus use replacement screens while small popups stay modal cards', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
@@ -142,14 +142,14 @@ test('large popup menus use full-screen scroll views while small popups stay mod
   assert.match(appSource, /document\.body\.classList\.add\('modal-open'\)/);
   assert.doesNotMatch(appSource, /function activeScrollableModalFromEvent/);
   assert.doesNotMatch(appSource, /function clampModalScroll/);
-  assert.match(appSource, /<aside class="screen-view nav-menu-modal"/);
-  assert.match(appSource, /<aside class="screen-view hunter-quest-modal"/);
-  assert.match(appSource, /<section class="screen-view">/);
+  assert.match(appSource, /function renderFullScreenView/);
+  assert.match(appSource, /<main class="screen-view nav-menu-screen"/);
+  assert.match(appSource, /<main class="screen-view hunter-screen"/);
+  assert.match(appSource, /<main class="screen-view">/);
   assert.match(appSource, /<section class="event-backdrop" role="dialog" aria-modal="true">\s*<article class="event-modal training-modal">/);
   assert.match(cssSource, /body\.modal-open\s*{[\s\S]*overflow:\s*hidden;/);
   assert.match(cssSource, /@media\s*\(max-width:\s*560px\)\s*{[\s\S]*body\.modal-open\s*{[\s\S]*position:\s*fixed;/);
   assert.match(cssSource, /\.event-backdrop\s*{[\s\S]*overflow:\s*hidden;/);
-  assert.match(cssSource, /\.screen-view\s*{[\s\S]*overflow-y:\s*auto;/);
-  assert.match(cssSource, /\.screen-view\s*{[\s\S]*touch-action:\s*pan-y;/);
+  assert.doesNotMatch(cssSource, /\.screen-view\s*{[\s\S]*position:\s*fixed;/);
   assert.match(cssSource, /\.screen-panel\s*{[\s\S]*min-height:\s*100dvh;/);
 });

@@ -822,39 +822,39 @@ function render() {
     return;
   }
 
-  app.innerHTML = `
+  const fullScreenView = renderFullScreenView();
+  app.innerHTML = fullScreenView || `
     <main class="shell game-shell dossier-shell">
       ${renderHeader()}
       ${renderTabs()}
       <section class="content-panel dossier-panel">${renderActiveTab()}</section>
     </main>
-    ${navMenuOpen ? renderNavMenu() : ''}
+  `;
+  app.innerHTML += `
     ${renderToast()}
     ${renderMoveIconBurst()}
     ${state.trainingPopup ? renderTrainingPopup() : ''}
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
-    ${renderHunterQuestPopup()}
-    ${renderHunterDungeonPopup()}
-    ${renderHunterLevelRewardPopup()}
-    ${renderSystemShopPopup()}
     ${state.pendingEvent ? renderPendingEvent() : ''}
   `;
   syncBodyScrollLock();
 }
 
+function renderFullScreenView() {
+  return navMenuOpen
+    ? renderNavMenu()
+    : renderHunterLevelRewardPopup()
+      || renderHunterQuestPopup()
+      || renderHunterDungeonPopup()
+      || renderSystemShopPopup();
+}
+
 function hasOpenModal() {
   if (!state) return false;
   return Boolean(
-    navMenuOpen ||
     state.trainingPopup ||
     state.social?.lastPost ||
-    state.pendingEvent ||
-    state.hunterWorld?.pendingLevelRewards?.length ||
-    systemShopPopupOpen ||
-    hunterQuestPopupOpen ||
-    hunterDungeonPopupOpen ||
-    state.activeFight?.source === 'hunterQuest' ||
-    state.activeFight?.source === 'hunterDungeon'
+    state.pendingEvent
   );
 }
 
@@ -984,7 +984,7 @@ function renderNavMenu() {
   const favorites = new Set(favoriteNavTabs());
   const favoriteCount = favorites.size;
   return `
-    <aside class="screen-view nav-menu-modal" role="dialog" aria-modal="true">
+    <main class="screen-view nav-menu-screen">
       <section class="screen-panel nav-menu-panel">
         <header class="nav-menu-header">
           <div>
@@ -1013,7 +1013,7 @@ function renderNavMenu() {
         </div>
         <button class="danger wide" data-action="reset">Reset Life</button>
       </section>
-    </aside>
+    </main>
   `;
 }
 
@@ -2644,7 +2644,7 @@ function renderHunterQuestPopup() {
   const quest = state.hunterWorld?.dailyQuest;
   if (!quest && state.activeFight?.source !== 'hunterQuest') return '';
   return `
-    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+    <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="hunter-quest">
         <div class="hunter-popup-header">
           <div>
@@ -2655,7 +2655,7 @@ function renderHunterQuestPopup() {
         </div>
         ${state.activeFight?.source === 'hunterQuest' ? renderHunterMonsterFight() : renderHunterQuestPanel()}
       </section>
-    </aside>
+    </main>
   `;
 }
 
@@ -2781,7 +2781,7 @@ function renderHunterLevelRewardPopup() {
   const pending = hunter.pendingLevelRewards[0];
   if (!pending) return '';
   return `
-    <section class="screen-view">
+    <main class="screen-view">
       <article class="screen-panel system-popup hunter-level-reward-popup" data-scroll-key="hunter-level-reward">
         <header class="hunter-popup-header">
           <div>
@@ -2799,7 +2799,7 @@ function renderHunterLevelRewardPopup() {
           `).join('')}
         </section>
       </article>
-    </section>
+    </main>
   `;
 }
 
@@ -2952,7 +2952,7 @@ function renderHunterDungeonPanel() {
 function renderHunterDungeonPopup() {
   if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
   return `
-    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+    <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup dungeon-popup system-popup" data-scroll-key="hunter-dungeon">
         <div class="hunter-popup-header">
           <div>
@@ -2963,7 +2963,7 @@ function renderHunterDungeonPopup() {
         </div>
         ${state.activeFight?.source === 'hunterDungeon' ? renderHunterMonsterFight('dungeon') : renderHunterDungeonPanel()}
       </section>
-    </aside>
+    </main>
   `;
 }
 
@@ -2995,7 +2995,7 @@ function renderSystemShopPopup() {
     `;
   };
   return `
-    <aside class="screen-view hunter-quest-modal" role="dialog" aria-modal="true">
+    <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="system-shop">
         <div class="hunter-popup-header">
           <div>
@@ -3014,7 +3014,7 @@ function renderSystemShopPopup() {
           ${items.map(itemCard).join('')}
         </div>
       </section>
-    </aside>
+    </main>
   `;
 }
 
