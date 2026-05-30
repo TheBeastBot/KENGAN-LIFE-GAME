@@ -70,6 +70,12 @@ const DEFAULT_HUNTER_WORLD = {
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
+const SYSTEM_PERK_VALUES = {
+  executeCooldownMinus1: 1,
+  specialStaminaMinus2: 2,
+  basicDamagePlus5: 1.05,
+  conservePlus6: 6,
+};
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
   D: { level: 5, gatesCleared: 3, power: 135 },
@@ -3524,11 +3530,19 @@ function hasSystemPerk(life, perk) {
   return normalizeHunterWorld(life.hunterWorld).unlockedSystemPerks.includes(perk);
 }
 
+function systemPerkValue(life, perk, fallback = 0) {
+  return hasSystemPerk(life, perk) ? SYSTEM_PERK_VALUES[perk] ?? fallback : fallback;
+}
+
 function createHunterLevelRewardChoice(life, level) {
-  const optionIds = Object.keys(HUNTER_LEVEL_REWARD_OPTIONS)
-    .map((id) => ({
-      id,
-      roll: deterministicRoll(life.rngSeed, 'hunter-level-reward', level, lifeMonth(life), id),
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  const availableOptions = Object.values(HUNTER_LEVEL_REWARD_OPTIONS)
+    .filter((option) => option.type !== 'perk' || !hunter.unlockedSystemPerks.includes(option.perk));
+  const pool = availableOptions.length >= 5 ? availableOptions : Object.values(HUNTER_LEVEL_REWARD_OPTIONS);
+  const optionIds = pool
+    .map((option) => ({
+      id: option.id,
+      roll: deterministicRoll(life.rngSeed, 'hunter-level-reward', level, lifeMonth(life), option.id),
     }))
     .sort((a, b) => a.roll - b.roll || a.id.localeCompare(b.id))
     .slice(0, 5)
@@ -5636,12 +5650,12 @@ function hunterMoveDisabledReason(life, move) {
 }
 
 function hunterMoveStaminaCost(life, move) {
-  const discount = move.moveType === 'special' && hasSystemPerk(life, 'specialStaminaMinus2') ? 2 : 0;
+  const discount = move.moveType === 'special' ? systemPerkValue(life, 'specialStaminaMinus2') : 0;
   return Math.max(0, Math.floor((move.staminaCost ?? 0) - discount));
 }
 
 function hunterSpecialCooldown(life, move) {
-  const reduction = move.id === 'execute' && hasSystemPerk(life, 'executeCooldownMinus1') ? 1 : 0;
+  const reduction = move.id === 'execute' ? systemPerkValue(life, 'executeCooldownMinus1') : 0;
   return Math.max(1, Math.floor((move.cooldown ?? HUNTER_SPECIAL_COOLDOWN) - reduction));
 }
 
@@ -7857,7 +7871,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
   const executeBonus = move.id === 'execute' ? Math.round(hurtPercent / 4) : 0;
   const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
-  const basicDamageMultiplier = move.moveType === 'basic' && hasSystemPerk(next, 'basicDamagePlus5') ? 1.05 : 1;
+  const basicDamageMultiplier = move.moveType === 'basic' ? systemPerkValue(next, 'basicDamagePlus5', 1) : 1;
   const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
@@ -7872,10 +7886,12 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const enemyDamage = dodged ? 0 : baseEnemyDamage;
 
   tickHunterMoveCooldowns(fight);
-  if (move.moveType === 'special') fight.moveCooldowns[move.id] = hunterSpecialCooldown(next, move);
+  const appliedCooldown = move.moveType === 'special' ? hunterSpecialCooldown(next, move) : 0;
+  if (move.moveType === 'special') fight.moveCooldowns[move.id] = appliedCooldown;
   fight.systemAnalysis = move.id === 'analyzeWeakness';
+  const conserveGain = 18 + systemPerkValue(next, 'conservePlus6');
   fight.meters.playerStamina = move.id === 'conserve'
-    ? clamp(fight.meters.playerStamina + (hasSystemPerk(next, 'conservePlus6') ? 24 : 18), 0, fight.meters.maxPlayerStamina ?? 100)
+    ? clamp(fight.meters.playerStamina + conserveGain, 0, fight.meters.maxPlayerStamina ?? 100)
     : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
@@ -7896,6 +7912,10 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     : fight.systemAnalysis
       ? ' The previous analysis turns one monster habit into a target.'
       : '';
+  const perkLine = [
+    move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.` : '',
+    appliedCooldown ? ` Cooldown set: ${appliedCooldown} exchange${appliedCooldown === 1 ? '' : 's'}.` : '',
+  ].join('');
   fight.exchanges.unshift({
     round: fight.round,
     tactic: move.category,
@@ -7906,7 +7926,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     opponentMoveId: enemyMove.id,
     opponentMoveLabel: enemyMove.label,
     opponentMoveText: enemyMove.text,
-    text: `Exchange ${fight.round} - ${move.label}: ${move.text} ${monsterLine} Damage: You dealt ${playerDamage}. You took ${enemyDamage}.${critical ? ' Critical System hit.' : ''}${analysisLine}`,
+    text: `Exchange ${fight.round} - ${move.label}: ${move.text} ${monsterLine} Damage: You dealt ${playerDamage}. You took ${enemyDamage}.${critical ? ' Critical System hit.' : ''}${analysisLine}${perkLine}`,
     playerDamage,
     basePlayerDamage,
     enemyDamage,

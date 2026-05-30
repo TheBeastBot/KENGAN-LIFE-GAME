@@ -2761,11 +2761,18 @@ function renderHunterMoves(mode = 'quest') {
   };
   const renderMoveCard = (move) => {
     const moveTypeLabel = move.moveType === 'special' ? 'Special Move' : 'Basic Move';
+    const perks = new Set(state.hunterWorld?.unlockedSystemPerks ?? []);
+    const perkHint = [
+      move.id === 'execute' && perks.has('executeCooldownMinus1') ? 'Execute cooldown -1 active.' : '',
+      move.id === 'conserve' && perks.has('conservePlus6') ? 'Conserve restores 24 mana.' : '',
+      move.moveType === 'special' && perks.has('specialStaminaMinus2') ? 'Special stamina cost -2 active.' : '',
+      move.moveType === 'basic' && move.id !== 'conserve' && perks.has('basicDamagePlus5') ? 'Basic damage +5% active.' : '',
+    ].filter(Boolean).join(' ');
     return `
       <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
         <em>${escapeHtml(moveTypeLabel)}</em>
         <strong>${escapeHtml(move.label)}</strong>
-        <span>${escapeHtml(move.disabledReason || move.hint)}</span>
+        <span>${escapeHtml(move.disabledReason || perkHint || move.hint)}</span>
       </button>
     `;
   };
