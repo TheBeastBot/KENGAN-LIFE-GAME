@@ -5,6 +5,7 @@ import {
   FIGHT_MOVES,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
   MONEY_ACTIONS,
@@ -19,6 +20,8 @@ import {
   ageUp,
   createNewLife,
   buySystemItem,
+  useHunterItem,
+  equipHunterItem,
   endLife,
   getAvailableFights,
   getAdaptedOpponent,
@@ -224,6 +227,7 @@ let selectedFightCategory = null;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
+let hunterItemsPopupOpen = false;
 let navMenuOpen = false;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
@@ -364,6 +368,22 @@ function normalizeClanAwakening(awakening, clan) {
   };
 }
 
+function normalizeHunterInventory(inventory = []) {
+  if (!Array.isArray(inventory)) return [];
+  const stacks = new Map();
+  for (const entry of inventory) {
+    const id = typeof entry === 'string' ? entry : entry?.id;
+    if (!HUNTER_ITEM_CATALOG[id]) continue;
+    const quantity = typeof entry === 'string' ? 1 : Math.max(1, Math.floor(entry.quantity ?? 1));
+    stacks.set(id, (stacks.get(id) ?? 0) + quantity);
+  }
+  return [...stacks.entries()].map(([id, quantity]) => ({ id, quantity }));
+}
+
+function hunterItemQuantity(hunter, itemId) {
+  return normalizeHunterInventory(hunter?.inventory).find((item) => item.id === itemId)?.quantity ?? 0;
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   return {
     ...DEFAULT_HUNTER_WORLD,
@@ -381,7 +401,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld?.dailyQuestsCompleted ?? 0)),
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
     shadowArmy: Array.isArray(hunterWorld?.shadowArmy) ? hunterWorld.shadowArmy : [],
-    inventory: Array.isArray(hunterWorld?.inventory) ? hunterWorld.inventory : [],
+    inventory: normalizeHunterInventory(hunterWorld?.inventory),
     equippedWeapon: typeof hunterWorld?.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld?.gateOffers) ? hunterWorld.gateOffers.slice(0, 3) : [],
     activeDungeon: hunterWorld?.activeDungeon ?? null,
@@ -846,6 +866,7 @@ function renderFullScreenView() {
     : renderHunterLevelRewardPopup()
       || renderHunterQuestPopup()
       || renderHunterDungeonPopup()
+      || renderHunterItemsPopup()
       || renderSystemShopPopup();
 }
 
@@ -2972,7 +2993,7 @@ function renderSystemShopPopup() {
   const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
   const items = Object.values(SYSTEM_SHOP_ITEMS);
   const itemCard = (item) => {
-    const owned = hunter.inventory?.includes(item.id);
+    const owned = hunterItemQuantity(hunter, item.id) > 0;
     const equipped = hunter.equippedWeapon === item.id;
     const canAfford = state.resources.money >= item.cost;
     const actionLabel = item.type === 'weapon' && owned
@@ -2987,8 +3008,9 @@ function renderSystemShopPopup() {
           <p class="eyebrow">${item.type === 'weapon' ? 'System Weapon' : 'System Potion'}</p>
           <h3>${escapeHtml(item.label)}</h3>
           <p>${escapeHtml(item.description)}</p>
+          <p class="muted">${item.type === 'weapon' ? 'Weapons equip from Items after purchase.' : 'Consumables are stored and used from Items.'}</p>
           ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
-          ${owned ? `<span class="badge ${equipped ? 'green' : ''}">${equipped ? 'Equipped' : 'Owned'}</span>` : ''}
+          ${owned ? `<span class="badge ${equipped ? 'green' : ''}">${equipped ? 'Equipped' : `Owned x${hunterItemQuantity(hunter, item.id)}`}</span>` : ''}
         </div>
         <button class="${item.type === 'weapon' ? 'primary' : ''}" data-action="${action}" ${disabled}>${actionLabel}</button>
       </article>
@@ -3008,10 +3030,71 @@ function renderSystemShopPopup() {
         <div class="system-chip-row">
           ${systemChip('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
           ${systemChip('Stamina', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
-          ${systemChip('Equipped', hunter.equippedWeapon ? SYSTEM_SHOP_ITEMS[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Equipped', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Items', normalizeHunterInventory(hunter.inventory).reduce((sum, item) => sum + item.quantity, 0))}
         </div>
         <div class="activity-list shop-grid">
           ${items.map(itemCard).join('')}
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function itemTypeLabel(item) {
+  return {
+    consumable: 'Consumable',
+    weapon: 'Weapon',
+    material: 'Material',
+    special: 'Special Item',
+  }[item.type] ?? labelize(item.type);
+}
+
+function renderHunterItemsPopup() {
+  if (!hunterItemsPopupOpen) return '';
+  const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
+  const inventory = normalizeHunterInventory(hunter.inventory)
+    .map((stack) => ({ ...stack, item: HUNTER_ITEM_CATALOG[stack.id] }))
+    .filter((stack) => stack.item);
+  const itemCard = ({ id, quantity, item }) => {
+    const equipped = hunter.equippedWeapon === id;
+    const move = item.moveId ? HUNTER_MOVES[item.moveId] : null;
+    const action = item.type === 'weapon'
+      ? `<button class="primary" data-action="hunter-item-equip-${id}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>`
+      : ['consumable', 'special'].includes(item.type)
+        ? `<button class="primary" data-action="hunter-item-use-${id}">Use</button>`
+        : '<span class="badge">Crafting material</span>';
+    return `
+      <article class="option-card system-window hunter-item-card ${item.type} rarity-${item.rarity ?? 'common'}">
+        <div>
+          <p class="eyebrow">${escapeHtml(itemTypeLabel(item))} / ${escapeHtml(item.rarity ?? 'common')}</p>
+          <h3>${escapeHtml(item.label)} <span class="muted">x${quantity}</span></h3>
+          <p>${escapeHtml(item.description)}</p>
+          ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
+          ${item.type === 'material' ? '<p class="muted">Saved for future crafting and upgrades.</p>' : ''}
+        </div>
+        ${action}
+      </article>
+    `;
+  };
+  return `
+    <main class="screen-view hunter-screen">
+      <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="hunter-items">
+        <div class="hunter-popup-header">
+          <div>
+            <p class="eyebrow">Hunter Items</p>
+            <h2>Inventory</h2>
+            <p class="muted">Use consumables, equip System weapons, and store dungeon materials for future upgrades.</p>
+          </div>
+          <button class="small-btn" data-action="hunter-items-close">Close</button>
+        </div>
+        <div class="system-chip-row">
+          ${systemChip('Stacks', inventory.length)}
+          ${systemChip('Total Items', inventory.reduce((sum, stack) => sum + stack.quantity, 0))}
+          ${systemChip('Equipped', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+        </div>
+        <div class="activity-list hunter-item-grid">
+          ${inventory.length ? inventory.map(itemCard).join('') : '<article class="option-card system-window empty-items"><div><h3>No Hunter items yet</h3><p>Buy supplies from the System Shop or clear Gates to find dungeon loot.</p></div></article>'}
         </div>
       </section>
     </main>
@@ -3037,6 +3120,8 @@ function renderHunter() {
   const canExtract = hunter.lastBossCleared && hunter.level >= 10;
   const questActivity = hunterQuestActivity(hunter.dailyQuest);
   const gateActivity = hunterGateActivity(hunter);
+  const inventoryStacks = normalizeHunterInventory(hunter.inventory);
+  const inventoryTotal = inventoryStacks.reduce((sum, item) => sum + item.quantity, 0);
   return `
     <section class="stack hunter-panel">
       ${renderHunterSystemStatus(hunter)}
@@ -3063,8 +3148,8 @@ function renderHunter() {
       ${renderCollapsibleSection({
         id: 'hunter-actions',
         title: 'Hunter Activities',
-        subtitle: 'Daily quests, Gates, association work, shop, and shadow growth.',
-        count: 6,
+        subtitle: 'Daily quests, Gates, items, association work, shop, and shadow growth.',
+        count: 7,
         body: `<div class="activity-list">
         ${renderHunterActivity({
           icon: 'DQ',
@@ -3085,6 +3170,14 @@ function renderHunter() {
           tone: 'gate',
         })}
         ${renderHunterActivity({
+          icon: 'IT',
+          title: 'Items',
+          subtitle: 'Use dungeon loot, consume potions, equip System weapons, and inspect materials.',
+          meta: `${inventoryTotal} item${inventoryTotal === 1 ? '' : 's'} / ${inventoryStacks.length} stack${inventoryStacks.length === 1 ? '' : 's'}`,
+          action: 'hunter-items-open',
+          tone: 'items',
+        })}
+        ${renderHunterActivity({
           icon: 'HA',
           title: 'Hunter Association',
           subtitle: 'Request rank reassessment and collect official hunter attention.',
@@ -3096,7 +3189,7 @@ function renderHunter() {
           icon: 'SP',
           title: 'System Shop',
           subtitle: 'Potions, fatigue cleanses, and System weapons with skill unlocks.',
-          meta: hunter.equippedWeapon ? `Equipped: ${SYSTEM_SHOP_ITEMS[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon)}` : `${hunter.inventory.length} item${hunter.inventory.length === 1 ? '' : 's'} owned`,
+          meta: hunter.equippedWeapon ? `Equipped: ${HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon)}` : `${inventoryTotal} item${inventoryTotal === 1 ? '' : 's'} owned`,
           action: 'hunter-shop',
           tone: 'shop',
         })}
@@ -3333,6 +3426,7 @@ function handleAction(action, source = null) {
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
     systemShopPopupOpen = false;
+    hunterItemsPopupOpen = false;
     navMenuOpen = false;
     return;
   }
@@ -3382,6 +3476,7 @@ function handleAction(action, source = null) {
     hunterQuestPopupOpen = false;
     hunterDungeonPopupOpen = false;
     systemShopPopupOpen = false;
+    hunterItemsPopupOpen = false;
     navMenuOpen = false;
     render();
   }
@@ -3523,6 +3618,27 @@ function handleAction(action, source = null) {
   }
   if (action === 'hunter-association') {
     setState(visitHunterAssociation(state));
+    return;
+  }
+  if (action === 'hunter-items-open') {
+    activeTab = 'hunter';
+    hunterItemsPopupOpen = true;
+    render();
+    return;
+  }
+  if (action === 'hunter-items-close') {
+    hunterItemsPopupOpen = false;
+    render();
+    return;
+  }
+  if (action.startsWith('hunter-item-use-')) {
+    hunterItemsPopupOpen = true;
+    setState(useHunterItem(state, action.replace('hunter-item-use-', '')));
+    return;
+  }
+  if (action.startsWith('hunter-item-equip-')) {
+    hunterItemsPopupOpen = true;
+    setState(equipHunterItem(state, action.replace('hunter-item-equip-', '')));
     return;
   }
   if (action === 'hunter-shop') {

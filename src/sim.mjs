@@ -386,11 +386,12 @@ export const HUNTER_MOVES = {
   },
 };
 
-export const SYSTEM_SHOP_ITEMS = {
+export const HUNTER_ITEM_CATALOG = {
   recoveryPotion: {
     id: 'recoveryPotion',
     label: 'Recovery Potion',
-    type: 'potion',
+    type: 'consumable',
+    rarity: 'common',
     cost: 400,
     description: 'Restores health and stamina for wounded Hunters.',
     effects: { health: 18, energy: 12 },
@@ -398,7 +399,8 @@ export const SYSTEM_SHOP_ITEMS = {
   fatigueCleanse: {
     id: 'fatigueCleanse',
     label: 'Fatigue Cleanse',
-    type: 'potion',
+    type: 'consumable',
+    rarity: 'common',
     cost: 650,
     description: 'Reduces System fatigue and steadies mood.',
     effects: { systemFatigue: -22, mood: 4 },
@@ -406,15 +408,33 @@ export const SYSTEM_SHOP_ITEMS = {
   highPotion: {
     id: 'highPotion',
     label: 'High Potion',
-    type: 'potion',
+    type: 'consumable',
+    rarity: 'rare',
     cost: 1200,
     description: 'A stronger emergency vial for deep dungeon damage.',
     effects: { health: 42, energy: 24, systemFatigue: -8 },
+  },
+  dungeonElixir: {
+    id: 'dungeonElixir',
+    label: 'Dungeon Elixir',
+    type: 'consumable',
+    rarity: 'rare',
+    description: 'A Gate-brewed vial that patches deep dungeon damage.',
+    effects: { health: 55, energy: 30, systemFatigue: -12 },
+  },
+  manaAmpoule: {
+    id: 'manaAmpoule',
+    label: 'Mana Ampoule',
+    type: 'consumable',
+    rarity: 'uncommon',
+    description: 'Condensed mana that restores stamina before the next monster push.',
+    effects: { energy: 38, mood: 3 },
   },
   knightDagger: {
     id: 'knightDagger',
     label: 'Knight Dagger',
     type: 'weapon',
+    rarity: 'uncommon',
     cost: 2500,
     description: 'Unlocks Shadow Pierce, a precise low-cost weapon skill.',
     moveId: 'shadowPierce',
@@ -423,6 +443,7 @@ export const SYSTEM_SHOP_ITEMS = {
     id: 'manaLongsword',
     label: 'Mana Longsword',
     type: 'weapon',
+    rarity: 'rare',
     cost: 5200,
     description: 'Unlocks Mana Rend, a heavier sword arc for armored monsters.',
     moveId: 'manaRend',
@@ -431,11 +452,60 @@ export const SYSTEM_SHOP_ITEMS = {
     id: 'reaperScythe',
     label: 'Reaper Scythe',
     type: 'weapon',
+    rarity: 'epic',
     cost: 9000,
     description: 'Unlocks Reaping Arc, a brutal late-fight execution sweep.',
     moveId: 'reapingArc',
   },
+  monsterCore: {
+    id: 'monsterCore',
+    label: 'Monster Core',
+    type: 'material',
+    rarity: 'common',
+    description: 'A basic monster core saved for future crafting and upgrades.',
+  },
+  gateShard: {
+    id: 'gateShard',
+    label: 'Gate Shard',
+    type: 'material',
+    rarity: 'uncommon',
+    description: 'A cracked Gate fragment saved for future crafting and upgrades.',
+  },
+  bossEssence: {
+    id: 'bossEssence',
+    label: 'Boss Essence',
+    type: 'material',
+    rarity: 'rare',
+    description: 'A boss echo condensed into material form for future upgrades.',
+  },
+  redGateShard: {
+    id: 'redGateShard',
+    label: 'Red Gate Shard',
+    type: 'material',
+    rarity: 'epic',
+    description: 'A volatile Red Gate fragment saved for future crafting and upgrades.',
+  },
+  monarchVial: {
+    id: 'monarchVial',
+    label: 'Monarch Vial',
+    type: 'special',
+    rarity: 'epic',
+    description: 'A one-use System item that grants a Hunter stat point and cuts fatigue.',
+    effects: { hunterStatPoints: 1, systemFatigue: -25 },
+  },
+  awakeningRune: {
+    id: 'awakeningRune',
+    label: 'Awakening Rune',
+    type: 'special',
+    rarity: 'legendary',
+    description: 'A rare boss rune that permanently raises every Hunter stat by 1.',
+    effects: { allHunterStats: 1 },
+  },
 };
+
+export const SYSTEM_SHOP_ITEMS = Object.fromEntries(
+  Object.entries(HUNTER_ITEM_CATALOG).filter(([, item]) => Number.isFinite(item.cost))
+);
 
 export const HUNTER_LEVEL_REWARD_OPTIONS = {
   strengthBoost: { id: 'strengthBoost', type: 'hunterStat', stat: 'strength', amount: 2, label: '+2 Hunter Strength' },
@@ -490,6 +560,46 @@ function normalizeHunterStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
   );
+}
+
+function normalizeHunterInventory(inventory = []) {
+  if (!Array.isArray(inventory)) return [];
+  const stacks = new Map();
+  for (const entry of inventory) {
+    const id = typeof entry === 'string' ? entry : entry?.id;
+    if (!HUNTER_ITEM_CATALOG[id]) continue;
+    const quantity = typeof entry === 'string' ? 1 : Math.max(1, Math.floor(entry.quantity ?? 1));
+    stacks.set(id, (stacks.get(id) ?? 0) + quantity);
+  }
+  return [...stacks.entries()].map(([id, quantity]) => ({ id, quantity }));
+}
+
+function hunterItemQuantity(hunterWorld, itemId) {
+  return normalizeHunterInventory(hunterWorld?.inventory).find((item) => item.id === itemId)?.quantity ?? 0;
+}
+
+function hunterHasItem(hunterWorld, itemId) {
+  return hunterItemQuantity(hunterWorld, itemId) > 0;
+}
+
+function addHunterItem(hunterWorld, itemId, quantity = 1) {
+  if (!HUNTER_ITEM_CATALOG[itemId]) return false;
+  const inventory = normalizeHunterInventory(hunterWorld.inventory);
+  const existing = inventory.find((item) => item.id === itemId);
+  if (existing) existing.quantity += Math.max(1, Math.floor(quantity));
+  else inventory.push({ id: itemId, quantity: Math.max(1, Math.floor(quantity)) });
+  hunterWorld.inventory = inventory;
+  return true;
+}
+
+function consumeHunterItem(hunterWorld, itemId) {
+  const inventory = normalizeHunterInventory(hunterWorld.inventory);
+  const existing = inventory.find((item) => item.id === itemId);
+  if (!existing) return false;
+  existing.quantity -= 1;
+  hunterWorld.inventory = inventory.filter((item) => item.quantity > 0);
+  if (hunterWorld.equippedWeapon === itemId && !hunterHasItem(hunterWorld, itemId)) hunterWorld.equippedWeapon = null;
+  return true;
 }
 
 function normalizeHunterDailyQuest(quest) {
@@ -560,7 +670,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld.dailyQuestsCompleted ?? 0)),
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
     shadowArmy: Array.isArray(hunterWorld.shadowArmy) ? hunterWorld.shadowArmy : [],
-    inventory: Array.isArray(hunterWorld.inventory) ? hunterWorld.inventory : [],
+    inventory: normalizeHunterInventory(hunterWorld.inventory),
     equippedWeapon: typeof hunterWorld.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld.gateOffers)
       ? hunterWorld.gateOffers.map(normalizeHunterGateOffer).filter(Boolean).slice(0, 3)
@@ -3496,6 +3606,38 @@ function dungeonRewardAmount(amount, isRedGate) {
   return Math.round(amount * (isRedGate ? 1.75 : 1));
 }
 
+function dungeonLootDrops(life, dungeon, encounter, monster) {
+  const roomKey = `${dungeon.id}-${dungeon.encounterIndex}-${monster?.id ?? monster?.name ?? 'monster'}`;
+  const drops = [];
+  const add = (id, quantity = 1) => drops.push({ id, quantity });
+  if (encounter.isBoss) {
+    add('bossEssence', dungeon.isRedGate ? 2 : 1);
+    if (dungeon.isRedGate) add('redGateShard');
+    const weaponRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-weapon');
+    if (weaponRoll < (dungeon.isRedGate ? 0.42 : 0.2)) {
+      add(dungeon.rank === 'A' || dungeon.rank === 'S' ? 'reaperScythe' : dungeon.rank === 'C' || dungeon.rank === 'B' ? 'manaLongsword' : 'knightDagger');
+    }
+    const specialRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-special');
+    if (specialRoll < (dungeon.isRedGate ? 0.36 : 0.16)) add(specialRoll < 0.06 ? 'awakeningRune' : 'monarchVial');
+    return drops;
+  }
+  add(dungeon.isRedGate ? 'gateShard' : 'monsterCore');
+  const consumableRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'room-consumable');
+  if (consumableRoll < (dungeon.isRedGate ? 0.55 : 0.28)) add(consumableRoll < 0.14 ? 'dungeonElixir' : 'manaAmpoule');
+  return drops;
+}
+
+function awardDungeonLoot(life, dungeon, encounter, monster) {
+  const drops = dungeonLootDrops(life, dungeon, encounter, monster);
+  for (const drop of drops) addHunterItem(life.hunterWorld, drop.id, drop.quantity);
+  return drops;
+}
+
+function itemDropText(drop) {
+  const item = HUNTER_ITEM_CATALOG[drop.id];
+  return `${item?.label ?? drop.id}${drop.quantity > 1 ? ` x${drop.quantity}` : ''}`;
+}
+
 function gateEncounterList(template, isRedGate) {
   const count = Math.min(5, HUNTER_DUNGEON_TIERS[template.rank].fights + (isRedGate ? 1 : 0));
   const encounters = [];
@@ -3828,9 +3970,11 @@ function applyHunterDungeonFightResult(life, fight, won) {
     grantHunterXp(life, xp);
     life.resources.money += money;
     life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
-    dungeon.rewardsEarned.push({ type: 'room', monster: monster.name, xp, money, reputation });
+    const itemDrops = awardDungeonLoot(life, dungeon, encounter, monster);
+    dungeon.rewardsEarned.push({ type: 'room', monster: monster.name, xp, money, reputation, items: itemDrops });
     dungeon.awaitingAdvance = true;
     fight.result.rewards.push(`Room cleared: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
+    if (itemDrops.length) fight.result.rewards.push(`Dungeon loot: ${itemDrops.map(itemDropText).join(', ')}`);
     fight.result.rewards.push('+5 mana recovered before the next room');
     life.hunterWorld.activeDungeon = dungeon;
     return;
@@ -3844,7 +3988,8 @@ function applyHunterDungeonFightResult(life, fight, won) {
   life.resources.money += money;
   life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
   const gainedStats = randomHunterStatRewards(life, statCount, dungeon.id);
-  dungeon.rewardsEarned.push({ type: 'boss', monster: monster.name, xp, money, reputation, stats: gainedStats });
+  const itemDrops = awardDungeonLoot(life, dungeon, encounter, monster);
+  dungeon.rewardsEarned.push({ type: 'boss', monster: monster.name, xp, money, reputation, stats: gainedStats, items: itemDrops });
   dungeon.completed = true;
   dungeon.bossDefeated = true;
   dungeon.outcome = 'cleared';
@@ -3854,6 +3999,7 @@ function applyHunterDungeonFightResult(life, fight, won) {
   life.hunterWorld.redGatePending = dungeon.redGateTriggered;
   fight.result.rewards.push(`Boss clear jackpot: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
   fight.result.rewards.push(`Hunter stat growth: +${statCount} (${gainedStats.join(', ')})`);
+  if (itemDrops.length) fight.result.rewards.push(`Boss loot: ${itemDrops.map(itemDropText).join(', ')}`);
   if (dungeon.redGateTriggered) fight.result.rewards.push('Emergency alert: a Red Gate has appeared on the next Gate Board');
   life.hunterWorld.activeDungeon = dungeon;
 }
@@ -5467,7 +5613,7 @@ export function getUnlockedHunterMoves(life) {
   if (life.activeFight?.source !== 'hunterQuest' && life.activeFight?.source !== 'hunterDungeon') return [];
   const hunter = normalizeHunterWorld(life.hunterWorld);
   return Object.entries(HUNTER_MOVES)
-    .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunter.inventory.includes(move.requiresWeapon))
+    .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunterHasItem(hunter, move.requiresWeapon))
     .map(([id, move]) => ({
       id,
       ...move,
@@ -5479,7 +5625,7 @@ function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   const hunter = normalizeHunterWorld(life.hunterWorld);
-  if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunter.inventory.includes(move.requiresWeapon)) return 'Requires the matching System weapon.';
+  if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunterHasItem(hunter, move.requiresWeapon)) return 'Requires the matching System weapon.';
   if (move.id === 'shadowAssist' && !(hunter.shadowArmy?.length)) return 'Requires at least one shadow in your army.';
   const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
   if (move.moveType === 'special' && cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'} remaining.`;
@@ -8853,22 +8999,47 @@ export function buySystemItem(life, itemId = 'recoveryPotion') {
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   if (!next.hunterWorld.unlocked) return addLog(next, 'The System Shop is still locked.', 'world');
   const item = SYSTEM_SHOP_ITEMS[itemId] ?? SYSTEM_SHOP_ITEMS.recoveryPotion;
-  if (item.type === 'weapon' && next.hunterWorld.inventory.includes(item.id)) {
+  if (item.type === 'weapon' && hunterHasItem(next.hunterWorld, item.id)) {
     next.hunterWorld.equippedWeapon = item.id;
     return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
   }
   if (next.resources.money < item.cost) return addLog(next, 'Not enough money for the System Shop.', 'world');
   next.resources.money -= item.cost;
-  next.hunterWorld.inventory = [...next.hunterWorld.inventory, item.id];
-  if (item.type === 'weapon') {
-    next.hunterWorld.equippedWeapon = item.id;
-  } else {
-    next.resources.health = clampLifeResource(next, 'health', next.resources.health + (item.effects.health ?? 0));
-    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + (item.effects.energy ?? 0));
-    next.resources.mood = clamp(next.resources.mood + (item.effects.mood ?? 0));
-    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + (item.effects.systemFatigue ?? 0));
+  addHunterItem(next.hunterWorld, item.id);
+  if (item.type === 'weapon') next.hunterWorld.equippedWeapon = item.id;
+  return addLog(next, `System Shop purchase: ${item.label} added to Items.`, 'world');
+}
+
+function applyHunterItemEffects(next, item) {
+  const effects = item.effects ?? {};
+  next.resources.health = clampLifeResource(next, 'health', next.resources.health + (effects.health ?? 0));
+  next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + (effects.energy ?? 0));
+  next.resources.mood = clamp(next.resources.mood + (effects.mood ?? 0));
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + (effects.systemFatigue ?? 0));
+  next.hunterWorld.statPoints += Math.max(0, Math.floor(effects.hunterStatPoints ?? 0));
+  if (effects.allHunterStats) {
+    for (const stat of Object.keys(DEFAULT_HUNTER_STATS)) next.hunterWorld.stats[stat] = Math.max(0, next.hunterWorld.stats[stat] + effects.allHunterStats);
   }
-  return addLog(next, `System Shop purchase: ${item.label}.`, 'world');
+}
+
+export function useHunterItem(life, itemId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const item = HUNTER_ITEM_CATALOG[itemId];
+  if (!item || !hunterHasItem(next.hunterWorld, itemId)) return addLog(next, 'That Hunter item is not in your inventory.', 'world');
+  if (!['consumable', 'special'].includes(item.type)) return addLog(next, `${item.label} cannot be used directly.`, 'world');
+  applyHunterItemEffects(next, item);
+  consumeHunterItem(next.hunterWorld, itemId);
+  return addLog(next, `Hunter item used: ${item.label}.`, 'world');
+}
+
+export function equipHunterItem(life, itemId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const item = HUNTER_ITEM_CATALOG[itemId];
+  if (!item || item.type !== 'weapon' || !hunterHasItem(next.hunterWorld, itemId)) return addLog(next, 'That System weapon is not in your inventory.', 'world');
+  next.hunterWorld.equippedWeapon = item.id;
+  return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
 }
 
 export function extractShadow(life) {
