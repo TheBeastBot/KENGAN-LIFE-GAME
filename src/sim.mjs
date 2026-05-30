@@ -4834,7 +4834,6 @@ export function redeemMentorPassword(life, password) {
   }
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  if (next.hunterWorld.rank !== 'S') return addLog(next, 'Mentor password locked: reach S-rank Hunter first.', 'mentor');
   const mentor = MENTORS.find((item) => item.id === 'systemSage');
   next.mentor = clone(mentor);
   next.relationships.mentor = 100;
