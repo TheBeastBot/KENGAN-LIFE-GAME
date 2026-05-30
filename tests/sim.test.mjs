@@ -52,6 +52,7 @@ import {
   joinTournament,
   redeemClanPassword,
   redeemHunterPassword,
+  redeemMonarchBodyPassword,
   rerollClan,
   recover,
   recoverCoachedFighter,
@@ -1541,6 +1542,39 @@ test('wrong clan password does not change clan or resources', () => {
   assert.equal(next.clan.name, life.clan.name);
   assert.deepEqual(next.resources, life.resources);
   assert.ok(next.log[0].text.includes('rejected'));
+});
+
+test('chyrish21 password unlocks Monarch Body and raises current stats to current caps', () => {
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 1311 }),
+    identity: { ...createNewLife({ gender: 'Male', seed: 1311 }).identity, age: 22 },
+    record: { wins: 8, losses: 1, kos: 5 },
+    stats: Object.fromEntries(Object.keys(createNewLife({ gender: 'Male', seed: 1311 }).stats).map((stat) => [stat, 1])),
+    resources: { ...createNewLife({ gender: 'Male', seed: 1311 }).resources, health: 44, energy: 39 },
+    specialTrainingCaps: { strength: 30, speed: 20 },
+  };
+  const expectedCaps = Object.fromEntries(Object.keys(life.stats).map((stat) => [stat, getStatCap(life, stat)]));
+
+  const next = redeemMonarchBodyPassword(life, ' chyrish21 ');
+
+  assert.deepEqual(next.stats, expectedCaps);
+  assert.deepEqual(next.baseStats, expectedCaps);
+  assert.equal(next.monarchBody.unlocked, true);
+  assert.equal(next.monarchBody.source, 'password');
+  assert.equal(next.resources.health, life.resources.health);
+  assert.equal(next.resources.energy, life.resources.energy);
+  assert.ok(next.log[0].text.includes('MONARCH BODY'));
+});
+
+test('wrong Monarch Body password does not change stats or resources', () => {
+  const life = createNewLife({ gender: 'Female', seed: 1312 });
+
+  const next = redeemMonarchBodyPassword(life, 'WRONG');
+
+  assert.deepEqual(next.stats, life.stats);
+  assert.deepEqual(next.resources, life.resources);
+  assert.equal(next.monarchBody?.unlocked, life.monarchBody?.unlocked);
+  assert.ok(next.log[0].text.includes('Monarch Body password rejected'));
 });
 
 test('secret clan has a natural 0.1 percent rarity weight', () => {

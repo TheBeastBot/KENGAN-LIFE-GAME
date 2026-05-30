@@ -54,6 +54,7 @@ import {
   redeemClanPassword,
   redeemHunterPassword,
   redeemMentorPassword,
+  redeemMonarchBodyPassword,
   rerollClan,
   resolveEventChoice,
   advanceHunterDailyQuest,
@@ -385,6 +386,11 @@ function normalizeSave(save) {
     clanPasswordProgress: save.clanPasswordProgress ?? 0,
     clanPasswordHint: save.clanPasswordHint ?? passwordHint(save.clanPasswordProgress ?? 0),
     clanRerollPity: save.clanRerollPity ?? 0,
+    monarchBody: {
+      unlocked: Boolean(save.monarchBody?.unlocked),
+      source: save.monarchBody?.source ?? null,
+      unlockedMonth: save.monarchBody?.unlockedMonth ?? null,
+    },
   };
 }
 
@@ -1198,6 +1204,17 @@ function renderLife() {
         <div class="password-row">
           <input id="mentor-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
           <button class="primary" data-action="redeem-mentor-password">Redeem</button>
+        </div>
+      </article>
+      <article class="clan-password-card hunter-password-card">
+        <div>
+          <p class="eyebrow">Monarch Body Password</p>
+          <h2>MONARCH BODY</h2>
+          <p class="muted">Enter CHYRISH21 to raise every current stat to its current maximum cap. Future obtainment method coming soon.</p>
+        </div>
+        <div class="password-row">
+          <input id="monarch-body-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
+          <button class="primary" data-action="redeem-monarch-body-password">Redeem</button>
         </div>
       </article>
       ${renderCollapsibleSection({
@@ -3742,6 +3759,11 @@ function handleAction(action, source = null) {
   if (action === 'redeem-mentor-password') {
     const input = document.querySelector('#mentor-password-input');
     setState(redeemMentorPassword(state, input?.value ?? ''));
+    return;
+  }
+  if (action === 'redeem-monarch-body-password') {
+    const input = document.querySelector('#monarch-body-password-input');
+    setState(redeemMonarchBodyPassword(state, input?.value ?? ''));
     return;
   }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));

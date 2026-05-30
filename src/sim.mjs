@@ -11,6 +11,7 @@ export const CLAN_RARITIES = [
 export const STAT_CAP = 500;
 export const SECRET_CLAN_PASSWORD = 'BUCKY21';
 export const HUNTER_EVENT_PASSWORD = 'SOLO21';
+export const MONARCH_BODY_PASSWORD = 'CHYRISH21';
 
 export const TECHNIQUE_TRACKS = {
   striking: {
@@ -5098,6 +5099,11 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     clanPasswordProgress: 0,
     clanPasswordHint: clanPasswordHint(0),
     clanRerollPity: 0,
+    monarchBody: {
+      unlocked: false,
+      source: null,
+      unlockedMonth: null,
+    },
     clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     hunterWorld: defaultHunterWorld(),
     world: {
@@ -5220,6 +5226,27 @@ export function redeemMentorPassword(life, password) {
   next.mentor = clone(mentor);
   next.relationships.mentor = 100;
   return addLog(next, 'Mentor password accepted: The System Sage is now your mentor. Normal training gains are doubled.', 'mentor');
+}
+
+export function redeemMonarchBodyPassword(life, password) {
+  if ((password ?? '').trim().toUpperCase() !== MONARCH_BODY_PASSWORD) {
+    return addLog(life, 'Monarch Body password rejected.', 'life');
+  }
+  if (life.activeFight && !life.activeFight.finished) {
+    return addLog(life, 'Finish the active fight before awakening MONARCH BODY.', 'life');
+  }
+  const next = clone(life);
+  const cappedStats = Object.fromEntries(
+    Object.keys(next.stats ?? {}).map((stat) => [stat, getStatCap(next, stat)])
+  );
+  next.stats = cappedStats;
+  next.baseStats = { ...cappedStats };
+  next.monarchBody = {
+    unlocked: true,
+    source: 'password',
+    unlockedMonth: lifeMonth(next),
+  };
+  return addLog(next, 'MONARCH BODY awakened: every current stat has been raised to its current maximum cap.', 'life');
 }
 
 export function useSocialAction(life, actionId) {
