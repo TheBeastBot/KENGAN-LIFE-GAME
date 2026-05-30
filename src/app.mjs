@@ -20,7 +20,9 @@ import {
   ageUp,
   createNewLife,
   advanceMonarchTrace,
+  battleShadowDomain,
   buySystemItem,
+  chooseSystemEnding,
   craftHunterItem,
   useHunterItem,
   equipHunterItem,
@@ -39,6 +41,7 @@ import {
   getOpponentArchetype,
   getPlayerArchetype,
   getShadowArmySummary,
+  getShadowDomainMap,
   getAutoRecoveryStatus,
   getAutoTrainingStatus,
   getTrainingAllowance,
@@ -54,7 +57,6 @@ import {
   redeemClanPassword,
   redeemHunterPassword,
   redeemMentorPassword,
-  redeemMonarchBodyPassword,
   rerollClan,
   resolveEventChoice,
   advanceHunterDailyQuest,
@@ -87,6 +89,7 @@ import {
   useSocialAction,
   spendHunterStatPoint,
   extractShadow,
+  fightMonarchBoss,
   selectHunterGate,
   startHunterDungeonEncounter,
   advanceHunterDungeon,
@@ -141,12 +144,30 @@ const DEFAULT_HUNTER_WORLD = {
     craftedItems: 0,
   },
   itemUpgrades: {},
+  shadowSigilPower: 0,
+  domainMap: {
+    conquered: [],
+    lastBattle: null,
+    completed: false,
+  },
   monarchTrace: {
     unlocked: false,
     stage: 0,
     influence: 0,
     completed: false,
   },
+  shadowMonarch: {
+    unlocked: false,
+    transformedMonth: null,
+    evolvedSkills: false,
+  },
+  monarchWar: {
+    unlocked: false,
+    defeated: [],
+    finalChoiceUnlocked: false,
+    lastBattle: null,
+  },
+  systemEnding: null,
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -245,6 +266,7 @@ let selectedGender = 'Male';
 let selectedFirstName = '';
 let activeTab = 'life';
 let selectedFightCategory = null;
+let selectedShadowDomainId = null;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
@@ -458,6 +480,32 @@ function normalizeMonarchTrace(trace = {}) {
   };
 }
 
+function normalizeDomainMap(map = {}) {
+  return {
+    conquered: Array.isArray(map?.conquered) ? map.conquered : [],
+    lastBattle: map?.lastBattle ?? null,
+    completed: Boolean(map?.completed),
+  };
+}
+
+function normalizeShadowMonarch(shadowMonarch = {}) {
+  return {
+    unlocked: Boolean(shadowMonarch?.unlocked),
+    transformedMonth: shadowMonarch?.transformedMonth ?? null,
+    evolvedSkills: Boolean(shadowMonarch?.evolvedSkills),
+    powersLost: Boolean(shadowMonarch?.powersLost),
+  };
+}
+
+function normalizeMonarchWar(war = {}) {
+  return {
+    unlocked: Boolean(war?.unlocked),
+    defeated: Array.isArray(war?.defeated) ? war.defeated : [],
+    finalChoiceUnlocked: Boolean(war?.finalChoiceUnlocked),
+    lastBattle: war?.lastBattle ?? null,
+  };
+}
+
 function systemPerkCount(hunter, perkId) {
   return normalizeSystemPerks(hunter?.unlockedSystemPerks).find((item) => item.id === perkId)?.count ?? 0;
 }
@@ -494,6 +542,8 @@ function normalizeHunterWorld(hunterWorld = {}) {
         id: typeof shadow?.id === 'string' ? shadow.id : `shadow-${index + 1}`,
         name: typeof shadow?.name === 'string' ? shadow.name : 'Extracted Shadow',
         strength: shadowStrength(shadow),
+        role: shadow?.role ?? 'vanguard',
+        armyPower: Math.max(1, Math.floor(shadow?.armyPower ?? shadowStrength(shadow) * 10)),
       }))
       : [],
     inventory: normalizeHunterInventory(hunterWorld?.inventory),
@@ -509,7 +559,12 @@ function normalizeHunterWorld(hunterWorld = {}) {
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
     milestones: normalizeHunterMilestones(hunterWorld?.milestones),
     itemUpgrades: normalizeHunterItemUpgrades(hunterWorld?.itemUpgrades),
+    shadowSigilPower: Math.max(0, Math.floor(hunterWorld?.shadowSigilPower ?? 0)),
+    domainMap: normalizeDomainMap(hunterWorld?.domainMap),
     monarchTrace: normalizeMonarchTrace(hunterWorld?.monarchTrace),
+    shadowMonarch: normalizeShadowMonarch(hunterWorld?.shadowMonarch),
+    monarchWar: normalizeMonarchWar(hunterWorld?.monarchWar),
+    systemEnding: hunterWorld?.systemEnding ?? null,
   };
 }
 
@@ -1204,17 +1259,6 @@ function renderLife() {
         <div class="password-row">
           <input id="mentor-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
           <button class="primary" data-action="redeem-mentor-password">Redeem</button>
-        </div>
-      </article>
-      <article class="clan-password-card hunter-password-card">
-        <div>
-          <p class="eyebrow">Monarch Body Password</p>
-          <h2>MONARCH BODY</h2>
-          <p class="muted">Enter CHYRISH21 to raise every current stat to its current maximum cap. Future obtainment method coming soon.</p>
-        </div>
-        <div class="password-row">
-          <input id="monarch-body-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
-          <button class="primary" data-action="redeem-monarch-body-password">Redeem</button>
         </div>
       </article>
       ${renderCollapsibleSection({
@@ -2709,8 +2753,8 @@ function renderShadowArmyPanel() {
     <article class="option-card system-window shadow-army-panel">
       <div>
         <p class="eyebrow">Shadow Army</p>
-        <h2>${summary.count} Shadows / Strength ${summary.totalStrength}</h2>
-        <p>${summary.canExtract ? `Boss echo ready: ${escapeHtml(summary.pendingBoss)}.` : 'Clear a boss after Level 10 to bind its echo into your army.'}</p>
+        <h2>${summary.count} Shadows / Army Power ${summary.armyPower}</h2>
+        <p>${summary.canExtract ? `Boss echo ready: ${escapeHtml(summary.pendingBoss)}.` : escapeHtml(summary.extractReason || 'Extract C-rank+, Red Gate, or Monarch boss echoes to build a real army.')}</p>
         ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 2 && summary.count >= 3 ? 'clear' : '' })))}
       </div>
       ${summary.canExtract ? button('Extract Shadow', 'hunter-extract', 'primary') : '<span class="lock-pill">No Echo</span>'}
@@ -2721,10 +2765,93 @@ function renderShadowArmyPanel() {
           <div>
             <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow</p>
             <h3>${escapeHtml(shadow.name)}</h3>
-            <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / Strength ${escapeHtml(String(shadow.strength))}</p>
+            <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / ${escapeHtml(shadow.role ?? 'vanguard')} / Power ${escapeHtml(String(shadow.armyPower ?? shadow.strength))}</p>
           </div>
         </article>
       `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Boss echoes will appear here after extraction.</p></div></article>'}
+    </div>
+  `;
+}
+
+function renderShadowDomainsPanel() {
+  const map = getShadowDomainMap(state);
+  const selected = map.domains.find((domain) => domain.id === selectedShadowDomainId) ?? map.domains.find((domain) => domain.canAttack) ?? map.domains[0];
+  selectedShadowDomainId = selected?.id ?? null;
+  const stateLabel = {
+    locked: 'Locked',
+    available: 'Attack Ready',
+    conquered: 'Conquered',
+    core: 'Core Domain',
+  };
+  return `
+    <section class="shadow-domain-layout">
+      <article class="system-window shadow-map-card">
+        <div class="shadow-map-header">
+          <div>
+            <p class="eyebrow">Shadow Domains</p>
+            <h2>Domain War Map</h2>
+          </div>
+          <span class="system-chip">Army ${map.armyPower}</span>
+        </div>
+        <svg class="shadow-domain-map" viewBox="0 0 100 100" role="img" aria-label="Interactive Shadow Domain map">
+          <path class="domain-map-backdrop" d="M8 68 L26 30 L56 16 L88 35 L82 82 L46 92 Z"></path>
+          ${map.domains.map((domain) => `
+            <g class="domain-node state-${domain.state} ${selected?.id === domain.id ? 'selected' : ''}" data-action="shadow-domain-select-${domain.id}" tabindex="0" role="button" aria-label="${escapeHtml(domain.name)}">
+              <rect x="${domain.x}" y="${domain.y}" width="${domain.width}" height="${domain.height}" rx="4"></rect>
+              <text x="${domain.x + domain.width / 2}" y="${domain.y + domain.height / 2}">${domain.core ? 'M' : domain.name.split(' ')[0][0]}</text>
+            </g>
+          `).join('')}
+        </svg>
+      </article>
+      <article class="option-card system-window domain-detail-card ${selected?.state ? `state-${selected.state}` : ''}">
+        <div>
+          <p class="eyebrow">${escapeHtml(stateLabel[selected?.state] ?? 'Domain')}</p>
+          <h2>${escapeHtml(selected?.name ?? 'No Domain')}</h2>
+          <p>${escapeHtml(selected?.enemy ?? 'Enemy territory')} controls this region.</p>
+          ${renderSystemScanRows([
+            { label: 'Enemy Army', value: String(selected?.enemyPower ?? 0), tone: 'danger' },
+            { label: 'Your Army', value: String(map.armyPower), tone: map.armyPower >= (selected?.enemyPower ?? 1) ? 'clear' : 'danger' },
+            { label: 'Reward', value: `+${selected?.rewards?.statPoints ?? 0} stat points`, tone: 'clear' },
+            { label: 'Status', value: selected?.lockReason || stateLabel[selected?.state] || 'Ready', tone: selected?.canAttack ? 'active' : selected?.state === 'conquered' ? 'clear' : 'danger' },
+          ])}
+        </div>
+        ${selected?.canAttack ? button('Battle Domain', `shadow-domain-battle-${selected.id}`, 'primary') : `<span class="lock-pill">${escapeHtml(selected?.lockReason || stateLabel[selected?.state] || 'Locked')}</span>`}
+      </article>
+    </section>
+  `;
+}
+
+function renderMonarchWarPanel() {
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const bosses = [
+    { id: 'monarch-fangs', name: 'Monarch of Fangs', power: 780 },
+    { id: 'monarch-frost', name: 'Monarch of Frost', power: 900 },
+    { id: 'monarch-flames', name: 'Monarch of Flames', power: 1040 },
+    { id: 'monarch-destruction', name: 'Monarch of Destruction', power: 1220 },
+  ];
+  const defeated = new Set(hunter.monarchWar?.defeated ?? []);
+  return `
+    <div class="activity-list monarch-war-grid">
+      ${bosses.map((boss) => `
+        <article class="option-card system-window monarch-boss-card ${defeated.has(boss.id) ? 'complete' : ''}">
+          <div>
+            <p class="eyebrow">${defeated.has(boss.id) ? 'Defeated' : 'Monarch War'}</p>
+            <h3>${escapeHtml(boss.name)}</h3>
+            <p>Power ${boss.power}. Normal Gates no longer answer after Shadow Monarch transformation.</p>
+          </div>
+          ${defeated.has(boss.id) ? '<span class="lock-pill">Defeated</span>' : button('Fight Monarch', `monarch-battle-${boss.id}`, 'danger')}
+        </article>
+      `).join('')}
+      ${hunter.monarchWar?.finalChoiceUnlocked ? `
+        <article class="option-card system-window monarch-ending-card">
+          <div>
+            <p class="eyebrow">Final System Choice</p>
+            <h3>${hunter.systemEnding ? 'Choice Recorded' : 'Portals Await Judgment'}</h3>
+            <p>${hunter.systemEnding ? escapeHtml(hunter.systemEnding.choice === 'closePortals' ? 'The System ended and your Hunter powers faded.' : 'The System remains while you defend the planet.') : 'All Monarchs are defeated. Decide what happens to the System.'}</p>
+          </div>
+          ${hunter.systemEnding ? '<span class="lock-pill">Complete</span>' : `${button('Close Portals', 'system-ending-closePortals', 'danger')}${button('Defend Planet', 'system-ending-defendPlanet', 'primary')}`}
+        </article>
+      ` : ''}
     </div>
   `;
 }
@@ -2964,7 +3091,7 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
         { label: 'Threat Pattern', value: `${opponent.style} / ${opponent.threat}`, tone: 'danger' },
         ...(monsterAttacks ? [{ label: 'Observed Attacks', value: monsterAttacks, tone: 'danger' }] : []),
       ])}
-      <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Conserve, Analyze Weakness, Execute, and Shadow Assist replace normal fighter moves here.</p>
+      <p>Use System skills to break the monster rhythm. Slash, Dash Strike, Mana Guard, Conserve, Analyze Weakness, and Execute replace normal fighter moves here.</p>
       <p>Effective Hunter power includes fighter stats, Hunter stats, Hunter level, and shadow army scaling.</p>
       ${fight.breakdown?.[0] ? `<p>${escapeHtml(fight.breakdown[0])}</p>` : ''}
     </article>
@@ -2984,7 +3111,6 @@ function renderHunterMoves(mode = 'quest') {
     conserve: 'recovery',
     analyzeWeakness: 'analysis',
     execute: 'finisher',
-    shadowAssist: 'shadow',
     abyssalLeech: 'finisher',
     shadowPierce: 'finisher',
     manaRend: 'finisher',
@@ -3002,11 +3128,11 @@ function renderHunterMoves(mode = 'quest') {
       move.moveType === 'basic' && move.id !== 'conserve' && perkCount('basicDamagePlus5') ? `Basic damage +${5 * perkCount('basicDamagePlus5')}% (${perkCount('basicDamagePlus5')}/10).` : '',
       move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
       move.id === 'abyssalLeech' ? 'Ultimate lifesteal move: restores health from damage dealt.' : '',
-      move.id === 'shadowAssist' ? `Shadow army: ${shadowCount} shadow${shadowCount === 1 ? '' : 's'}, strength ${shadowStrengthTotal}.` : '',
-      move.id === 'shadowAssist' && perkCount('shadowDamagePlus8') ? `Shadow Assist damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
+      move.uiTone === 'shadow-monarch' ? `Shadow Monarch evolved skill. Army strength ${shadowStrengthTotal}.` : '',
+      move.id === 'monarchCommand' && perkCount('shadowDamagePlus8') ? `Domain army damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
     ].filter(Boolean).join(' ');
     return `
-      <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
+      <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move ${move.uiTone === 'shadow-monarch' ? 'shadow-monarch-skill' : ''}" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
         <em>${escapeHtml(moveTypeLabel)}</em>
         <strong>${escapeHtml(move.label)}</strong>
         <span>${escapeHtml(move.disabledReason || perkHint || move.hint)}</span>
@@ -3106,6 +3232,14 @@ function gateMoney(value) {
 }
 
 function hunterGateActivity(hunter) {
+  if (hunter.shadowMonarch?.unlocked) {
+    return {
+      title: 'Monarch War',
+      subtitle: 'Normal Gates have vanished. Only Monarch boss encounters remain.',
+      meta: `${hunter.monarchWar?.defeated?.length ?? 0}/4 Monarchs defeated`,
+      cta: 'Open',
+    };
+  }
   const dungeon = hunter.activeDungeon;
   if (dungeon) {
     if (dungeon.completed) {
@@ -3132,6 +3266,7 @@ function hunterGateActivity(hunter) {
 }
 
 function renderHunterGateOffers() {
+  if (normalizeHunterWorld(state.hunterWorld).shadowMonarch?.unlocked) return renderMonarchWarPanel();
   const offers = state.hunterWorld?.gateOffers ?? [];
   return `
     <div class="gate-offer-grid">
@@ -3328,7 +3463,7 @@ function renderHunterItemsPopup() {
           <h3>${escapeHtml(item.label)} <span class="muted">x${quantity}</span></h3>
           <p>${escapeHtml(item.description)}</p>
           ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
-          ${item.type === 'material' ? '<p class="muted">Saved for future crafting and upgrades.</p>' : ''}
+          ${item.type === 'material' ? '<p class="muted">Used in System crafting, shadow sigils, and Monarch war prep.</p>' : ''}
         </div>
         ${action}
       </article>
@@ -3387,7 +3522,7 @@ function renderHunter() {
       ${renderCollapsibleSection({
         id: 'hunter-milestones',
         title: 'Hunter Progression',
-        subtitle: 'Career spine: quests, Gates, rank, shadows, and Monarch Trace.',
+        subtitle: 'Career spine: quests, Domains, rank, shadows, and Monarch Trace.',
         body: renderHunterMilestones(),
       })}
       ${renderCollapsibleSection({
@@ -3398,7 +3533,7 @@ function renderHunter() {
         <div>
           <p class="eyebrow">System Player</p>
           <h2>${state.identity.name}</h2>
-          <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Gate Board signals, shadow growth, crafting, Association rank, and Monarch Trace all advance this career path.'}</p>
+          <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Shadow growth, Domain conquest, crafting, Association rank, and Monarch Trace all advance this career path.'}</p>
         </div>
         <div class="system-chip-row">
           ${systemChip('Rank', `${hunter.rank}-Rank`, 'rank')}
@@ -3415,8 +3550,8 @@ function renderHunter() {
       ${renderCollapsibleSection({
         id: 'hunter-actions',
         title: 'Hunter Activities',
-        subtitle: 'Daily quests, Gates, items, association work, shop, and shadow growth.',
-        count: 7,
+        subtitle: 'Daily quests, Domains, items, association work, shop, and shadow growth.',
+        count: 8,
         body: `<div class="activity-list">
         ${renderHunterActivity({
           icon: 'DQ',
@@ -3463,10 +3598,18 @@ function renderHunter() {
         ${renderHunterActivity({
           icon: 'SX',
           title: 'Shadow Extraction',
-          subtitle: 'Bind cleared boss echoes, grow Shadow Assist, and prepare Monarch Trace.',
+          subtitle: 'Bind strong boss echoes, build army power, and prepare Domain conquest.',
           meta: canExtract ? `Boss echo: ${shadowSummary.pendingBoss}` : `${shadowSummary.count} shadows / strength ${shadowSummary.totalStrength}`,
           action: 'hunter-extract',
           locked: !canExtract,
+          tone: 'shadow',
+        })}
+        ${renderHunterActivity({
+          icon: 'DM',
+          title: 'Shadow Domains',
+          subtitle: 'Use your shadow army on the interactive Domain war map.',
+          meta: `${hunter.domainMap?.conquered?.length ?? 0}/5 conquered`,
+          action: 'hunter-domains-open',
           tone: 'shadow',
         })}
         ${renderHunterActivity({
@@ -3492,6 +3635,18 @@ function renderHunter() {
         subtitle: `${shadowSummary.count} shadows / ${shadowSummary.totalStrength} strength`,
         body: renderShadowArmyPanel(),
       })}
+      ${renderCollapsibleSection({
+        id: 'hunter-domains',
+        title: 'Shadow Domains',
+        subtitle: `${hunter.domainMap?.conquered?.length ?? 0}/5 territories conquered`,
+        body: renderShadowDomainsPanel(),
+      })}
+      ${hunter.shadowMonarch?.unlocked ? renderCollapsibleSection({
+        id: 'hunter-monarch-war',
+        title: 'Monarch War',
+        subtitle: `${hunter.monarchWar?.defeated?.length ?? 0}/4 Monarchs defeated`,
+        body: renderMonarchWarPanel(),
+      }) : ''}
       ${renderCollapsibleSection({
         id: 'hunter-crafting',
         title: 'System Crafting',
@@ -3761,11 +3916,6 @@ function handleAction(action, source = null) {
     setState(redeemMentorPassword(state, input?.value ?? ''));
     return;
   }
-  if (action === 'redeem-monarch-body-password') {
-    const input = document.querySelector('#monarch-body-password-input');
-    setState(redeemMonarchBodyPassword(state, input?.value ?? ''));
-    return;
-  }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));
   if (action === 'choice-street') setState(spendLifeChoice(state, 'street'));
   if (action === 'choice-job') setState(spendLifeChoice(state, 'job'));
@@ -3878,8 +4028,31 @@ function handleAction(action, source = null) {
   }
   if (action === 'hunter-gates-open') {
     activeTab = 'hunter';
-    hunterDungeonPopupOpen = true;
+    hunterDungeonPopupOpen = !normalizeHunterWorld(state.hunterWorld).shadowMonarch.unlocked;
     setState(generateHunterGateOffers(state));
+    return;
+  }
+  if (action === 'hunter-domains-open') {
+    activeTab = 'hunter';
+    render();
+    return;
+  }
+  if (action.startsWith('shadow-domain-select-')) {
+    selectedShadowDomainId = action.replace('shadow-domain-select-', '');
+    render();
+    return;
+  }
+  if (action.startsWith('shadow-domain-battle-')) {
+    selectedShadowDomainId = action.replace('shadow-domain-battle-', '');
+    setState(battleShadowDomain(state, selectedShadowDomainId));
+    return;
+  }
+  if (action.startsWith('monarch-battle-')) {
+    setState(fightMonarchBoss(state, action.replace('monarch-battle-', '')));
+    return;
+  }
+  if (action.startsWith('system-ending-')) {
+    setState(chooseSystemEnding(state, action.replace('system-ending-', '')));
     return;
   }
   if (action === 'hunter-dungeon-close') {

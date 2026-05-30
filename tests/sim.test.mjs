@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   CLAN_RARITIES,
@@ -7,6 +8,8 @@ import {
   BASIC_FIGHT_MOVE_IDS,
   buySystemItem,
   craftHunterItem,
+  battleShadowDomain,
+  chooseSystemEnding,
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
@@ -36,6 +39,7 @@ import {
   getOpponentStats,
   getOpponentArchetype,
   getShadowArmySummary,
+  getShadowDomainMap,
   getTrainingAllowance,
   getAutoTrainingStatus,
   getCoachedFightOptions,
@@ -73,6 +77,7 @@ import {
   spendMoneyAction,
   spendHunterStatPoint,
   extractShadow,
+  fightMonarchBoss,
   startFight,
   startHunterDungeonEncounter,
   startHunterQuestFight,
@@ -298,13 +303,14 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
 
   const hunterMoves = getUnlockedHunterMoves(life);
 
-  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk).map(([id]) => id));
+  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch).map(([id]) => id));
+  assert.equal(hunterMoves.some((move) => move.id === 'shadowAssist'), false);
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
 test('Hunter move catalog labels every System skill as Basic or Special', () => {
   const basicMoves = ['slash', 'dashStrike', 'manaGuard', 'conserve', 'analyzeWeakness'];
-  const specialMoves = ['execute', 'shadowAssist', 'shadowPierce', 'manaRend', 'reapingArc'];
+  const specialMoves = ['execute', 'shadowPierce', 'manaRend', 'reapingArc', 'monarchCommand', 'abyssalDomain'];
 
   for (const moveId of basicMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'basic');
   for (const moveId of specialMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'special');
@@ -614,7 +620,7 @@ test('selecting a Gate creates a multi-room dungeon with a final boss System fig
   assert.equal(life.hunterWorld.activeDungeon.encounters.at(-1).isBoss, true);
   assert.equal(life.activeFight.source, 'hunterDungeon');
   assert.equal(life.activeFight.dungeonId, life.hunterWorld.activeDungeon.id);
-  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk).map(([id]) => id));
+  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -947,8 +953,9 @@ test('Shadow army summary includes roster strength, bonuses, and extraction elig
       ...base.hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      level: 12,
-      lastBossCleared: 'goblinCaptain',
+      rank: 'C',
+      level: 20,
+      lastBossCleared: 'bloodOgreBoss',
       shadowArmy: [
         { id: 'shadow-1', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
       ],
@@ -961,9 +968,31 @@ test('Shadow army summary includes roster strength, bonuses, and extraction elig
   assert.equal(summary.canExtract, true);
   assert.equal(summary.count, 1);
   assert.ok(summary.totalStrength >= 4);
-  assert.ok(summary.bonuses.some((bonus) => bonus.includes('Shadow Assist')));
-  assert.equal(extracted.hunterWorld.shadowArmy[1].sourceBoss, 'Goblin Captain');
+  assert.ok(summary.bonuses.some((bonus) => bonus.includes('Domain army')));
+  assert.equal(extracted.hunterWorld.shadowArmy[1].sourceBoss, 'Blood Ogre');
+  assert.ok(extracted.hunterWorld.shadowArmy[1].armyPower > 0);
   assert.equal(extracted.hunterWorld.milestones.shadowsExtracted, 1);
+});
+
+test('Shadow extraction rejects weak low-tier boss echoes', () => {
+  const base = createNewLife({ gender: 'Female', seed: 93051 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'C',
+      level: 20,
+      lastBossCleared: 'goblinCaptain',
+      shadowArmy: [],
+    },
+  };
+
+  const next = extractShadow(life);
+
+  assert.equal(next.hunterWorld.shadowArmy.length, 0);
+  assert.ok(next.log[0].text.includes('C-rank+'));
 });
 
 test('Monarch Trace unlocks at S-rank with three shadows and progresses as an endgame arc', () => {
@@ -992,7 +1021,8 @@ test('Monarch Trace unlocks at S-rank with three shadows and progresses as an en
   assert.equal(unlocked.hunterWorld.monarchTrace.stage, 1);
   assert.ok(unlocked.hunterWorld.unlockedSystemPerks.some((perk) => perk.id === 'rulersAuthority'));
   assert.equal(advanced.hunterWorld.monarchTrace.stage, 2);
-  assert.ok(advanced.hunterWorld.gateOffers.some((offer) => offer.isMonarchGate));
+  assert.equal(advanced.hunterWorld.gateOffers.some((offer) => offer.isMonarchGate), false);
+  assert.ok(getShadowDomainMap(advanced).domains.some((domain) => domain.state === 'available' || domain.state === 'core'));
 });
 
 test('higher-rank Hunter daily quests use tiered templates with stronger rewards', () => {
@@ -1368,7 +1398,7 @@ test('system shop potions heal resources and reduce System fatigue', () => {
   assert.equal(boughtRecovery.resources.money, life.resources.money - SYSTEM_SHOP_ITEMS.recoveryPotion.cost);
   assert.ok(healed.resources.health > life.resources.health);
   assert.ok(healed.resources.energy > life.resources.energy);
-  assert.equal(cleansed.hunterWorld.systemFatigue, 38);
+  assert.equal(cleansed.hunterWorld.systemFatigue, 26);
   assert.ok(cleansed.resources.mood > healed.resources.mood);
   assert.deepEqual(cleansed.hunterWorld.inventory, []);
 });
@@ -1402,14 +1432,16 @@ test('shadow extraction requires boss gate clearance and adds a shadow ally', ()
       ...createNewLife({ gender: 'Female', seed: 95 }).hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      level: 12,
-      lastBossCleared: 'steel-knight',
+      rank: 'C',
+      level: 20,
+      lastBossCleared: 'bloodOgreBoss',
     },
   };
 
   const next = extractShadow(life);
 
   assert.equal(next.hunterWorld.shadowArmy.length, 1);
+  assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
   assert.equal(next.hunterWorld.lastBossCleared, null);
   assert.ok(next.stats.control > life.stats.control);
 });
@@ -5736,4 +5768,124 @@ test('ground submission critical narration describes a submission instead of a s
   assert.ok(found, 'expected to find a critical submission exchange');
   assert.match(found.text, /Critical submission:/);
   assert.doesNotMatch(found.text, /Critical strike:/);
+});
+
+test('Monarch Body password UI is hidden while the hidden redeem function still works', () => {
+  const appSource = readFileSync(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const life = {
+    ...createNewLife({ gender: 'Male', seed: 16001 }),
+    stats: { ...createNewLife({ gender: 'Male', seed: 16001 }).stats, strength: 20, speed: 30 },
+  };
+
+  const unlocked = redeemMonarchBodyPassword(life, 'chyrish21');
+
+  assert.equal(appSource.includes('CHYRISH21'), false);
+  assert.equal(appSource.includes('monarch-body-password-input'), false);
+  assert.equal(unlocked.stats.strength, getStatCap(unlocked, 'strength'));
+  assert.equal(unlocked.stats.speed, getStatCap(unlocked, 'speed'));
+});
+
+test('Shadow Domains use clickable map state and transform a traced full conqueror into Shadow Monarch', () => {
+  const base = createNewLife({ gender: 'Female', seed: 16002 });
+  let life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 50,
+      gatesCleared: 55,
+      stats: { strength: 35, agility: 35, vitality: 35, sense: 35, intelligence: 35 },
+      shadowArmy: [
+        { id: 's1', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 8, role: 'vanguard', armyPower: 95 },
+        { id: 's2', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 12, role: 'elite', armyPower: 150 },
+        { id: 's3', monsterId: 'dragonMonarchBoss', name: 'Dragon Monarch Shadow', rank: 'S', strength: 16, role: 'elite', armyPower: 210 },
+      ],
+      monarchTrace: { unlocked: true, stage: 4, influence: 100, completed: true },
+      unlockedSystemPerks: [{ id: 'rulersAuthority', count: 1 }, { id: 'shadowDamagePlus8', count: 3 }],
+    },
+  };
+
+  const initialMap = getShadowDomainMap(life);
+  assert.equal(initialMap.domains.find((domain) => domain.id === 'ashen-outskirts').canAttack, true);
+  assert.equal(initialMap.domains.find((domain) => domain.id === 'iron-bastion').state, 'locked');
+
+  for (const id of ['ashen-outskirts', 'iron-bastion', 'bloodwood-front', 'frost-citadel', 'abyssal-throne']) {
+    life = battleShadowDomain(life, id);
+  }
+
+  assert.equal(life.hunterWorld.domainMap.completed, true);
+  assert.equal(life.hunterWorld.shadowMonarch.unlocked, true);
+  assert.equal(life.hunterWorld.shadowMonarch.evolvedSkills, true);
+  assert.ok(life.hunterWorld.statPoints >= 500);
+  assert.equal(life.hunterWorld.gateOffers.length, 0);
+});
+
+test('Shadow Monarch evolves basic Hunter skills and stops normal Gate offers', () => {
+  const base = createNewLife({ gender: 'Male', seed: 16003 });
+  const life = {
+    ...base,
+    activeFight: { source: 'hunterQuest', finished: false, moveCooldowns: {}, meters: { playerStamina: 100 } },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowMonarch: { unlocked: true, evolvedSkills: true, transformedMonth: 10 },
+      monarchWar: { unlocked: true, defeated: [], finalChoiceUnlocked: false },
+    },
+  };
+
+  const moves = getUnlockedHunterMoves(life);
+  const gated = generateHunterGateOffers(life);
+
+  assert.equal(moves.find((move) => move.id === 'slash').label, 'Monarch Slash');
+  assert.equal(moves.find((move) => move.id === 'slash').uiTone, 'shadow-monarch');
+  assert.ok(moves.some((move) => move.id === 'monarchCommand'));
+  assert.equal(moves.some((move) => move.id === 'shadowAssist'), false);
+  assert.equal(gated.hunterWorld.gateOffers.length, 0);
+  assert.equal(gated.hunterWorld.monarchWar.unlocked, true);
+});
+
+test('Monarch War defeats all Monarchs and unlocks final System choices', () => {
+  const base = createNewLife({ gender: 'Female', seed: 16004 });
+  let life = {
+    ...base,
+    stats: {
+      ...base.stats,
+      strength: 500,
+      speed: 500,
+      durability: 500,
+      technique: 500,
+      fightIq: 500,
+      willpower: 500,
+      reflexes: 500,
+      flexibility: 500,
+      control: 500,
+    },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 70,
+      statPoints: 500,
+      stats: { strength: 80, agility: 80, vitality: 80, sense: 80, intelligence: 80 },
+      shadowArmy: [{ id: 's1', monsterId: 'dragonMonarchBoss', name: 'Dragon Monarch Shadow', rank: 'S', strength: 20, role: 'elite', armyPower: 400 }],
+      shadowMonarch: { unlocked: true, evolvedSkills: true, transformedMonth: 20 },
+      monarchWar: { unlocked: true, defeated: [], finalChoiceUnlocked: false },
+    },
+  };
+
+  for (const id of ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction']) {
+    life = fightMonarchBoss(life, id);
+  }
+  const defender = chooseSystemEnding(life, 'defendPlanet');
+  const closed = chooseSystemEnding(life, 'closePortals');
+
+  assert.equal(life.hunterWorld.monarchWar.finalChoiceUnlocked, true);
+  assert.equal(defender.hunterWorld.systemEnding.choice, 'defendPlanet');
+  assert.equal(defender.hunterWorld.unlocked, true);
+  assert.equal(closed.hunterWorld.systemEnding.choice, 'closePortals');
+  assert.equal(closed.hunterWorld.unlocked, false);
 });

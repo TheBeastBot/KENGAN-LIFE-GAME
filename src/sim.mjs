@@ -75,12 +75,30 @@ const DEFAULT_HUNTER_WORLD = {
     craftedItems: 0,
   },
   itemUpgrades: {},
+  shadowSigilPower: 0,
+  domainMap: {
+    conquered: [],
+    lastBattle: null,
+    completed: false,
+  },
   monarchTrace: {
     unlocked: false,
     stage: 0,
     influence: 0,
     completed: false,
   },
+  shadowMonarch: {
+    unlocked: false,
+    transformedMonth: null,
+    evolvedSkills: false,
+  },
+  monarchWar: {
+    unlocked: false,
+    defeated: [],
+    finalChoiceUnlocked: false,
+    lastBattle: null,
+  },
+  systemEnding: null,
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
@@ -175,6 +193,90 @@ const HUNTER_CRAFTING_RECIPES = [
     costs: { redGateShard: 1, bossEssence: 2 },
     grants: { monarchVial: 1 },
   },
+  {
+    id: 'forge-shadow-sigil',
+    label: 'Forge Shadow Sigil',
+    description: 'Bind boss essence and Gate shards into a command seal for Domain conquest.',
+    costs: { bossEssence: 2, gateShard: 3 },
+    grants: { shadowSigil: 1 },
+  },
+  {
+    id: 'monarch-war-cache',
+    label: 'Monarch War Cache',
+    description: 'Prepare late-game recovery items from Monarch materials before boss war.',
+    costs: { monarchVial: 1, redGateShard: 1, monsterCore: 4 },
+    grants: { dungeonElixir: 2, manaAmpoule: 2 },
+  },
+];
+
+export const SHADOW_DOMAIN_TEMPLATES = [
+  {
+    id: 'ashen-outskirts',
+    name: 'Ashen Outskirts',
+    enemy: 'Ash Legion Remnants',
+    enemyPower: 34,
+    x: 14,
+    y: 58,
+    width: 22,
+    height: 22,
+    rewards: { statPoints: 8, items: { monsterCore: 3, gateShard: 2 }, influence: 10 },
+  },
+  {
+    id: 'iron-bastion',
+    name: 'Iron Bastion',
+    enemy: 'Knight Domain',
+    enemyPower: 62,
+    requires: ['ashen-outskirts'],
+    x: 36,
+    y: 36,
+    width: 24,
+    height: 22,
+    rewards: { statPoints: 12, items: { bossEssence: 1, gateShard: 2 }, influence: 14 },
+  },
+  {
+    id: 'bloodwood-front',
+    name: 'Bloodwood Front',
+    enemy: 'Ogre Warband',
+    enemyPower: 86,
+    requires: ['ashen-outskirts'],
+    x: 26,
+    y: 68,
+    width: 28,
+    height: 20,
+    rewards: { statPoints: 16, items: { bossEssence: 2, monsterCore: 3 }, influence: 16 },
+  },
+  {
+    id: 'frost-citadel',
+    name: 'Frost Citadel',
+    enemy: 'Warden Host',
+    enemyPower: 126,
+    requires: ['iron-bastion', 'bloodwood-front'],
+    x: 58,
+    y: 22,
+    width: 24,
+    height: 24,
+    rewards: { statPoints: 22, items: { bossEssence: 2, redGateShard: 1 }, influence: 18 },
+  },
+  {
+    id: 'abyssal-throne',
+    name: 'Abyssal Throne',
+    enemy: 'Monarch Core Guard',
+    enemyPower: 176,
+    core: true,
+    requires: ['frost-citadel'],
+    x: 66,
+    y: 56,
+    width: 24,
+    height: 28,
+    rewards: { statPoints: 40, items: { monarchVial: 1, awakeningRune: 1 }, influence: 25 },
+  },
+];
+
+export const MONARCH_BOSSES = [
+  { id: 'monarch-fangs', name: 'Monarch of Fangs', power: 780, reward: { statPoints: 60, items: { redGateShard: 1, bossEssence: 2 } } },
+  { id: 'monarch-frost', name: 'Monarch of Frost', power: 900, reward: { statPoints: 75, items: { monarchVial: 1 } } },
+  { id: 'monarch-flames', name: 'Monarch of Flames', power: 1040, reward: { statPoints: 90, items: { awakeningRune: 1 } } },
+  { id: 'monarch-destruction', name: 'Monarch of Destruction', power: 1220, reward: { statPoints: 140, items: { monarchVial: 2, awakeningRune: 1 } } },
 ];
 
 export const HUNTER_MONSTERS = {
@@ -400,17 +502,6 @@ export const HUNTER_MOVES = {
     guardBias: -7,
     text: 'Execute marks the target and drives the final line toward the core.',
   },
-  shadowAssist: {
-    label: 'Shadow Assist',
-    moveType: 'special',
-    cooldown: HUNTER_SPECIAL_COOLDOWN,
-    category: 'summon',
-    hint: 'Call shadow pressure. Stronger with Intelligence and shadow army size.',
-    staminaCost: 20,
-    damageBias: 1.35,
-    guardBias: 2,
-    text: 'Shadow Assist drags the monster timing off-beat for one brutal opening.',
-  },
   abyssalLeech: {
     label: 'Abyssal Leech',
     moveType: 'special',
@@ -459,6 +550,38 @@ export const HUNTER_MOVES = {
     requiresWeapon: 'reaperScythe',
     text: 'Reaping Arc carves a crescent of System light across the monster field.',
   },
+  monarchCommand: {
+    label: 'Monarch Command',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
+    category: 'ultimate',
+    hint: 'Shadow Monarch System skill. Crushes monster rhythm with royal pressure.',
+    staminaCost: 26,
+    damageBias: 1.7,
+    guardBias: 4,
+    requiresShadowMonarch: true,
+    text: 'Monarch Command turns the battlefield black and forces the target to kneel.',
+  },
+  abyssalDomain: {
+    label: 'Abyssal Domain',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN + 2,
+    category: 'ultimate',
+    hint: 'Shadow Monarch System skill. Heavy damage and heavy protection in one decree.',
+    staminaCost: 36,
+    damageBias: 2.1,
+    guardBias: 8,
+    requiresShadowMonarch: true,
+    text: 'Abyssal Domain spreads under your feet as black-violet System light answers.',
+  },
+};
+
+const SHADOW_MONARCH_SKILL_EVOLUTIONS = {
+  slash: { label: 'Monarch Slash', hint: 'Evolved Slash. Black-violet blade pressure scales with shadow sovereignty.' },
+  dashStrike: { label: 'Abyss Dash', hint: 'Evolved Dash Strike. Vanish through the enemy line and strike from the dark.' },
+  manaGuard: { label: 'Monarch Guard', hint: 'Evolved Mana Guard. Purple-black armor absorbs pressure and restores command.' },
+  conserve: { label: 'Shadow Recovery', hint: 'Evolved Conserve. Pull mana from the Domain without giving up control.' },
+  analyzeWeakness: { label: 'Sovereign Analysis', hint: 'Evolved Analyze Weakness. The System marks command breaks and fatal openings.' },
 };
 
 export const HUNTER_ITEM_CATALOG = {
@@ -469,7 +592,7 @@ export const HUNTER_ITEM_CATALOG = {
     rarity: 'common',
     cost: 400,
     description: 'Restores health and stamina for wounded Hunters.',
-    effects: { health: 18, energy: 12 },
+    effects: { health: 32, energy: 18 },
   },
   fatigueCleanse: {
     id: 'fatigueCleanse',
@@ -478,7 +601,7 @@ export const HUNTER_ITEM_CATALOG = {
     rarity: 'common',
     cost: 650,
     description: 'Reduces System fatigue and steadies mood.',
-    effects: { systemFatigue: -22, mood: 4 },
+    effects: { systemFatigue: -34, mood: 6 },
   },
   highPotion: {
     id: 'highPotion',
@@ -487,7 +610,7 @@ export const HUNTER_ITEM_CATALOG = {
     rarity: 'rare',
     cost: 1200,
     description: 'A stronger emergency vial for deep dungeon damage.',
-    effects: { health: 42, energy: 24, systemFatigue: -8 },
+    effects: { health: 70, energy: 38, systemFatigue: -12 },
   },
   dungeonElixir: {
     id: 'dungeonElixir',
@@ -495,7 +618,7 @@ export const HUNTER_ITEM_CATALOG = {
     type: 'consumable',
     rarity: 'rare',
     description: 'A Gate-brewed vial that patches deep dungeon damage.',
-    effects: { health: 55, energy: 30, systemFatigue: -12 },
+    effects: { health: 95, energy: 52, systemFatigue: -20 },
   },
   manaAmpoule: {
     id: 'manaAmpoule',
@@ -503,7 +626,7 @@ export const HUNTER_ITEM_CATALOG = {
     type: 'consumable',
     rarity: 'uncommon',
     description: 'Condensed mana that restores stamina before the next monster push.',
-    effects: { energy: 38, mood: 3 },
+    effects: { energy: 64, mood: 4 },
   },
   knightDagger: {
     id: 'knightDagger',
@@ -537,28 +660,36 @@ export const HUNTER_ITEM_CATALOG = {
     label: 'Monster Core',
     type: 'material',
     rarity: 'common',
-    description: 'A basic monster core saved for future crafting and upgrades.',
+    description: 'A basic monster core used for weapons, recovery items, and shadow command crafting.',
   },
   gateShard: {
     id: 'gateShard',
     label: 'Gate Shard',
     type: 'material',
     rarity: 'uncommon',
-    description: 'A cracked Gate fragment saved for future crafting and upgrades.',
+    description: 'A cracked Gate fragment used to refine System weapons and stabilize shadow sigils.',
   },
   bossEssence: {
     id: 'bossEssence',
     label: 'Boss Essence',
     type: 'material',
     rarity: 'rare',
-    description: 'A boss echo condensed into material form for future upgrades.',
+    description: 'A boss echo condensed into material form for shadow strengthening and higher recipes.',
   },
   redGateShard: {
     id: 'redGateShard',
     label: 'Red Gate Shard',
     type: 'material',
     rarity: 'epic',
-    description: 'A volatile Red Gate fragment saved for future crafting and upgrades.',
+    description: 'A volatile Red Gate fragment used for Monarch Vials and late-game war preparation.',
+  },
+  shadowSigil: {
+    id: 'shadowSigil',
+    label: 'Shadow Sigil',
+    type: 'special',
+    rarity: 'rare',
+    description: 'A command seal that permanently raises shadow army pressure for Domain conquest.',
+    effects: { shadowArmyPower: 16, systemFatigue: -8 },
   },
   monarchVial: {
     id: 'monarchVial',
@@ -598,11 +729,11 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   dashStrikeMastery: { id: 'dashStrikeMastery', type: 'perk', perk: 'dashStrikePlus4', tier: 'basic', maxStacks: 10, label: 'Dash Strike damage +4 per stack' },
   executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', tier: 'rare', maxStacks: 5, label: 'Execute cooldown -1 per stack' },
   analysisCrit: { id: 'analysisCrit', type: 'perk', perk: 'analysisCritPlus3', tier: 'rare', maxStacks: 5, label: 'System analysis crit/read chance +3% per stack' },
-  shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow Assist damage +8% per stack' },
+  shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow army Domain damage +8% per stack' },
   weaponSkillDamage: { id: 'weaponSkillDamage', type: 'perk', perk: 'weaponSkillPlus10', tier: 'rare', maxStacks: 5, label: 'Weapon System skill damage +10% per stack' },
   monarchExecution: { id: 'monarchExecution', type: 'perk', perk: 'monarchExecution', tier: 'special', maxStacks: 1, label: 'Monarch Execution: Execute crushes wounded monsters' },
   absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina' },
-  rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Shadow Assist scales harder" },
+  rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Domain conquest and Monarch progression bonus" },
   systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: all Basic System moves gain flat damage' },
   abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlocks an ultimate lifesteal System move' },
 };
@@ -739,6 +870,45 @@ function normalizeMonarchTrace(trace = {}) {
   };
 }
 
+function normalizeDomainMap(map = {}) {
+  const conquered = Array.isArray(map.conquered)
+    ? [...new Set(map.conquered.filter((id) => SHADOW_DOMAIN_TEMPLATES.some((domain) => domain.id === id)))]
+    : [];
+  return {
+    conquered,
+    lastBattle: map.lastBattle ?? null,
+    completed: Boolean(map.completed) || conquered.length >= SHADOW_DOMAIN_TEMPLATES.length,
+  };
+}
+
+function normalizeShadowMonarch(shadowMonarch = {}) {
+  return {
+    unlocked: Boolean(shadowMonarch.unlocked),
+    transformedMonth: shadowMonarch.transformedMonth ?? null,
+    evolvedSkills: Boolean(shadowMonarch.evolvedSkills),
+    powersLost: Boolean(shadowMonarch.powersLost),
+  };
+}
+
+function normalizeMonarchWar(war = {}) {
+  return {
+    unlocked: Boolean(war.unlocked),
+    defeated: Array.isArray(war.defeated)
+      ? [...new Set(war.defeated.filter((id) => MONARCH_BOSSES.some((boss) => boss.id === id)))]
+      : [],
+    finalChoiceUnlocked: Boolean(war.finalChoiceUnlocked),
+    lastBattle: war.lastBattle ?? null,
+  };
+}
+
+function normalizeSystemEnding(ending) {
+  if (!ending || !['closePortals', 'defendPlanet'].includes(ending.choice)) return null;
+  return {
+    choice: ending.choice,
+    chosenMonth: ending.chosenMonth ?? null,
+  };
+}
+
 function normalizeHunterDailyQuest(quest) {
   if (!quest) return null;
   const stages = Array.isArray(quest.stages) ? quest.stages : [];
@@ -805,6 +975,23 @@ function shadowStrength(shadow = {}) {
   return Math.max(1, storedStrength, storedPower, rankPower + monsterPower);
 }
 
+function shadowRole(monster = {}, rank = 'E') {
+  const style = `${monster.style ?? ''} ${monster.temperament ?? ''}`.toLowerCase();
+  if (style.includes('caster') || style.includes('lance') || style.includes('array')) return 'mage';
+  if (style.includes('guard') || style.includes('sentinel') || style.includes('warden') || style.includes('golem')) return 'tank';
+  if (style.includes('ambush') || style.includes('stalker') || style.includes('fang')) return 'assassin';
+  return HUNTER_RANKS.indexOf(rank) >= HUNTER_RANKS.indexOf('A') ? 'elite' : 'vanguard';
+}
+
+function shadowArmyPower(hunterWorld) {
+  const hunter = normalizeHunterWorld(hunterWorld);
+  const base = hunter.shadowArmy.reduce((sum, shadow) => sum + (shadow.armyPower ?? shadowStrength(shadow) * 10), 0);
+  const perkMultiplier = 1 + systemPerkValue({ hunterWorld: hunter }, 'shadowDamagePlus8');
+  const authorityBonus = hasSystemPerk({ hunterWorld: hunter }, 'rulersAuthority') ? 30 + hunter.stats.intelligence * 4 : 0;
+  const sigilBonus = hunter.shadowSigilPower ?? 0;
+  return Math.max(0, Math.floor(base * perkMultiplier + authorityBonus + sigilBonus));
+}
+
 function normalizeShadowArmy(shadowArmy = []) {
   if (!Array.isArray(shadowArmy)) return [];
   return shadowArmy
@@ -819,12 +1006,32 @@ function normalizeShadowArmy(shadowArmy = []) {
         monsterId: shadow.monsterId ?? shadow.sourceMonsterId ?? null,
         rank,
         strength: shadowStrength({ ...shadow, rank }),
+        role: shadow.role ?? shadowRole(monster, rank),
+        armyPower: Math.max(1, Math.floor(shadow.armyPower ?? shadowStrength({ ...shadow, rank }) * 10)),
       };
     });
 }
 
 function shadowArmyStrength(hunterWorld) {
   return (hunterWorld?.shadowArmy ?? []).reduce((sum, shadow) => sum + shadowStrength(shadow), 0);
+}
+
+function shadowExtractionEligibility(hunter) {
+  const bossId = hunter.lastBossCleared;
+  const monster = HUNTER_MONSTERS[bossId] ?? null;
+  const rank = monster?.tier ?? hunter.rank;
+  const rankIndex = HUNTER_RANKS.indexOf(rank);
+  const isBoss = Boolean(monster?.threat?.includes('Boss'));
+  const isRed = Boolean(bossId?.startsWith('red'));
+  const isMonarch = Boolean(monster?.threat?.includes('Monarch') || bossId?.includes('monarch') || bossId?.includes('Monarch'));
+  const levelReady = hunter.level >= 18;
+  const rankReady = HUNTER_RANKS.indexOf(hunter.rank) >= HUNTER_RANKS.indexOf('C');
+  const bossReady = isBoss && (rankIndex >= HUNTER_RANKS.indexOf('C') || isRed || isMonarch);
+  if (!hunter.unlocked || !bossId) return { eligible: false, reason: 'No cleared boss echo is available.' };
+  if (!levelReady) return { eligible: false, reason: 'Reach Hunter Level 18 before stable extraction.' };
+  if (!rankReady) return { eligible: false, reason: 'Reach C-rank before commanding real shadows.' };
+  if (!bossReady) return { eligible: false, reason: 'Only C-rank+, Red Gate, or Monarch boss echoes can become useful shadows.' };
+  return { eligible: true, monster, rank };
 }
 
 function normalizeHunterWorld(hunterWorld = {}) {
@@ -858,7 +1065,12 @@ function normalizeHunterWorld(hunterWorld = {}) {
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld.unlockedSystemPerks),
     milestones: normalizeHunterMilestones(hunterWorld.milestones),
     itemUpgrades: normalizeHunterItemUpgrades(hunterWorld.itemUpgrades),
+    shadowSigilPower: Math.max(0, Math.floor(hunterWorld.shadowSigilPower ?? 0)),
+    domainMap: normalizeDomainMap(hunterWorld.domainMap),
     monarchTrace: normalizeMonarchTrace(hunterWorld.monarchTrace),
+    shadowMonarch: normalizeShadowMonarch(hunterWorld.shadowMonarch),
+    monarchWar: normalizeMonarchWar(hunterWorld.monarchWar),
+    systemEnding: normalizeSystemEnding(hunterWorld.systemEnding),
   };
 }
 
@@ -3674,20 +3886,25 @@ export function getHunterAssociationReview(life) {
 export function getShadowArmySummary(life) {
   const hunter = normalizeHunterWorld(life?.hunterWorld);
   const totalStrength = shadowArmyStrength(hunter);
+  const armyPower = shadowArmyPower(hunter);
   const lastBoss = HUNTER_MONSTERS[hunter.lastBossCleared];
+  const eligibility = shadowExtractionEligibility(hunter);
   return {
     count: hunter.shadowArmy.length,
     totalStrength,
-    canExtract: Boolean(hunter.unlocked && hunter.lastBossCleared && hunter.level >= 10),
+    armyPower,
+    canExtract: eligibility.eligible,
+    extractReason: eligibility.reason ?? '',
     pendingBoss: lastBoss?.name ?? (hunter.lastBossCleared ? labelFromId(hunter.lastBossCleared) : null),
     roster: hunter.shadowArmy.map((shadow) => ({
       ...shadow,
       sourceBoss: HUNTER_MONSTERS[shadow.monsterId]?.name ?? shadow.sourceBoss ?? labelFromId(shadow.monsterId),
       strength: shadowStrength(shadow),
+      armyPower: shadow.armyPower ?? shadowStrength(shadow) * 10,
     })),
     bonuses: [
-      `Shadow Assist damage scaling: +${totalStrength} army strength`,
-      `Incoming pressure reduction: +${hunter.shadowArmy.length * 2 + totalStrength}`,
+      `Domain army pressure: ${armyPower} conquest power`,
+      `Territory control bonus: +${hunter.shadowArmy.length * 2 + totalStrength}`,
       hunter.shadowArmy.length >= 3 ? 'Monarch Trace readiness: online' : `Monarch Trace readiness: ${hunter.shadowArmy.length}/3 shadows`,
     ],
   };
@@ -6070,10 +6287,14 @@ export function getUnlockedHunterMoves(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   return Object.entries(HUNTER_MOVES)
     .filter(([, move]) => !move.requiresPerk || hasSystemPerk({ hunterWorld: hunter }, move.requiresPerk))
+    .filter(([, move]) => !move.requiresShadowMonarch || hunter.shadowMonarch.unlocked)
     .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunterHasItem(hunter, move.requiresWeapon))
     .map(([id, move]) => ({
       id,
       ...move,
+      ...(hunter.shadowMonarch.unlocked && SHADOW_MONARCH_SKILL_EVOLUTIONS[id]
+        ? { ...SHADOW_MONARCH_SKILL_EVOLUTIONS[id], evolved: true, uiTone: 'shadow-monarch' }
+        : {}),
       disabledReason: hunterMoveDisabledReason(life, { id, ...move }),
     }));
 }
@@ -6083,8 +6304,8 @@ function hunterMoveDisabledReason(life, move) {
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   const hunter = normalizeHunterWorld(life.hunterWorld);
   if (move.requiresPerk && !hasSystemPerk(life, move.requiresPerk)) return 'Requires the matching ultimate System perk.';
+  if (move.requiresShadowMonarch && !hunter.shadowMonarch.unlocked) return 'Requires Shadow Monarch transformation.';
   if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunterHasItem(hunter, move.requiresWeapon)) return 'Requires the matching System weapon.';
-  if (move.id === 'shadowAssist' && !(hunter.shadowArmy?.length)) return 'Requires at least one shadow in your army.';
   const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
   if (move.moveType === 'special' && cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'} remaining.`;
   const staminaCost = hunterMoveStaminaCost(life, move);
@@ -8273,11 +8494,6 @@ function hunterMoveProfile(move, life) {
       damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 2 + weaponDamageBonus,
       incomingReduction: 0,
     },
-    shadowAssist: {
-      stat: stats.control * 0.9 + stats.fightIq * 0.75 + shadowPower + hunter.level * 4,
-      damageBonus: shadowPower * (1 + systemPerkValue(life, 'shadowDamagePlus8')) + (hasSystemPerk(life, 'rulersAuthority') ? shadowStrengthTotal * (12 + hunter.stats.intelligence) : 0),
-      incomingReduction: shadowCount * 2 + shadowStrengthTotal,
-    },
     abyssalLeech: {
       stat: stats.control * 1.05 + stats.willpower * 0.85 + stats.fightIq * 0.55 + hunter.stats.intelligence * 5 + hunter.level * 5,
       damageBonus: hunter.stats.intelligence * 4 + hunter.stats.sense * 2 + shadowStrengthTotal * 6,
@@ -8298,8 +8514,25 @@ function hunterMoveProfile(move, life) {
       damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 3 + hunter.stats.intelligence * 2 + weaponDamageBonus,
       incomingReduction: 0,
     },
+    monarchCommand: {
+      stat: stats.control * 1.15 + stats.fightIq * 0.8 + shadowPower + hunter.level * 7,
+      damageBonus: shadowPower * 0.35 + hunter.stats.intelligence * 5 + hunter.stats.sense * 3,
+      incomingReduction: 8 + shadowCount * 3,
+    },
+    abyssalDomain: {
+      stat: stats.willpower * 1.05 + stats.control * 0.85 + shadowPower * 0.75 + hunter.level * 8,
+      damageBonus: shadowPower * 0.55 + hunter.stats.strength * 3 + hunter.stats.intelligence * 4,
+      incomingReduction: 14 + hunter.stats.vitality * 2 + shadowStrengthTotal,
+    },
   };
-  return profiles[move.id] ?? profiles.slash;
+  const profile = profiles[move.id] ?? profiles.slash;
+  if (!hunter.shadowMonarch.unlocked || !SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id]) return profile;
+  return {
+    ...profile,
+    stat: profile.stat * 1.18 + shadowPower * 0.15,
+    damageBonus: profile.damageBonus + 28 + shadowStrengthTotal * 2,
+    incomingReduction: profile.incomingReduction + 6,
+  };
 }
 
 function takeHunterQuestTurn(life, moveId = 'slash') {
@@ -9338,10 +9571,103 @@ export function claimHunterDailyQuest(life) {
   return addLog(next, `System Daily Quest claimed: ${template.title}, ${result}.`, 'world');
 }
 
+function applyDomainRewards(next, rewards = {}) {
+  next.hunterWorld.statPoints += Math.max(0, Math.floor(rewards.statPoints ?? 0));
+  next.hunterWorld.monarchTrace = normalizeMonarchTrace(next.hunterWorld.monarchTrace);
+  next.hunterWorld.monarchTrace.influence = clamp(next.hunterWorld.monarchTrace.influence + (rewards.influence ?? 0));
+  for (const [itemId, quantity] of Object.entries(rewards.items ?? {})) addHunterItem(next.hunterWorld, itemId, quantity);
+}
+
+function transformShadowMonarch(next) {
+  next.hunterWorld.shadowMonarch = normalizeShadowMonarch(next.hunterWorld.shadowMonarch);
+  if (next.hunterWorld.shadowMonarch.unlocked) return false;
+  next.hunterWorld.shadowMonarch = {
+    unlocked: true,
+    transformedMonth: lifeMonth(next),
+    evolvedSkills: true,
+  };
+  next.hunterWorld.statPoints += 500;
+  next.hunterWorld.monarchWar = {
+    ...normalizeMonarchWar(next.hunterWorld.monarchWar),
+    unlocked: true,
+  };
+  next.hunterWorld.gateOffers = [];
+  grantSystemPerk(next.hunterWorld, 'systemOverclock');
+  grantSystemPerk(next.hunterWorld, 'abyssalLeech');
+  return true;
+}
+
+export function getShadowDomainMap(life) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  const map = normalizeDomainMap(hunter.domainMap);
+  const conquered = new Set(map.conquered);
+  const armyPower = shadowArmyPower(hunter);
+  return {
+    armyPower,
+    completed: map.completed,
+    transformed: hunter.shadowMonarch.unlocked,
+    domains: SHADOW_DOMAIN_TEMPLATES.map((domain) => {
+      const requirements = domain.requires ?? [];
+      const missing = requirements.filter((id) => !conquered.has(id));
+      const isConquered = conquered.has(domain.id);
+      const unlocked = !missing.length;
+      const canAttack = hunter.unlocked && !isConquered && unlocked && !hunter.shadowMonarch.unlocked;
+      const state = isConquered ? 'conquered' : !unlocked ? 'locked' : domain.core ? 'core' : 'available';
+      return {
+        ...domain,
+        state,
+        canAttack,
+        lockReason: isConquered ? 'Conquered' : missing.length ? `Conquer ${missing.map(labelFromId).join(', ')} first.` : '',
+        playerPower: armyPower,
+        winChance: canAttack ? clamp(Math.round((armyPower / Math.max(1, domain.enemyPower)) * 60), 5, 95) : 0,
+      };
+    }),
+  };
+}
+
+export function battleShadowDomain(life, domainId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'Shadow Domains are locked until the System recognizes you as a Hunter.', 'world');
+  const mapView = getShadowDomainMap(next);
+  const domain = mapView.domains.find((item) => item.id === domainId);
+  if (!domain) return addLog(next, 'That Shadow Domain does not exist on the map.', 'world');
+  if (!domain.canAttack) return addLog(next, domain.lockReason || 'That Shadow Domain cannot be attacked right now.', 'world');
+  const armyPower = mapView.armyPower;
+  const authorityBonus = hasSystemPerk(next, 'rulersAuthority') ? 18 : 0;
+  const resultPower = armyPower + authorityBonus + next.hunterWorld.level;
+  const won = resultPower >= domain.enemyPower;
+  next.hunterWorld.domainMap = normalizeDomainMap(next.hunterWorld.domainMap);
+  next.hunterWorld.domainMap.lastBattle = {
+    domainId,
+    won,
+    armyPower,
+    enemyPower: domain.enemyPower,
+    month: lifeMonth(next),
+  };
+  if (!won) {
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 10);
+    return addLog(next, `Domain assault failed: ${domain.name} held against your shadow army (${armyPower}/${domain.enemyPower}).`, 'world');
+  }
+  next.hunterWorld.domainMap.conquered = [...new Set([...next.hunterWorld.domainMap.conquered, domain.id])];
+  next.hunterWorld.domainMap.completed = next.hunterWorld.domainMap.conquered.length >= SHADOW_DOMAIN_TEMPLATES.length;
+  applyDomainRewards(next, domain.rewards);
+  const transformed = next.hunterWorld.domainMap.completed && next.hunterWorld.monarchTrace.unlocked ? transformShadowMonarch(next) : false;
+  const message = transformed
+    ? `Domain conquered: ${domain.name}. The full map bows, and you awaken as the Shadow Monarch. +500 Hunter stat points.`
+    : `Domain conquered: ${domain.name}. Rewards added to the System inventory.`;
+  return addLog(next, message, 'world');
+}
+
 export function generateHunterGateOffers(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate Board is still locked.', 'world');
+  if (next.hunterWorld.shadowMonarch.unlocked) {
+    next.hunterWorld.gateOffers = [];
+    next.hunterWorld.monarchWar = { ...normalizeMonarchWar(next.hunterWorld.monarchWar), unlocked: true };
+    return addLog(next, 'Monarch War has replaced Gates. No normal Gate signals appear.', 'world');
+  }
   if (next.hunterWorld.activeDungeon || next.hunterWorld.gateOffers.length) return next;
   next.hunterWorld.gateOffers = createHunterGateBoard(next);
   next.hunterWorld.redGatePending = false;
@@ -9440,6 +9766,11 @@ export function dismissHunterDungeonResult(life) {
   if (!dungeon || !dungeon.completed) return addLog(next, 'There is no resolved dungeon report to dismiss.', 'world');
   next.activeFight = null;
   next.hunterWorld.activeDungeon = null;
+  if (next.hunterWorld.shadowMonarch.unlocked) {
+    next.hunterWorld.gateOffers = [];
+    next.hunterWorld.monarchWar = { ...normalizeMonarchWar(next.hunterWorld.monarchWar), unlocked: true };
+    return addLog(next, `Gate report closed: ${dungeon.name}. Monarch War has replaced normal Gates.`, 'world');
+  }
   next.hunterWorld.gateOffers = createHunterGateBoard(next);
   next.hunterWorld.redGatePending = false;
   return addLog(next, `Gate report closed: ${dungeon.name}. New Gate signals have appeared.`, 'world');
@@ -9558,6 +9889,7 @@ function applyHunterItemEffects(next, item) {
   next.resources.mood = clamp(next.resources.mood + (effects.mood ?? 0));
   next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + (effects.systemFatigue ?? 0));
   next.hunterWorld.statPoints += Math.max(0, Math.floor(effects.hunterStatPoints ?? 0));
+  next.hunterWorld.shadowSigilPower = Math.max(0, Math.floor((next.hunterWorld.shadowSigilPower ?? 0) + (effects.shadowArmyPower ?? 0)));
   if (effects.allHunterStats) {
     for (const stat of Object.keys(DEFAULT_HUNTER_STATS)) next.hunterWorld.stats[stat] = Math.max(0, next.hunterWorld.stats[stat] + effects.allHunterStats);
   }
@@ -9586,13 +9918,15 @@ export function equipHunterItem(life, itemId) {
 export function extractShadow(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  if (!next.hunterWorld.unlocked || !next.hunterWorld.lastBossCleared || next.hunterWorld.level < 10) {
-    return addLog(next, 'Shadow Extraction failed. The System needs a stronger boss echo.', 'world');
+  const eligibility = shadowExtractionEligibility(next.hunterWorld);
+  if (!eligibility.eligible) {
+    return addLog(next, `Shadow Extraction failed. ${eligibility.reason}`, 'world');
   }
   const monsterId = next.hunterWorld.lastBossCleared;
   const monster = HUNTER_MONSTERS[monsterId] ?? null;
   const rank = monster?.tier ?? next.hunterWorld.rank;
-  const strength = shadowStrength({ monsterId, rank, power: 18 + next.hunterWorld.level * 2 });
+  const strength = shadowStrength({ monsterId, rank, power: 30 + next.hunterWorld.level * 3 + (monster?.power ?? 0) / 4 });
+  const role = shadowRole(monster, rank);
   const shadow = {
     id: `${monsterId}-${next.hunterWorld.shadowArmy.length + 1}`,
     monsterId,
@@ -9600,8 +9934,10 @@ export function extractShadow(life) {
     sourceBoss: monster?.name ?? labelFromId(monsterId),
     extractedMonth: lifeMonth(next),
     rank,
+    role,
     strength,
-    power: 18 + next.hunterWorld.level * 2,
+    armyPower: strength * 12 + Math.floor((monster?.power ?? 0) / 10),
+    power: 30 + next.hunterWorld.level * 3,
   };
   next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
   next.hunterWorld.lastBossCleared = null;
@@ -9638,18 +9974,62 @@ export function advanceMonarchTrace(life) {
   trace.influence = clamp(trace.influence + 25, 0, 100);
   trace.completed = trace.stage >= 4;
   next.hunterWorld.milestones.monarchSteps += 1;
-  if (trace.stage >= 2 && !next.hunterWorld.gateOffers.some((offer) => offer.isMonarchGate)) {
-    const offer = createGateOffer(next, 'S', 9, { isRedGate: true, danger: true });
-    offer.id = `monarch-${lifeMonth(next)}-${trace.stage}`;
-    offer.name = 'MONARCH TRACE: Shadow Throne Rift';
-    offer.isMonarchGate = true;
-    offer.modifier = { id: 'monarch-trace', label: 'Monarch Trace', danger: 'Mythic', loot: '+Monarch rewards', scan: 'The Gate is responding to your shadow army directly.' };
-    next.hunterWorld.gateOffers = [offer, ...next.hunterWorld.gateOffers.filter((gate) => !gate.isMonarchGate)].slice(0, 3);
-  }
+  if (trace.stage >= 2) next.hunterWorld.domainMap = normalizeDomainMap(next.hunterWorld.domainMap);
   if (trace.stage >= 3) grantSystemPerk(next.hunterWorld, 'systemOverclock');
   if (trace.completed) grantSystemPerk(next.hunterWorld, 'abyssalLeech');
   next.hunterWorld.monarchTrace = trace;
   return addLog(next, trace.completed ? 'Monarch Trace completed: Abyssal Leech unlocked.' : `Monarch Trace advanced to stage ${trace.stage}.`, 'world');
+}
+
+export function fightMonarchBoss(life, bossId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.shadowMonarch.unlocked) return addLog(next, 'Monarch War is locked until you become the Shadow Monarch.', 'world');
+  const boss = MONARCH_BOSSES.find((item) => item.id === bossId);
+  if (!boss) return addLog(next, 'That Monarch cannot be found.', 'world');
+  const war = normalizeMonarchWar(next.hunterWorld.monarchWar);
+  if (war.defeated.includes(boss.id)) return addLog(next, `${boss.name} has already fallen.`, 'world');
+  const hunterScore = hunterPower(next) + shadowArmyPower(next.hunterWorld) + next.hunterWorld.level * 8 + next.hunterWorld.statPoints * 0.15;
+  const won = hunterScore >= boss.power;
+  war.lastBattle = {
+    bossId: boss.id,
+    won,
+    hunterScore: Math.floor(hunterScore),
+    bossPower: boss.power,
+    month: lifeMonth(next),
+  };
+  if (!won) {
+    next.hunterWorld.monarchWar = war;
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 18);
+    return addLog(next, `${boss.name} repelled you. Monarch War pressure rises (${Math.floor(hunterScore)}/${boss.power}).`, 'world');
+  }
+  war.defeated = [...new Set([...war.defeated, boss.id])];
+  war.finalChoiceUnlocked = war.defeated.length >= MONARCH_BOSSES.length;
+  next.hunterWorld.monarchWar = war;
+  next.hunterWorld.statPoints += Math.max(0, Math.floor(boss.reward?.statPoints ?? 0));
+  for (const [itemId, quantity] of Object.entries(boss.reward?.items ?? {})) addHunterItem(next.hunterWorld, itemId, quantity);
+  const suffix = war.finalChoiceUnlocked ? ' Final System choice unlocked.' : '';
+  return addLog(next, `${boss.name} defeated. Monarch rewards claimed.${suffix}`, 'world');
+}
+
+export function chooseSystemEnding(life, choice) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const war = normalizeMonarchWar(next.hunterWorld.monarchWar);
+  if (!war.finalChoiceUnlocked) return addLog(next, 'The final System choice is locked until every Monarch falls.', 'world');
+  if (!['closePortals', 'defendPlanet'].includes(choice)) return addLog(next, 'That System ending choice does not exist.', 'world');
+  next.hunterWorld.systemEnding = { choice, chosenMonth: lifeMonth(next) };
+  if (choice === 'closePortals') {
+    next.hunterWorld.unlocked = false;
+    next.hunterWorld.playerAwakened = false;
+    next.hunterWorld.gateOffers = [];
+    next.hunterWorld.activeDungeon = null;
+    next.hunterWorld.statPoints = 0;
+    next.hunterWorld.shadowMonarch = { ...next.hunterWorld.shadowMonarch, powersLost: true };
+    return addLog(next, 'Final choice: all portals closed. The System ends, and your Hunter powers fade.', 'world');
+  }
+  next.resources.reputation = clamp(next.resources.reputation + 120, 0, 999);
+  return addLog(next, 'Final choice: the System remains. You stand as the planet defender.', 'world');
 }
 
 function queueTriggeredEvents(life, trigger, context = {}) {
