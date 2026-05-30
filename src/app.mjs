@@ -385,6 +385,22 @@ function hunterItemQuantity(hunter, itemId) {
   return normalizeHunterInventory(hunter?.inventory).find((item) => item.id === itemId)?.quantity ?? 0;
 }
 
+function normalizeSystemPerks(perks = []) {
+  if (!Array.isArray(perks)) return [];
+  const stacks = new Map();
+  for (const entry of perks) {
+    const id = typeof entry === 'string' ? entry : entry?.id ?? entry?.perk;
+    if (!id) continue;
+    const count = typeof entry === 'string' ? 1 : Math.max(1, Math.floor(entry.count ?? 1));
+    stacks.set(id, (stacks.get(id) ?? 0) + count);
+  }
+  return [...stacks.entries()].map(([id, count]) => ({ id, count }));
+}
+
+function systemPerkCount(hunter, perkId) {
+  return normalizeSystemPerks(hunter?.unlockedSystemPerks).find((item) => item.id === perkId)?.count ?? 0;
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   return {
     ...DEFAULT_HUNTER_WORLD,
@@ -412,7 +428,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
     dailyQuest: hunterWorld?.dailyQuest ?? null,
     pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
-    unlockedSystemPerks: Array.isArray(hunterWorld?.unlockedSystemPerks) ? hunterWorld.unlockedSystemPerks.filter(Boolean) : [],
+    unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
   };
 }
 
@@ -2774,12 +2790,16 @@ function renderHunterMoves(mode = 'quest') {
   };
   const renderMoveCard = (move) => {
     const moveTypeLabel = move.moveType === 'special' ? 'Special Move' : 'Basic Move';
-    const perks = new Set(state.hunterWorld?.unlockedSystemPerks ?? []);
+    const perkCount = (id) => systemPerkCount(state.hunterWorld, id);
     const perkHint = [
-      move.id === 'execute' && perks.has('executeCooldownMinus1') ? 'Execute cooldown -1 active.' : '',
-      move.id === 'conserve' && perks.has('conservePlus6') ? 'Conserve restores 24 mana.' : '',
-      move.moveType === 'special' && perks.has('specialStaminaMinus2') ? 'Special stamina cost -2 active.' : '',
-      move.moveType === 'basic' && move.id !== 'conserve' && perks.has('basicDamagePlus5') ? 'Basic damage +5% active.' : '',
+      move.id === 'execute' && perkCount('executeCooldownMinus1') ? `Execute cooldown -${perkCount('executeCooldownMinus1')} active (${perkCount('executeCooldownMinus1')}/5).` : '',
+      move.id === 'conserve' && perkCount('conservePlus6') ? `Conserve restores +${6 * perkCount('conservePlus6')} mana (${perkCount('conservePlus6')}/10).` : '',
+      move.id === 'manaGuard' && perkCount('manaGuardPlus3') ? `Mana Guard reduction +${3 * perkCount('manaGuardPlus3')} (${perkCount('manaGuardPlus3')}/10).` : '',
+      move.id === 'dashStrike' && perkCount('dashStrikePlus4') ? `Dash Strike damage +${4 * perkCount('dashStrikePlus4')} (${perkCount('dashStrikePlus4')}/10).` : '',
+      move.moveType === 'special' && perkCount('specialStaminaMinus2') ? `Special stamina cost -${2 * perkCount('specialStaminaMinus2')} (${perkCount('specialStaminaMinus2')}/10).` : '',
+      move.moveType === 'basic' && move.id !== 'conserve' && perkCount('basicDamagePlus5') ? `Basic damage +${5 * perkCount('basicDamagePlus5')}% (${perkCount('basicDamagePlus5')}/10).` : '',
+      move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
+      move.id === 'shadowAssist' && perkCount('shadowDamagePlus8') ? `Shadow Assist damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
     ].filter(Boolean).join(' ');
     return `
       <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>

@@ -74,8 +74,17 @@ const SECRET_MENTOR_PASSWORD = 'MENTOR21';
 const SYSTEM_PERK_VALUES = {
   executeCooldownMinus1: 1,
   specialStaminaMinus2: 2,
-  basicDamagePlus5: 1.05,
+  basicDamagePlus5: 0.05,
   conservePlus6: 6,
+  manaGuardPlus3: 3,
+  dashStrikePlus4: 4,
+  analysisCritPlus3: 0.03,
+  shadowDamagePlus8: 0.08,
+  weaponSkillPlus10: 0.1,
+  monarchExecution: 1,
+  absoluteGuard: 1,
+  rulersAuthority: 1,
+  systemOverclock: 1,
 };
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
@@ -523,10 +532,19 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   fieldRecovery: { id: 'fieldRecovery', type: 'recovery', health: 30, energy: 20, label: 'Restore 30 health and 20 stamina' },
   moneyCache: { id: 'moneyCache', type: 'money', amount: 1000, label: '+$1,000 money' },
   reputationPing: { id: 'reputationPing', type: 'reputation', amount: 8, label: '+8 reputation' },
-  executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', label: 'Execute cooldown -1' },
-  specialEfficiency: { id: 'specialEfficiency', type: 'perk', perk: 'specialStaminaMinus2', label: 'Special Move stamina costs -2' },
-  basicDamage: { id: 'basicDamage', type: 'perk', perk: 'basicDamagePlus5', label: 'Basic Move damage +5%' },
-  conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', label: 'Conserve restores +6 more stamina' },
+  basicDamage: { id: 'basicDamage', type: 'perk', perk: 'basicDamagePlus5', tier: 'basic', maxStacks: 10, label: 'Basic Move damage +5% per stack' },
+  specialEfficiency: { id: 'specialEfficiency', type: 'perk', perk: 'specialStaminaMinus2', tier: 'basic', maxStacks: 10, label: 'Special Move stamina costs -2 per stack' },
+  conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', tier: 'basic', maxStacks: 10, label: 'Conserve restores +6 more stamina per stack' },
+  manaGuardMastery: { id: 'manaGuardMastery', type: 'perk', perk: 'manaGuardPlus3', tier: 'basic', maxStacks: 10, label: 'Mana Guard reduction +3 per stack' },
+  dashStrikeMastery: { id: 'dashStrikeMastery', type: 'perk', perk: 'dashStrikePlus4', tier: 'basic', maxStacks: 10, label: 'Dash Strike damage +4 per stack' },
+  executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', tier: 'rare', maxStacks: 5, label: 'Execute cooldown -1 per stack' },
+  analysisCrit: { id: 'analysisCrit', type: 'perk', perk: 'analysisCritPlus3', tier: 'rare', maxStacks: 5, label: 'System analysis crit/read chance +3% per stack' },
+  shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow Assist damage +8% per stack' },
+  weaponSkillDamage: { id: 'weaponSkillDamage', type: 'perk', perk: 'weaponSkillPlus10', tier: 'rare', maxStacks: 5, label: 'Weapon System skill damage +10% per stack' },
+  monarchExecution: { id: 'monarchExecution', type: 'perk', perk: 'monarchExecution', tier: 'special', maxStacks: 1, label: 'Monarch Execution: Execute crushes wounded monsters' },
+  absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina' },
+  rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Shadow Assist scales harder" },
+  systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: all Basic System moves gain flat damage' },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -579,6 +597,26 @@ function normalizeHunterInventory(inventory = []) {
     stacks.set(id, (stacks.get(id) ?? 0) + quantity);
   }
   return [...stacks.entries()].map(([id, quantity]) => ({ id, quantity }));
+}
+
+function normalizeSystemPerks(perks = []) {
+  if (!Array.isArray(perks)) return [];
+  const stacks = new Map();
+  const validPerks = new Set(Object.values(HUNTER_LEVEL_REWARD_OPTIONS).filter((option) => option.type === 'perk').map((option) => option.perk));
+  for (const entry of perks) {
+    const id = typeof entry === 'string' ? entry : entry?.id ?? entry?.perk;
+    if (!id || !validPerks.has(id)) continue;
+    const quantity = typeof entry === 'string' ? 1 : Math.max(1, Math.floor(entry.count ?? entry.quantity ?? 1));
+    stacks.set(id, (stacks.get(id) ?? 0) + quantity);
+  }
+  return [...stacks.entries()].map(([id, count]) => {
+    const option = systemPerkOption(id);
+    return { id, count: Math.min(count, option?.maxStacks ?? 1) };
+  });
+}
+
+function systemPerkOption(perkId) {
+  return Object.values(HUNTER_LEVEL_REWARD_OPTIONS).find((option) => option.type === 'perk' && option.perk === perkId) ?? null;
 }
 
 function hunterItemQuantity(hunterWorld, itemId) {
@@ -689,7 +727,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
     dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
     pendingLevelRewards: Array.isArray(hunterWorld.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
-    unlockedSystemPerks: Array.isArray(hunterWorld.unlockedSystemPerks) ? [...new Set(hunterWorld.unlockedSystemPerks.filter(Boolean))] : [],
+    unlockedSystemPerks: normalizeSystemPerks(hunterWorld.unlockedSystemPerks),
   };
 }
 
@@ -3544,19 +3582,24 @@ function hunterXpForNextLevel(level) {
 }
 
 function hasSystemPerk(life, perk) {
-  return normalizeHunterWorld(life.hunterWorld).unlockedSystemPerks.includes(perk);
+  return systemPerkCount(life, perk) > 0;
+}
+
+function systemPerkCount(life, perk) {
+  return normalizeHunterWorld(life.hunterWorld).unlockedSystemPerks.find((item) => item.id === perk)?.count ?? 0;
 }
 
 function systemPerkValue(life, perk, fallback = 0) {
-  return hasSystemPerk(life, perk) ? SYSTEM_PERK_VALUES[perk] ?? fallback : fallback;
+  const count = systemPerkCount(life, perk);
+  if (!count) return fallback;
+  return (SYSTEM_PERK_VALUES[perk] ?? fallback) * count;
 }
 
 function createHunterLevelRewardChoice(life, level) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const availableOptions = Object.values(HUNTER_LEVEL_REWARD_OPTIONS)
-    .filter((option) => option.type !== 'perk' || !hunter.unlockedSystemPerks.includes(option.perk));
-  const pool = availableOptions.length >= 5 ? availableOptions : Object.values(HUNTER_LEVEL_REWARD_OPTIONS);
-  const optionIds = pool
+    .filter((option) => option.type !== 'perk' || (hunter.unlockedSystemPerks.find((item) => item.id === option.perk)?.count ?? 0) < (option.maxStacks ?? 1));
+  const optionIds = availableOptions
     .map((option) => ({
       id: option.id,
       roll: deterministicRoll(life.rngSeed, 'hunter-level-reward', level, lifeMonth(life), option.id),
@@ -3603,7 +3646,12 @@ export function claimHunterLevelReward(life, rewardId) {
   } else if (reward.type === 'reputation') {
     next.resources.reputation = clamp(next.resources.reputation + Math.round(reward.amount ?? 0));
   } else if (reward.type === 'perk' && reward.perk) {
-    if (!next.hunterWorld.unlockedSystemPerks.includes(reward.perk)) next.hunterWorld.unlockedSystemPerks.push(reward.perk);
+    const perks = normalizeSystemPerks(next.hunterWorld.unlockedSystemPerks);
+    const existing = perks.find((item) => item.id === reward.perk);
+    const maxStacks = reward.maxStacks ?? systemPerkOption(reward.perk)?.maxStacks ?? 1;
+    if (existing) existing.count = Math.min(maxStacks, existing.count + 1);
+    else perks.push({ id: reward.perk, count: 1 });
+    next.hunterWorld.unlockedSystemPerks = perks;
   }
 
   next.hunterWorld.pendingLevelRewards = next.hunterWorld.pendingLevelRewards.slice(1);
@@ -7835,13 +7883,13 @@ function hunterMoveProfile(move, life) {
     },
     dashStrike: {
       stat: stats.speed * 1.1 + stats.reflexes * 0.85 + stats.strength * 0.35 + hunter.level * 4,
-      damageBonus: hunter.stats.agility * 2 + hunter.stats.strength,
+      damageBonus: hunter.stats.agility * 2 + hunter.stats.strength + systemPerkValue(life, 'dashStrikePlus4'),
       incomingReduction: 0,
     },
     manaGuard: {
       stat: stats.durability * 0.95 + stats.willpower * 0.9 + stats.control * 0.5 + hunter.level * 4,
       damageBonus: 0,
-      incomingReduction: 10 + hunter.stats.vitality * 2 + hunter.stats.intelligence,
+      incomingReduction: 10 + hunter.stats.vitality * 2 + hunter.stats.intelligence + systemPerkValue(life, 'manaGuardPlus3'),
     },
     conserve: {
       stat: stats.durability * 0.92 + stats.willpower * 0.9 + stats.control * 0.52 + hunter.level * 4,
@@ -7860,7 +7908,7 @@ function hunterMoveProfile(move, life) {
     },
     shadowAssist: {
       stat: stats.control * 0.9 + stats.fightIq * 0.75 + shadowPower + hunter.level * 4,
-      damageBonus: shadowPower,
+      damageBonus: shadowPower * (1 + systemPerkValue(life, 'shadowDamagePlus8')) + (hasSystemPerk(life, 'rulersAuthority') ? hunter.shadowArmy.length * (12 + hunter.stats.intelligence) : 0),
       incomingReduction: hunter.shadowArmy.length * 2,
     },
     shadowPierce: {
@@ -7902,13 +7950,17 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus;
   const swing = playerScore - enemyScore;
   const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
-  const executeBonus = move.id === 'execute' ? Math.round(hurtPercent / 4) : 0;
+  const executeBonus = move.id === 'execute'
+    ? Math.round(hurtPercent / 4) + (hasSystemPerk(next, 'monarchExecution') && hurtPercent >= 65 ? Math.round((fight.meters.maxOpponentHealth ?? 100) * 0.18) : 0)
+    : 0;
   const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
-  const basicDamageMultiplier = move.moveType === 'basic' ? systemPerkValue(next, 'basicDamagePlus5', 1) : 1;
-  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus - opponentDefense)));
+  const basicDamageMultiplier = move.moveType === 'basic' ? 1 + systemPerkValue(next, 'basicDamagePlus5') : 1;
+  const weaponDamageMultiplier = move.category === 'weapon' ? 1 + systemPerkValue(next, 'weaponSkillPlus10') : 1;
+  const overclockBonus = move.moveType === 'basic' && hasSystemPerk(next, 'systemOverclock') ? 12 : 0;
+  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
-    : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004, 0.05, 0.42);
+    : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0), 0.05, 0.57);
   const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'hunter-crit');
   const critical = criticalRoll < criticalChance;
   let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
@@ -7923,9 +7975,10 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   if (move.moveType === 'special') fight.moveCooldowns[move.id] = appliedCooldown;
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   const conserveGain = 18 + systemPerkValue(next, 'conservePlus6');
+  const guardRecovery = move.id === 'manaGuard' && hasSystemPerk(next, 'absoluteGuard') ? 8 : 0;
   fight.meters.playerStamina = move.id === 'conserve'
     ? clamp(fight.meters.playerStamina + conserveGain, 0, fight.meters.maxPlayerStamina ?? 100)
-    : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 : 0), 0, fight.meters.maxPlayerStamina ?? 100);
+    : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 + guardRecovery : 0), 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
@@ -7947,6 +8000,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
       : '';
   const perkLine = [
     move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.` : '',
+    guardRecovery ? ` Absolute Guard recovery: +${guardRecovery} mana.` : '',
     appliedCooldown ? ` Cooldown set: ${appliedCooldown} exchange${appliedCooldown === 1 ? '' : 's'}.` : '',
   ].join('');
   fight.exchanges.unshift({
