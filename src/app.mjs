@@ -295,7 +295,10 @@ function preloadMoveIcons() {
 function loadGame() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? normalizeSave(JSON.parse(saved)) : null;
+    if (!saved) return null;
+    const normalized = normalizeSave(JSON.parse(saved));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    return normalized;
   } catch {
     return null;
   }
