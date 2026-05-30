@@ -19,7 +19,9 @@ import {
   acceptClan,
   ageUp,
   createNewLife,
+  advanceMonarchTrace,
   buySystemItem,
+  craftHunterItem,
   useHunterItem,
   equipHunterItem,
   endLife,
@@ -27,12 +29,16 @@ import {
   getAdaptedOpponent,
   getCombatOpponent,
   getHunterEffectiveStats,
+  getHunterAssociationReview,
+  getHunterCraftingRecipes,
   getLockedFights,
+  getHunterMilestones,
   getExperienceBoost,
   maxLifeEnergy,
   maxLifeHealth,
   getOpponentArchetype,
   getPlayerArchetype,
+  getShadowArmySummary,
   getAutoRecoveryStatus,
   getAutoTrainingStatus,
   getTrainingAllowance,
@@ -127,6 +133,19 @@ const DEFAULT_HUNTER_WORLD = {
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
+  milestones: {
+    promotions: [],
+    shadowsExtracted: 0,
+    monarchSteps: 0,
+    craftedItems: 0,
+  },
+  itemUpgrades: {},
+  monarchTrace: {
+    unlocked: false,
+    stage: 0,
+    influence: 0,
+    completed: false,
+  },
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -258,6 +277,13 @@ const dropdownState = createDropdownStateController({
     'social-posts': true,
     'hunter-core': true,
     'hunter-actions': true,
+    'hunter-milestones': true,
+    'hunter-association-panel': true,
+    'hunter-shadows': true,
+    'hunter-crafting': true,
+    'hunter-monarch-trace': true,
+    'hunter-stats': true,
+    'hunter-log': false,
     'hunter-basic-moves': true,
     'hunter-special-moves': false,
     'world-rumors': true,
@@ -400,6 +426,32 @@ function normalizeSystemPerks(perks = []) {
   return [...stacks.entries()].map(([id, count]) => ({ id, count }));
 }
 
+function normalizeHunterMilestones(milestones = {}) {
+  return {
+    promotions: Array.isArray(milestones?.promotions) ? milestones.promotions : [],
+    shadowsExtracted: Math.max(0, Math.floor(milestones?.shadowsExtracted ?? 0)),
+    monarchSteps: Math.max(0, Math.floor(milestones?.monarchSteps ?? 0)),
+    craftedItems: Math.max(0, Math.floor(milestones?.craftedItems ?? 0)),
+  };
+}
+
+function normalizeHunterItemUpgrades(upgrades = {}) {
+  return Object.fromEntries(
+    Object.entries(upgrades ?? {})
+      .filter(([itemId]) => Boolean(HUNTER_ITEM_CATALOG[itemId]))
+      .map(([itemId, level]) => [itemId, Math.max(0, Math.min(5, Math.floor(level ?? 0)))])
+  );
+}
+
+function normalizeMonarchTrace(trace = {}) {
+  return {
+    unlocked: Boolean(trace?.unlocked),
+    stage: Math.max(0, Math.min(4, Math.floor(trace?.stage ?? 0))),
+    influence: Math.max(0, Math.min(100, Math.floor(trace?.influence ?? 0))),
+    completed: Boolean(trace?.completed),
+  };
+}
+
 function systemPerkCount(hunter, perkId) {
   return normalizeSystemPerks(hunter?.unlockedSystemPerks).find((item) => item.id === perkId)?.count ?? 0;
 }
@@ -449,6 +501,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     dailyQuest: hunterWorld?.dailyQuest ?? null,
     pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
+    milestones: normalizeHunterMilestones(hunterWorld?.milestones),
+    itemUpgrades: normalizeHunterItemUpgrades(hunterWorld?.itemUpgrades),
+    monarchTrace: normalizeMonarchTrace(hunterWorld?.monarchTrace),
   };
 }
 
@@ -2593,6 +2648,112 @@ function renderHunterStatSheet() {
   `;
 }
 
+function renderHunterMilestones() {
+  const milestones = getHunterMilestones(state);
+  return `
+    <div class="world-grid hunter-milestone-grid">
+      ${milestones.map((milestone) => `
+        <article class="option-card system-window milestone-card ${milestone.complete ? 'complete' : milestone.ready ? 'ready' : ''}">
+          <div>
+            <p class="eyebrow">${milestone.complete ? 'Complete' : milestone.ready ? 'Ready' : 'In Progress'}</p>
+            <h3>${escapeHtml(milestone.title)}</h3>
+            <p>${escapeHtml(milestone.subtitle)}</p>
+          </div>
+          <span class="system-chip compact"><small>Goal</small><strong>${escapeHtml(`${Math.min(milestone.current ?? 0, milestone.target ?? 1)}/${milestone.target ?? 1}`)}</strong></span>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHunterAssociationPanel() {
+  const review = getHunterAssociationReview(state);
+  return `
+    <article class="option-card system-window association-review-card">
+      <div>
+        <p class="eyebrow">Hunter Association</p>
+        <h2>${review.nextRank ? `${review.currentRank}-Rank Review -> ${review.nextRank}-Rank` : 'Maximum Rank File'}</h2>
+        <p>${review.eligible ? 'Promotion requirements satisfied. Submit for reassessment to claim the rank reward.' : 'Build the missing requirements before the next promotion review.'}</p>
+        ${renderSystemScanRows(review.requirements.map((item) => ({
+          label: item.label,
+          value: `${item.current}/${item.required}`,
+          tone: item.met ? 'clear' : 'danger',
+        })))}
+        <p class="muted">Rewards: ${review.rewards.map(escapeHtml).join(' / ')}</p>
+      </div>
+      ${button(review.eligible ? 'Claim Promotion' : 'Request Review', 'hunter-association', review.eligible ? 'primary' : '')}
+    </article>
+  `;
+}
+
+function renderShadowArmyPanel() {
+  const summary = getShadowArmySummary(state);
+  return `
+    <article class="option-card system-window shadow-army-panel">
+      <div>
+        <p class="eyebrow">Shadow Army</p>
+        <h2>${summary.count} Shadows / Strength ${summary.totalStrength}</h2>
+        <p>${summary.canExtract ? `Boss echo ready: ${escapeHtml(summary.pendingBoss)}.` : 'Clear a boss after Level 10 to bind its echo into your army.'}</p>
+        ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 2 && summary.count >= 3 ? 'clear' : '' })))}
+      </div>
+      ${summary.canExtract ? button('Extract Shadow', 'hunter-extract', 'primary') : '<span class="lock-pill">No Echo</span>'}
+    </article>
+    <div class="world-grid shadow-roster-grid">
+      ${summary.roster.length ? summary.roster.map((shadow) => `
+        <article class="option-card system-window shadow-card">
+          <div>
+            <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow</p>
+            <h3>${escapeHtml(shadow.name)}</h3>
+            <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / Strength ${escapeHtml(String(shadow.strength))}</p>
+          </div>
+        </article>
+      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Boss echoes will appear here after extraction.</p></div></article>'}
+    </div>
+  `;
+}
+
+function renderHunterCraftingPanel() {
+  const recipes = getHunterCraftingRecipes(state);
+  return `
+    <div class="activity-list crafting-grid">
+      ${recipes.map((recipe) => `
+        <article class="option-card system-window crafting-card ${recipe.available ? 'ready' : 'locked'}">
+          <div>
+            <p class="eyebrow">System Crafting${recipe.upgradeItem ? ` / Upgrade +${recipe.currentUpgrade}` : ''}</p>
+            <h3>${escapeHtml(recipe.label)}</h3>
+            <p>${escapeHtml(recipe.description)}</p>
+            <p class="muted">Cost: ${Object.entries(recipe.costs ?? {}).map(([id, quantity]) => `${escapeHtml(HUNTER_ITEM_CATALOG[id]?.label ?? labelize(id))} x${quantity}`).join(' / ')}</p>
+            ${recipe.missing.length ? `<p class="danger-copy">Missing: ${recipe.missing.map(escapeHtml).join(', ')}</p>` : ''}
+          </div>
+          <button class="primary" data-action="hunter-craft-${recipe.id}" ${recipe.available ? '' : 'disabled'}>${recipe.upgradeItem ? 'Upgrade' : 'Craft'}</button>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderMonarchTracePanel() {
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const milestone = getHunterMilestones(state).find((item) => item.id === 'monarch-trace');
+  const trace = hunter.monarchTrace ?? DEFAULT_HUNTER_WORLD.monarchTrace;
+  const locked = !trace.unlocked && !milestone?.ready;
+  return `
+    <article class="option-card system-window monarch-trace-card ${trace.unlocked ? 'active' : locked ? 'locked' : 'ready'}">
+      <div>
+        <p class="eyebrow">Monarch Trace</p>
+        <h2>${trace.completed ? 'Shadow Monarch Candidate' : trace.unlocked ? `Trace Stage ${trace.stage}` : milestone?.ready ? 'Trace Ready' : 'Dormant'}</h2>
+        <p>${trace.completed ? 'Abyssal Leech is unlocked. The System recognizes your shadow army as an endgame vessel.' : trace.unlocked ? 'The trace is responding to your shadow roster and S-rank Gate record.' : milestone?.subtitle ?? 'Requires S-rank, Level 40, 50 Gates, and 3 shadows.'}</p>
+        ${renderSystemScanRows([
+          { label: 'Stage', value: `${trace.stage}/4`, tone: trace.unlocked ? 'active' : '' },
+          { label: 'Influence', value: `${trace.influence}%`, tone: trace.influence >= 75 ? 'danger' : '' },
+          { label: 'Requirement', value: milestone?.ready || trace.unlocked ? 'Satisfied' : 'Locked', tone: milestone?.ready || trace.unlocked ? 'clear' : 'danger' },
+        ])}
+      </div>
+      ${locked || trace.completed ? `<span class="lock-pill">${trace.completed ? 'Complete' : 'Locked'}</span>` : button(trace.unlocked ? 'Advance Trace' : 'Awaken Trace', 'hunter-monarch', 'primary')}
+    </article>
+  `;
+}
+
 function currentHunterQuestStage(quest) {
   if (!quest || quest.completed) return null;
   return quest.stages?.[quest.stageIndex ?? 0] ?? null;
@@ -2963,11 +3124,14 @@ function renderHunterGateOffers() {
             <p class="eyebrow">${offer.isRedGate ? 'Emergency Red Gate' : `${escapeHtml(offer.rank)}-Rank Gate`}</p>
             <h2>${escapeHtml(offer.name)}</h2>
             <p>${escapeHtml(offer.theme)} / ${offer.encounters.length} encounters / Boss: ${escapeHtml(offer.bossName)}</p>
+            ${offer.modifier ? `<p class="muted">Modifier: ${escapeHtml(offer.modifier.label)} - ${escapeHtml(offer.modifier.scan ?? offer.modifier.loot ?? '')}</p>` : ''}
             ${offer.danger ? '<p class="danger-copy">Danger signal: this Gate exceeds your recommended clearance.</p>' : ''}
             <p class="muted">Rooms: +${offer.rewardsPreview.roomXp} XP, ${gateMoney(offer.rewardsPreview.roomMoney)} each / Boss: +${offer.rewardsPreview.bossXp} XP, ${gateMoney(offer.rewardsPreview.bossMoney)}, +${offer.rewardsPreview.statRewards} Hunter stat</p>
             ${renderSystemScanRows([
               { label: 'Tier', value: `${offer.rank}-Rank${offer.isRedGate ? ' Red Gate' : ''}`, tone: offer.isRedGate || offer.danger ? 'danger' : 'active' },
               { label: 'Depth', value: `${offer.encounters.length} rooms`, tone: 'active' },
+              { label: 'Modifier', value: offer.modifier?.label ?? 'Stable Mana', tone: offer.modifier?.danger === 'High' || offer.modifier?.danger === 'Extreme' || offer.modifier?.danger === 'Mythic' ? 'danger' : '' },
+              { label: 'Loot Read', value: offer.rewardsPreview.loot ?? 'Standard', tone: 'clear' },
               { label: 'Boss Signature', value: offer.bossName, tone: offer.isRedGate || offer.danger ? 'danger' : '' },
             ])}
           </div>
@@ -3198,18 +3362,26 @@ function renderHunter() {
   const gateActivity = hunterGateActivity(hunter);
   const inventoryStacks = normalizeHunterInventory(hunter.inventory);
   const inventoryTotal = inventoryStacks.reduce((sum, item) => sum + item.quantity, 0);
+  const shadowSummary = getShadowArmySummary(state);
+  const monarchMilestone = getHunterMilestones(state).find((item) => item.id === 'monarch-trace');
   return `
     <section class="stack hunter-panel">
       ${renderHunterSystemStatus(hunter)}
       ${renderCollapsibleSection({
+        id: 'hunter-milestones',
+        title: 'Hunter Progression',
+        subtitle: 'Career spine: quests, Gates, rank, shadows, and Monarch Trace.',
+        body: renderHunterMilestones(),
+      })}
+      ${renderCollapsibleSection({
         id: 'hunter-core',
         title: 'System Player',
-        subtitle: activeDungeon ? `${activeDungeon.name} active` : `${hunter.gateOffers?.length ?? 0} Gate signals available`,
+        subtitle: activeDungeon ? `${activeDungeon.name} active` : `${hunter.gateOffers?.length ?? 0} Gate signals / ${shadowSummary.count} shadows`,
         body: `<div class="hunter-header option-card system-window">
         <div>
           <p class="eyebrow">System Player</p>
           <h2>${state.identity.name}</h2>
-          <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Gate Board signals are ready. Choose a dungeon run below.'}</p>
+          <p>${activeDungeon ? `${activeDungeon.name} is active. Survive each room to reach the boss.` : 'Gate Board signals, shadow growth, crafting, Association rank, and Monarch Trace all advance this career path.'}</p>
         </div>
         <div class="system-chip-row">
           ${systemChip('Rank', `${hunter.rank}-Rank`, 'rank')}
@@ -3218,6 +3390,8 @@ function renderHunter() {
           ${systemChip('Stat Pts', hunter.statPoints, hunter.statPoints ? 'ready' : '')}
           ${systemChip('Hunter Power', hunterPowerUi(), 'power')}
           ${systemChip('Fatigue', `${hunter.systemFatigue}%`, hunter.systemFatigue >= 70 ? 'danger' : '')}
+          ${systemChip('Army Strength', shadowSummary.totalStrength)}
+          ${systemChip('Trace', hunter.monarchTrace?.unlocked ? `Stage ${hunter.monarchTrace.stage}` : monarchMilestone?.ready ? 'Ready' : 'Dormant', monarchMilestone?.ready ? 'ready' : '')}
         </div>
       </div>`,
       })}
@@ -3256,7 +3430,7 @@ function renderHunter() {
         ${renderHunterActivity({
           icon: 'HA',
           title: 'Hunter Association',
-          subtitle: 'Request rank reassessment and collect official hunter attention.',
+          subtitle: 'Review next-rank requirements, promotion rewards, and official hunter file status.',
           meta: `Current ${hunter.rank}-rank`,
           action: 'hunter-association',
           tone: 'association',
@@ -3272,8 +3446,8 @@ function renderHunter() {
         ${renderHunterActivity({
           icon: 'SX',
           title: 'Shadow Extraction',
-          subtitle: 'Attempt to bind the echo of a cleared boss into your shadow army.',
-          meta: canExtract ? `Boss echo: ${labelize(hunter.lastBossCleared)}` : 'Requires Level 10 and boss clear',
+          subtitle: 'Bind cleared boss echoes, grow Shadow Assist, and prepare Monarch Trace.',
+          meta: canExtract ? `Boss echo: ${shadowSummary.pendingBoss}` : `${shadowSummary.count} shadows / strength ${shadowSummary.totalStrength}`,
           action: 'hunter-extract',
           locked: !canExtract,
           tone: 'shadow',
@@ -3281,13 +3455,37 @@ function renderHunter() {
         ${renderHunterActivity({
           icon: 'MT',
           title: 'Monarch Trace',
-          subtitle: 'A late-game System trace that is watching your shadow growth.',
-          meta: 'Requires S-rank and 3 shadows',
-          action: 'hunter-association',
-          locked: hunter.rank !== 'S' || (hunter.shadowArmy?.length ?? 0) < 3,
+          subtitle: 'Endgame System arc for S-rank shadow vessels.',
+          meta: hunter.monarchTrace?.unlocked ? `Stage ${hunter.monarchTrace.stage}/4` : monarchMilestone?.ready ? 'Ready to awaken' : 'Requires S-rank, Level 40, 50 Gates, 3 shadows',
+          action: 'hunter-monarch',
+          locked: !hunter.monarchTrace?.unlocked && !monarchMilestone?.ready,
           tone: 'monarch',
         })}
       </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-association-panel',
+        title: 'Association Review',
+        subtitle: 'Next-rank requirements and promotion payout.',
+        body: renderHunterAssociationPanel(),
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-shadows',
+        title: 'Shadow Army',
+        subtitle: `${shadowSummary.count} shadows / ${shadowSummary.totalStrength} strength`,
+        body: renderShadowArmyPanel(),
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-crafting',
+        title: 'System Crafting',
+        subtitle: 'Spend dungeon materials on upgrades and useful items.',
+        body: renderHunterCraftingPanel(),
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-monarch-trace',
+        title: 'Monarch Trace',
+        subtitle: hunter.monarchTrace?.unlocked ? `Stage ${hunter.monarchTrace.stage}/4` : monarchMilestone?.subtitle ?? 'Dormant',
+        body: renderMonarchTracePanel(),
       })}
       ${renderCollapsibleSection({
         id: 'hunter-stats',
@@ -3701,6 +3899,10 @@ function handleAction(action, source = null) {
     setState(visitHunterAssociation(state));
     return;
   }
+  if (action === 'hunter-monarch') {
+    setState(advanceMonarchTrace(state));
+    return;
+  }
   if (action === 'hunter-items-open') {
     activeTab = 'hunter';
     hunterItemsPopupOpen = true;
@@ -3741,6 +3943,10 @@ function handleAction(action, source = null) {
   if (action.startsWith('hunter-shop-buy-')) {
     systemShopPopupOpen = true;
     setState(buySystemItem(state, action.replace('hunter-shop-buy-', '')));
+    return;
+  }
+  if (action.startsWith('hunter-craft-')) {
+    setState(craftHunterItem(state, action.replace('hunter-craft-', '')));
     return;
   }
   if (action === 'hunter-extract') {

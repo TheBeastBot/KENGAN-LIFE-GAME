@@ -6,6 +6,7 @@ import {
   CLANS,
   BASIC_FIGHT_MOVE_IDS,
   buySystemItem,
+  craftHunterItem,
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
@@ -28,9 +29,13 @@ import {
   findMentor,
   getAvailableFights,
   getAdaptedOpponent,
+  getHunterAssociationReview,
+  getHunterCraftingRecipes,
   getLockedFights,
+  getHunterMilestones,
   getOpponentStats,
   getOpponentArchetype,
+  getShadowArmySummary,
   getTrainingAllowance,
   getAutoTrainingStatus,
   getCoachedFightOptions,
@@ -59,6 +64,7 @@ import {
   dismissRetreatedHunterQuest,
   resolveEventChoice,
   advanceHunterDungeon,
+  advanceMonarchTrace,
   dismissHunterDungeonResult,
   generateHunterGateOffers,
   retreatHunterDungeon,
@@ -82,6 +88,7 @@ import {
   takeFightTurn,
   train,
   simulateFight,
+  useHunterItem,
   useSocialAction,
   visitHunterAssociation,
   ageUp,
@@ -290,7 +297,7 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
 
   const hunterMoves = getUnlockedHunterMoves(life);
 
-  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon).map(([id]) => id));
+  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -606,7 +613,7 @@ test('selecting a Gate creates a multi-room dungeon with a final boss System fig
   assert.equal(life.hunterWorld.activeDungeon.encounters.at(-1).isBoss, true);
   assert.equal(life.activeFight.source, 'hunterDungeon');
   assert.equal(life.activeFight.dungeonId, life.hunterWorld.activeDungeon.id);
-  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon).map(([id]) => id));
+  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -846,7 +853,187 @@ test('Hunter level reward choices apply one queued bonus at a time', () => {
   };
   const perked = claimHunterLevelReward(perkLife, 'executeCooldown');
 
-  assert.deepEqual(perked.hunterWorld.unlockedSystemPerks, ['executeCooldownMinus1']);
+  assert.deepEqual(perked.hunterWorld.unlockedSystemPerks, [{ id: 'executeCooldownMinus1', count: 1 }]);
+});
+
+test('Hunter Association review exposes next-rank requirements and promotion rewards', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9302 });
+  const life = {
+    ...base,
+    stats: Object.fromEntries(Object.entries(base.stats).map(([stat, value]) => [stat, value + 160])),
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 5,
+      gatesCleared: 3,
+    },
+  };
+
+  const review = getHunterAssociationReview(life);
+  const promoted = visitHunterAssociation(life);
+
+  assert.equal(review.currentRank, 'E');
+  assert.equal(review.nextRank, 'D');
+  assert.equal(review.eligible, true);
+  assert.deepEqual(review.requirements.map((item) => item.met), [true, true, true]);
+  assert.ok(review.rewards.some((reward) => reward.includes('reputation')));
+  assert.equal(promoted.hunterWorld.rank, 'D');
+  assert.ok(promoted.hunterWorld.milestones.promotions.includes('D'));
+  assert.ok(promoted.hunterWorld.statPoints >= life.hunterWorld.statPoints + 2);
+});
+
+test('Hunter milestones summarize progression spine and Monarch Trace readiness', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9303 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 42,
+      gatesCleared: 50,
+      dailyQuestsCompleted: 20,
+      shadowArmy: [
+        { id: 'shadow-1', monsterId: 'goblinCaptain', name: 'Goblin Captain Shadow', rank: 'E', strength: 3 },
+        { id: 'shadow-2', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
+        { id: 'shadow-3', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 5 },
+      ],
+    },
+  };
+
+  const milestones = getHunterMilestones(life);
+  const monarch = milestones.find((milestone) => milestone.id === 'monarch-trace');
+
+  assert.ok(milestones.find((milestone) => milestone.id === 's-rank')?.complete);
+  assert.equal(monarch.complete, false);
+  assert.equal(monarch.ready, true);
+  assert.match(monarch.subtitle, /ready/i);
+});
+
+test('Hunter crafting consumes dungeon materials and upgrades System gear', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9304 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      inventory: [
+        { id: 'monsterCore', quantity: 3 },
+        { id: 'gateShard', quantity: 2 },
+      ],
+      equippedWeapon: 'knightDagger',
+    },
+  };
+
+  const recipes = getHunterCraftingRecipes(life);
+  const crafted = craftHunterItem(life, 'refine-dagger');
+
+  assert.equal(recipes.find((recipe) => recipe.id === 'refine-dagger').available, true);
+  assert.equal(crafted.hunterWorld.itemUpgrades.knightDagger, 1);
+  assert.equal(crafted.hunterWorld.inventory.find((item) => item.id === 'monsterCore').quantity, 1);
+  assert.equal(crafted.hunterWorld.inventory.find((item) => item.id === 'gateShard').quantity, 1);
+  assert.ok(crafted.log[0].text.includes('Crafting complete'));
+});
+
+test('Shadow army summary includes roster strength, bonuses, and extraction eligibility', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9305 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 12,
+      lastBossCleared: 'goblinCaptain',
+      shadowArmy: [
+        { id: 'shadow-1', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
+      ],
+    },
+  };
+
+  const summary = getShadowArmySummary(life);
+  const extracted = extractShadow(life);
+
+  assert.equal(summary.canExtract, true);
+  assert.equal(summary.count, 1);
+  assert.ok(summary.totalStrength >= 4);
+  assert.ok(summary.bonuses.some((bonus) => bonus.includes('Shadow Assist')));
+  assert.equal(extracted.hunterWorld.shadowArmy[1].sourceBoss, 'Goblin Captain');
+  assert.equal(extracted.hunterWorld.milestones.shadowsExtracted, 1);
+});
+
+test('Monarch Trace unlocks at S-rank with three shadows and progresses as an endgame arc', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9306 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 45,
+      gatesCleared: 52,
+      shadowArmy: [
+        { id: 'shadow-1', monsterId: 'goblinCaptain', name: 'Goblin Captain Shadow', rank: 'E', strength: 3 },
+        { id: 'shadow-2', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
+        { id: 'shadow-3', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 5 },
+      ],
+    },
+  };
+
+  const unlocked = advanceMonarchTrace(life);
+  const advanced = advanceMonarchTrace(unlocked);
+
+  assert.equal(unlocked.hunterWorld.monarchTrace.unlocked, true);
+  assert.equal(unlocked.hunterWorld.monarchTrace.stage, 1);
+  assert.ok(unlocked.hunterWorld.unlockedSystemPerks.some((perk) => perk.id === 'rulersAuthority'));
+  assert.equal(advanced.hunterWorld.monarchTrace.stage, 2);
+  assert.ok(advanced.hunterWorld.gateOffers.some((offer) => offer.isMonarchGate));
+});
+
+test('higher-rank Hunter daily quests use tiered templates with stronger rewards', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9307 });
+  const life = runHunterDailyQuest({
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'A',
+      level: 30,
+      gatesCleared: 30,
+      dailyQuestsCompleted: 8,
+    },
+  });
+
+  assert.ok(['mid', 'late'].includes(life.hunterWorld.dailyQuest.tier));
+  assert.ok(life.hunterWorld.dailyQuest.rewardsPreview.some((reward) => /Hunter XP/.test(reward)));
+  assert.ok(life.hunterWorld.dailyQuest.stages.length >= 3);
+});
+
+test('Gate offers include modifiers with clear reward and danger preview', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9308 });
+  const life = generateHunterGateOffers({
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'B',
+      level: 24,
+      gatesCleared: 16,
+    },
+  });
+
+  const offer = life.hunterWorld.gateOffers[0];
+
+  assert.ok(offer.modifier);
+  assert.ok(offer.modifier.label);
+  assert.ok(offer.rewardsPreview.danger);
+  assert.ok(offer.rewardsPreview.loot);
 });
 
 test('retreating from a dungeon keeps earned room rewards, applies survival penalties, and creates new offers after dismissal', () => {
@@ -1172,15 +1359,17 @@ test('system shop potions heal resources and reduce System fatigue', () => {
     },
   };
 
-  const healed = buySystemItem(life, 'recoveryPotion');
-  const cleansed = buySystemItem(healed, 'fatigueCleanse');
+  const boughtRecovery = buySystemItem(life, 'recoveryPotion');
+  const healed = useHunterItem(boughtRecovery, 'recoveryPotion');
+  const boughtCleanse = buySystemItem(healed, 'fatigueCleanse');
+  const cleansed = useHunterItem(boughtCleanse, 'fatigueCleanse');
 
-  assert.equal(healed.resources.money, life.resources.money - SYSTEM_SHOP_ITEMS.recoveryPotion.cost);
+  assert.equal(boughtRecovery.resources.money, life.resources.money - SYSTEM_SHOP_ITEMS.recoveryPotion.cost);
   assert.ok(healed.resources.health > life.resources.health);
   assert.ok(healed.resources.energy > life.resources.energy);
   assert.equal(cleansed.hunterWorld.systemFatigue, 38);
   assert.ok(cleansed.resources.mood > healed.resources.mood);
-  assert.deepEqual(cleansed.hunterWorld.inventory, ['recoveryPotion', 'fatigueCleanse']);
+  assert.deepEqual(cleansed.hunterWorld.inventory, []);
 });
 
 test('system shop weapons persist, equip, and unlock weapon System abilities', () => {
@@ -1197,7 +1386,7 @@ test('system shop weapons persist, equip, and unlock weapon System abilities', (
   const bought = buySystemItem(life, 'knightDagger');
 
   assert.equal(bought.hunterWorld.equippedWeapon, 'knightDagger');
-  assert.ok(bought.hunterWorld.inventory.includes('knightDagger'));
+  assert.ok(bought.hunterWorld.inventory.some((item) => item.id === 'knightDagger'));
   assert.ok(!getUnlockedHunterMoves(life).some((move) => move.id === 'shadowPierce'));
   let fighting = runHunterDailyQuest(bought);
   fighting = advanceHunterDailyQuest(fighting, fighting.hunterWorld.dailyQuest.stages[0].choices[0].id);

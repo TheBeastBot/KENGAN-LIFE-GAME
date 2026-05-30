@@ -67,6 +67,19 @@ const DEFAULT_HUNTER_WORLD = {
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
+  milestones: {
+    promotions: [],
+    shadowsExtracted: 0,
+    monarchSteps: 0,
+    craftedItems: 0,
+  },
+  itemUpgrades: {},
+  monarchTrace: {
+    unlocked: false,
+    stage: 0,
+    influence: 0,
+    completed: false,
+  },
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
@@ -130,6 +143,38 @@ const HUNTER_DUNGEON_TEMPLATES = {
     { id: 'monarch-rift', name: 'Monarch Rift', theme: 'Shattered throne', normals: ['chaosKnight', 'dragonSpawn'], boss: 'monarchAvatarBoss' },
   ],
 };
+
+const HUNTER_GATE_MODIFIERS = [
+  { id: 'stable', label: 'Stable Mana', danger: 'Low', loot: 'Standard loot table', scan: 'Clean readings and predictable monster signatures.' },
+  { id: 'dense-mana', label: 'Dense Mana', danger: 'Medium', loot: '+loot pressure', scan: 'Thicker mana raises monster output and improves material traces.' },
+  { id: 'shadow-rich', label: 'Shadow-Rich', danger: 'Medium', loot: '+shadow echo quality', scan: 'Boss echoes hold together longer after defeat.' },
+  { id: 'fractured-space', label: 'Fractured Space', danger: 'High', loot: '+rare item chance', scan: 'Rooms bend distance and can spike burst damage.' },
+];
+
+const HUNTER_CRAFTING_RECIPES = [
+  {
+    id: 'refine-dagger',
+    label: 'Refine Knight Dagger',
+    description: 'Sharpen the starter System weapon with monster cores and Gate fragments.',
+    costs: { monsterCore: 2, gateShard: 1 },
+    requiresItem: 'knightDagger',
+    upgradeItem: 'knightDagger',
+  },
+  {
+    id: 'forge-mana-ampoule',
+    label: 'Brew Mana Ampoule',
+    description: 'Compress monster cores into a clean stamina recovery item.',
+    costs: { monsterCore: 2 },
+    grants: { manaAmpoule: 1 },
+  },
+  {
+    id: 'stabilize-red-shard',
+    label: 'Stabilize Red Gate Shard',
+    description: 'Convert a volatile Red Gate fragment into a Monarch Vial.',
+    costs: { redGateShard: 1, bossEssence: 2 },
+    grants: { monarchVial: 1 },
+  },
+];
 
 export const HUNTER_MONSTERS = {
   systemGoblinScout: {
@@ -652,13 +697,45 @@ function addHunterItem(hunterWorld, itemId, quantity = 1) {
 }
 
 function consumeHunterItem(hunterWorld, itemId) {
+  return consumeHunterItemQuantity(hunterWorld, itemId, 1);
+}
+
+function consumeHunterItemQuantity(hunterWorld, itemId, quantity = 1) {
   const inventory = normalizeHunterInventory(hunterWorld.inventory);
   const existing = inventory.find((item) => item.id === itemId);
   if (!existing) return false;
-  existing.quantity -= 1;
+  const amount = Math.max(1, Math.floor(quantity));
+  if (existing.quantity < amount) return false;
+  existing.quantity -= amount;
   hunterWorld.inventory = inventory.filter((item) => item.quantity > 0);
   if (hunterWorld.equippedWeapon === itemId && !hunterHasItem(hunterWorld, itemId)) hunterWorld.equippedWeapon = null;
   return true;
+}
+
+function normalizeHunterMilestones(milestones = {}) {
+  return {
+    promotions: Array.isArray(milestones.promotions) ? [...new Set(milestones.promotions.filter((rank) => HUNTER_RANKS.includes(rank)))] : [],
+    shadowsExtracted: Math.max(0, Math.floor(milestones.shadowsExtracted ?? 0)),
+    monarchSteps: Math.max(0, Math.floor(milestones.monarchSteps ?? 0)),
+    craftedItems: Math.max(0, Math.floor(milestones.craftedItems ?? 0)),
+  };
+}
+
+function normalizeHunterItemUpgrades(upgrades = {}) {
+  return Object.fromEntries(
+    Object.entries(upgrades ?? {})
+      .filter(([itemId]) => Boolean(HUNTER_ITEM_CATALOG[itemId]))
+      .map(([itemId, level]) => [itemId, clamp(level ?? 0, 0, 5)])
+  );
+}
+
+function normalizeMonarchTrace(trace = {}) {
+  return {
+    unlocked: Boolean(trace.unlocked),
+    stage: clamp(trace.stage ?? 0, 0, 4),
+    influence: clamp(trace.influence ?? 0, 0, 100),
+    completed: Boolean(trace.completed),
+  };
 }
 
 function normalizeHunterDailyQuest(quest) {
@@ -778,6 +855,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
     pendingLevelRewards: Array.isArray(hunterWorld.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld.unlockedSystemPerks),
+    milestones: normalizeHunterMilestones(hunterWorld.milestones),
+    itemUpgrades: normalizeHunterItemUpgrades(hunterWorld.itemUpgrades),
+    monarchTrace: normalizeMonarchTrace(hunterWorld.monarchTrace),
   };
 }
 
@@ -3554,6 +3634,117 @@ function hunterPower(life) {
   return Math.round(statPower + hunter.level * 8 + shadowPower);
 }
 
+function grantSystemPerk(hunterWorld, perkId, count = 1) {
+  const option = systemPerkOption(perkId);
+  if (!option) return false;
+  const perks = normalizeSystemPerks(hunterWorld.unlockedSystemPerks);
+  const existing = perks.find((item) => item.id === perkId);
+  const maxStacks = option.maxStacks ?? 1;
+  if (existing) existing.count = Math.min(maxStacks, existing.count + Math.max(1, Math.floor(count)));
+  else perks.push({ id: perkId, count: Math.min(maxStacks, Math.max(1, Math.floor(count))) });
+  hunterWorld.unlockedSystemPerks = perks;
+  return true;
+}
+
+export function getHunterAssociationReview(life) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  const currentIndex = HUNTER_RANKS.indexOf(hunter.rank);
+  const nextRank = HUNTER_RANKS[currentIndex + 1] ?? null;
+  const requirement = nextRank ? HUNTER_RANK_REQUIREMENTS[nextRank] : null;
+  const power = hunterPower({ ...life, hunterWorld: hunter });
+  const requirements = requirement ? [
+    { id: 'level', label: 'Level', current: hunter.level, required: requirement.level, met: hunter.level >= requirement.level },
+    { id: 'gates', label: 'Gates Cleared', current: hunter.gatesCleared, required: requirement.gatesCleared, met: hunter.gatesCleared >= requirement.gatesCleared },
+    { id: 'power', label: 'Hunter Power', current: power, required: requirement.power, met: power >= requirement.power },
+  ] : [];
+  return {
+    currentRank: hunter.rank,
+    nextRank,
+    power,
+    maxRank: !nextRank,
+    eligible: Boolean(requirement) && requirements.every((item) => item.met),
+    requirements,
+    rewards: requirement
+      ? [`+${10 + currentIndex * 4} reputation`, `+$${750 * (currentIndex + 1)}`, '+2 Hunter stat points', nextRank === 'S' ? 'S-rank System signal' : `${nextRank}-rank Gate access`]
+      : ['Maximum Association rank reached'],
+  };
+}
+
+export function getShadowArmySummary(life) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  const totalStrength = shadowArmyStrength(hunter);
+  const lastBoss = HUNTER_MONSTERS[hunter.lastBossCleared];
+  return {
+    count: hunter.shadowArmy.length,
+    totalStrength,
+    canExtract: Boolean(hunter.unlocked && hunter.lastBossCleared && hunter.level >= 10),
+    pendingBoss: lastBoss?.name ?? (hunter.lastBossCleared ? labelFromId(hunter.lastBossCleared) : null),
+    roster: hunter.shadowArmy.map((shadow) => ({
+      ...shadow,
+      sourceBoss: HUNTER_MONSTERS[shadow.monsterId]?.name ?? shadow.sourceBoss ?? labelFromId(shadow.monsterId),
+      strength: shadowStrength(shadow),
+    })),
+    bonuses: [
+      `Shadow Assist damage scaling: +${totalStrength} army strength`,
+      `Incoming pressure reduction: +${hunter.shadowArmy.length * 2 + totalStrength}`,
+      hunter.shadowArmy.length >= 3 ? 'Monarch Trace readiness: online' : `Monarch Trace readiness: ${hunter.shadowArmy.length}/3 shadows`,
+    ],
+  };
+}
+
+export function getHunterMilestones(life) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  const shadowSummary = getShadowArmySummary({ ...life, hunterWorld: hunter });
+  const monarchReady = hunter.rank === 'S' && hunter.level >= 40 && hunter.gatesCleared >= 50 && hunter.shadowArmy.length >= 3;
+  return [
+    {
+      id: 'daily-discipline',
+      title: 'Daily Discipline',
+      current: hunter.dailyQuestsCompleted,
+      target: 10,
+      complete: hunter.dailyQuestsCompleted >= 10,
+      subtitle: `${hunter.dailyQuestsCompleted}/10 System Daily Quests completed`,
+    },
+    {
+      id: 'gate-clearer',
+      title: 'Gate Clearer',
+      current: hunter.gatesCleared,
+      target: 25,
+      complete: hunter.gatesCleared >= 25,
+      subtitle: `${hunter.gatesCleared}/25 Gates cleared`,
+    },
+    {
+      id: 's-rank',
+      title: 'S-Rank Hunter',
+      current: HUNTER_RANKS.indexOf(hunter.rank),
+      target: HUNTER_RANKS.indexOf('S'),
+      complete: hunter.rank === 'S',
+      subtitle: `${hunter.rank}-rank Association file`,
+    },
+    {
+      id: 'shadow-army',
+      title: 'Shadow Army',
+      current: hunter.shadowArmy.length,
+      target: 3,
+      complete: hunter.shadowArmy.length >= 3,
+      subtitle: `${hunter.shadowArmy.length}/3 shadows / ${shadowSummary.totalStrength} army strength`,
+    },
+    {
+      id: 'monarch-trace',
+      title: 'Monarch Trace',
+      current: hunter.monarchTrace.stage,
+      target: 4,
+      ready: monarchReady && !hunter.monarchTrace.completed,
+      complete: hunter.monarchTrace.completed,
+      subtitle: hunter.monarchTrace.completed
+        ? 'Monarch Trace completed'
+        : monarchReady
+          ? 'S-rank shadow vessel ready'
+          : 'Requires S-rank, Level 40, 50 Gates, and 3 shadows',
+    },
+  ];
+}
+
 export function getHunterEffectiveStats(life) {
   const base = life.stats ?? {};
   const hunter = normalizeHunterWorld(life.hunterWorld);
@@ -3797,6 +3988,10 @@ function createGateOffer(life, rank, slot, { isRedGate = false, danger = false, 
   const template = selectDungeonTemplate(life, rank, slot, isRedGate, excludedTemplateIds);
   const rewards = HUNTER_DUNGEON_TIERS[rank];
   const encounters = gateEncounterList(template, isRedGate);
+  const modifierRoll = deterministicRoll(life.rngSeed, lifeMonth(life), rank, slot, template.id, isRedGate ? 'red-modifier' : 'modifier');
+  const modifier = isRedGate
+    ? { id: 'red-overflow', label: 'Red Overflow', danger: 'Extreme', loot: '+Red Gate loot', scan: 'The Gate has already started rewriting the room sequence.' }
+    : HUNTER_GATE_MODIFIERS[Math.floor(modifierRoll * HUNTER_GATE_MODIFIERS.length) % HUNTER_GATE_MODIFIERS.length];
   return {
     id: `gate-${lifeMonth(life)}-${life.hunterWorld?.gatesCleared ?? 0}-${slot}-${template.id}${isRedGate ? '-red' : ''}`,
     templateId: template.id,
@@ -3805,6 +4000,7 @@ function createGateOffer(life, rank, slot, { isRedGate = false, danger = false, 
     rank,
     isRedGate,
     danger,
+    modifier,
     encounters,
     bossName: HUNTER_MONSTERS[encounters.at(-1).monsterId].name,
     rewardsPreview: {
@@ -3813,6 +4009,8 @@ function createGateOffer(life, rank, slot, { isRedGate = false, danger = false, 
       bossXp: dungeonRewardAmount(rewards.boss.xp, isRedGate),
       bossMoney: dungeonRewardAmount(rewards.boss.money, isRedGate),
       statRewards: rewards.boss.stats + (isRedGate ? 1 : 0),
+      danger: modifier.danger,
+      loot: modifier.loot,
     },
   };
 }
@@ -3860,6 +4058,7 @@ function randomHunterStatRewards(life, count, salt) {
 const HUNTER_DAILY_QUEST_TEMPLATES = [
   {
     id: 'penalty-zone-drill',
+    tier: 'early',
     title: 'Penalty Zone Drill',
     rewardsPreview: ['Hunter XP', '+vitality', '+sense', 'Fatigue +6'],
     completion: { xp: 68, fatigue: 6, hunterStats: { vitality: 2, sense: 1 }, resources: { mood: -1 } },
@@ -3897,6 +4096,7 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
   },
   {
     id: 'subway-gate-trace',
+    tier: 'early',
     title: 'Subway Gate Trace',
     rewardsPreview: ['Hunter XP', '$260', '+sense', 'Heat +4'],
     completion: { xp: 92, fatigue: 8, hunterStats: { sense: 2, intelligence: 1 }, resources: { money: 260, reputation: 3 }, world: { heat: 4 } },
@@ -3934,6 +4134,7 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
   },
   {
     id: 'civilian-rescue',
+    tier: 'early',
     title: 'Emergency Civilian Rescue',
     rewardsPreview: ['Hunter XP', '+reputation', '+vitality', 'Heat +6'],
     completion: { xp: 84, fatigue: 9, hunterStats: { vitality: 2, agility: 1 }, resources: { reputation: 7, mood: 2 }, world: { heat: 6 } },
@@ -3966,6 +4167,83 @@ const HUNTER_DAILY_QUEST_TEMPLATES = [
           { id: 'take-credit', label: 'Take Credit', result: 'Witness clips make sure the Association knows your face.', effects: { resources: { reputation: 3 }, world: { heat: 2 } } },
           { id: 'stay-quiet', label: 'Stay Quiet', result: 'You leave before the interviews and keep the focus on survival.', effects: { resources: { mood: 2 }, world: { heat: -1 } } },
           { id: 'scan-again', label: 'Scan Again', result: 'You find one more trace and learn how the pack entered.', effects: { hunterStats: { sense: 1 }, resources: { energy: -5 } } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'association-raid-support',
+    tier: 'mid',
+    title: 'Association Raid Support',
+    rewardsPreview: ['Hunter XP', '+intelligence', '+reputation', 'Fatigue +10'],
+    completion: { xp: 155, fatigue: 10, hunterStats: { intelligence: 2, sense: 1 }, resources: { reputation: 8, money: 900 }, world: { heat: 5 } },
+    partial: { xp: 64, fatigue: 7, hunterStats: { intelligence: 1 }, resources: { reputation: 3 }, world: { heat: 3 } },
+    stages: [
+      {
+        id: 'briefing-window',
+        type: 'choice',
+        title: 'Raid Briefing',
+        body: 'The Association borrows your System scan for a leaking C-rank building. Official hunters pretend not to stare at your blue window.',
+        choices: [
+          { id: 'map-weakness', label: 'Map Weakness', result: 'You mark the monster traffic before anyone enters.', effects: { hunterStats: { intelligence: 1 }, resources: { energy: -8 } } },
+          { id: 'lead-vanguard', label: 'Lead Vanguard', result: 'You take the front slot and set the raid pace yourself.', effects: { hunterStats: { strength: 1 }, resources: { health: -4, reputation: 2 } } },
+          { id: 'protect-healers', label: 'Protect Healers', result: 'You keep the recovery team untouched through the first breach.', effects: { hunterStats: { vitality: 1 }, resources: { reputation: 3, energy: -10 } } },
+        ],
+      },
+      {
+        id: 'raid-monster',
+        type: 'combat',
+        title: 'Raid Corridor Breaker',
+        body: 'A heavy monster bursts through the marked wall before the raid captain can finish the count.',
+        monsterId: 'bloodApe',
+      },
+      {
+        id: 'credit-window',
+        type: 'choice',
+        title: 'Official Credit',
+        body: 'The Association terminal opens a clean report field. You can claim credit, hide the System, or squeeze more data from the corpse.',
+        choices: [
+          { id: 'claim-credit', label: 'Claim Credit', result: 'Your file gets the raid assist stamp.', effects: { resources: { reputation: 4 }, world: { heat: 2 } } },
+          { id: 'hide-system', label: 'Hide System', result: 'You let the captain take the headline while your window saves the combat data.', effects: { resources: { mood: 2 }, hunterStats: { sense: 1 } } },
+          { id: 'harvest-data', label: 'Harvest Data', result: 'You pull one more pattern from the monster before cleanup arrives.', effects: { hunterStats: { intelligence: 1 }, resources: { energy: -5 } } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'red-signal-prep',
+    tier: 'late',
+    title: 'Red Signal Preparation',
+    rewardsPreview: ['Large Hunter XP', '+shadow growth', '+stat point', 'Fatigue +14'],
+    completion: { xp: 260, fatigue: 14, hunterStats: { strength: 2, sense: 2 }, resources: { reputation: 12, money: 2500 }, world: { heat: 8 } },
+    partial: { xp: 105, fatigue: 10, hunterStats: { sense: 1 }, resources: { reputation: 4 }, world: { heat: 5 } },
+    stages: [
+      {
+        id: 'red-signal-scan',
+        type: 'choice',
+        title: 'Red Signal Scan',
+        body: 'A red Gate warning flashes without opening. The System asks whether to study it, bait it, or suppress it.',
+        choices: [
+          { id: 'study-red', label: 'Study Red Signal', result: 'You let the warning burn long enough to learn its shape.', effects: { hunterStats: { intelligence: 1, sense: 1 }, resources: { mood: -2 } } },
+          { id: 'bait-red', label: 'Bait It', result: 'You leak mana and dare the signal to answer.', effects: { hunterStats: { strength: 1 }, resources: { health: -6 }, world: { heat: 3 } } },
+          { id: 'suppress-red', label: 'Suppress It', result: 'You crush the signal before civilians can notice.', effects: { hunterStats: { vitality: 1 }, resources: { energy: -14, reputation: 2 } } },
+        ],
+      },
+      {
+        id: 'red-echo-fight',
+        type: 'combat',
+        title: 'Red Echo',
+        body: 'The warning condenses into a boss echo wearing the shape of a Gate that has not opened yet.',
+        monsterId: 'redBloodOgre',
+      },
+      {
+        id: 'shadow-claim',
+        type: 'choice',
+        title: 'Shadow Claim',
+        body: 'The red echo leaves a torn silhouette. Your shadow army stirs before the System confirms the reward.',
+        choices: [
+          { id: 'feed-shadow', label: 'Feed Shadow', result: 'You let your army devour the trace and grow heavier.', effects: { hunterStats: { intelligence: 1 }, resources: { mood: 1 } } },
+          { id: 'compress-core', label: 'Compress Core', result: 'You compress the trace into something you can spend later.', effects: { resources: { money: 500 }, hunterStats: { sense: 1 } } },
         ],
       },
     ],
@@ -4007,11 +4285,17 @@ function applyDelta(life, effects = {}) {
 }
 
 function createHunterDailyQuest(life) {
-  const index = Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), life.hunterWorld?.dailyQuestsCompleted ?? 0, 'hunter-daily') * HUNTER_DAILY_QUEST_TEMPLATES.length);
-  const template = HUNTER_DAILY_QUEST_TEMPLATES[index] ?? HUNTER_DAILY_QUEST_TEMPLATES[0];
+  const hunter = normalizeHunterWorld(life.hunterWorld);
+  let eligibleTiers = ['early'];
+  if (HUNTER_RANKS.indexOf(hunter.rank) >= HUNTER_RANKS.indexOf('C') || hunter.level >= 12 || hunter.gatesCleared >= 8) eligibleTiers = ['early', 'mid'];
+  if (HUNTER_RANKS.indexOf(hunter.rank) >= HUNTER_RANKS.indexOf('A') || hunter.level >= 28 || hunter.gatesCleared >= 25) eligibleTiers = ['mid', 'late'];
+  const pool = HUNTER_DAILY_QUEST_TEMPLATES.filter((quest) => eligibleTiers.includes(quest.tier ?? 'early'));
+  const index = Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), hunter.dailyQuestsCompleted ?? 0, hunter.rank, 'hunter-daily') * pool.length);
+  const template = pool[index] ?? pool[0] ?? HUNTER_DAILY_QUEST_TEMPLATES[0];
   return {
     id: `${template.id}-${lifeMonth(life)}-${life.hunterWorld?.dailyQuestsCompleted ?? 0}`,
     templateId: template.id,
+    tier: template.tier ?? 'early',
     title: template.title,
     stageIndex: 0,
     stages: clone(template.stages),
@@ -7929,15 +8213,17 @@ function hunterMoveProfile(move, life) {
   const shadowCount = hunter.shadowArmy.length;
   const shadowStrengthTotal = shadowArmyStrength(hunter);
   const shadowPower = shadowStrengthTotal * (8 + hunter.stats.intelligence * 0.6);
+  const weaponUpgrade = hunter.equippedWeapon ? (hunter.itemUpgrades?.[hunter.equippedWeapon] ?? 0) : 0;
+  const weaponDamageBonus = move.requiresWeapon ? weaponUpgrade * 14 : weaponUpgrade * 3;
   const profiles = {
     slash: {
       stat: stats.strength * 1.05 + stats.technique * 0.45 + stats.fightIq * 0.25 + hunter.level * 4,
-      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense + weaponDamageBonus,
       incomingReduction: 0,
     },
     dashStrike: {
       stat: stats.speed * 1.1 + stats.reflexes * 0.85 + stats.strength * 0.35 + hunter.level * 4,
-      damageBonus: hunter.stats.agility * 2 + hunter.stats.strength + systemPerkValue(life, 'dashStrikePlus4'),
+      damageBonus: hunter.stats.agility * 2 + hunter.stats.strength + systemPerkValue(life, 'dashStrikePlus4') + weaponDamageBonus,
       incomingReduction: 0,
     },
     manaGuard: {
@@ -7952,12 +8238,12 @@ function hunterMoveProfile(move, life) {
     },
     analyzeWeakness: {
       stat: stats.fightIq * 1.1 + stats.control * 0.8 + stats.technique * 0.45 + hunter.level * 4,
-      damageBonus: hunter.stats.sense + hunter.stats.intelligence,
+      damageBonus: hunter.stats.sense + hunter.stats.intelligence + weaponDamageBonus,
       incomingReduction: 4 + hunter.stats.sense,
     },
     execute: {
       stat: stats.strength * 0.9 + stats.speed * 0.55 + stats.fightIq * 0.55 + hunter.level * 5,
-      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 2,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 2 + weaponDamageBonus,
       incomingReduction: 0,
     },
     shadowAssist: {
@@ -7972,17 +8258,17 @@ function hunterMoveProfile(move, life) {
     },
     shadowPierce: {
       stat: stats.reflexes * 0.95 + stats.speed * 0.75 + stats.technique * 0.45 + hunter.level * 5,
-      damageBonus: hunter.stats.sense * 3 + hunter.stats.agility * 2,
+      damageBonus: hunter.stats.sense * 3 + hunter.stats.agility * 2 + weaponDamageBonus,
       incomingReduction: 1 + hunter.stats.sense,
     },
     manaRend: {
       stat: stats.strength * 1.05 + stats.control * 0.7 + stats.fightIq * 0.35 + hunter.level * 6,
-      damageBonus: hunter.stats.strength * 3 + hunter.stats.intelligence * 3,
+      damageBonus: hunter.stats.strength * 3 + hunter.stats.intelligence * 3 + weaponDamageBonus,
       incomingReduction: 0,
     },
     reapingArc: {
       stat: stats.strength * 0.85 + stats.speed * 0.5 + stats.fightIq * 0.7 + hunter.level * 7,
-      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 3 + hunter.stats.intelligence * 2,
+      damageBonus: hunter.stats.strength * 2 + hunter.stats.sense * 3 + hunter.stats.intelligence * 2 + weaponDamageBonus,
       incomingReduction: 0,
     },
   };
@@ -9143,18 +9429,59 @@ export function spendHunterStatPoint(life, stat) {
   return addLog(next, `System stat point spent: Hunter ${stat} increased.`, 'world');
 }
 
+export function getHunterCraftingRecipes(life) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  return HUNTER_CRAFTING_RECIPES.map((recipe) => {
+    const missing = [];
+    if (recipe.requiresItem && !hunterHasItem(hunter, recipe.requiresItem) && hunter.equippedWeapon !== recipe.requiresItem) {
+      missing.push(HUNTER_ITEM_CATALOG[recipe.requiresItem]?.label ?? labelFromId(recipe.requiresItem));
+    }
+    for (const [itemId, quantity] of Object.entries(recipe.costs ?? {})) {
+      const owned = hunterItemQuantity(hunter, itemId);
+      if (owned < quantity) missing.push(`${HUNTER_ITEM_CATALOG[itemId]?.label ?? labelFromId(itemId)} ${owned}/${quantity}`);
+    }
+    return {
+      ...recipe,
+      available: missing.length === 0,
+      missing,
+      currentUpgrade: recipe.upgradeItem ? (hunter.itemUpgrades?.[recipe.upgradeItem] ?? 0) : 0,
+    };
+  });
+}
+
+export function craftHunterItem(life, recipeId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const recipe = getHunterCraftingRecipes(next).find((item) => item.id === recipeId);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The System crafting menu is still locked.', 'world');
+  if (!recipe) return addLog(next, 'That System crafting recipe is not available.', 'world');
+  if (!recipe.available) return addLog(next, `Crafting blocked: ${recipe.missing.join(', ')}.`, 'world');
+
+  for (const [itemId, quantity] of Object.entries(recipe.costs ?? {})) {
+    consumeHunterItemQuantity(next.hunterWorld, itemId, quantity);
+  }
+  if (recipe.upgradeItem) {
+    next.hunterWorld.itemUpgrades = normalizeHunterItemUpgrades(next.hunterWorld.itemUpgrades);
+    next.hunterWorld.itemUpgrades[recipe.upgradeItem] = clamp((next.hunterWorld.itemUpgrades[recipe.upgradeItem] ?? 0) + 1, 0, 5);
+  }
+  for (const [itemId, quantity] of Object.entries(recipe.grants ?? {})) addHunterItem(next.hunterWorld, itemId, quantity);
+  next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
+  next.hunterWorld.milestones.craftedItems += 1;
+  return addLog(next, `Crafting complete: ${recipe.label}.`, 'world');
+}
+
 export function visitHunterAssociation(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   if (!next.hunterWorld.unlocked) return addLog(next, 'The Hunter Association has not contacted you yet.', 'world');
+  const review = getHunterAssociationReview(next);
   const currentIndex = HUNTER_RANKS.indexOf(next.hunterWorld.rank);
-  const nextRank = HUNTER_RANKS[currentIndex + 1];
-  const requirement = HUNTER_RANK_REQUIREMENTS[nextRank];
-  if (requirement &&
-    next.hunterWorld.level >= requirement.level &&
-    next.hunterWorld.gatesCleared >= requirement.gatesCleared &&
-    hunterPower(next) >= requirement.power) {
+  const nextRank = review.nextRank;
+  if (review.eligible) {
     next.hunterWorld.rank = nextRank;
+    next.hunterWorld.statPoints += 2;
+    next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
+    next.hunterWorld.milestones.promotions = [...new Set([...next.hunterWorld.milestones.promotions, nextRank])];
     next.resources.reputation = clamp(next.resources.reputation + 10 + currentIndex * 4, 0, 999);
     next.resources.money += 750 * (currentIndex + 1);
     if (nextRank === 'S' && !next.eventFlags?.mentorPasswordRevealed) {
@@ -9177,7 +9504,8 @@ export function visitHunterAssociation(life) {
     return addLog(next, `Hunter Association rank reassessment: promoted to ${nextRank}-rank.`, 'world');
   }
   next.resources.mood = clamp(next.resources.mood + 2);
-  return addLog(next, 'Hunter Association review complete. They say your file is growing, but not enough for promotion yet.', 'world');
+  const missing = review.requirements.filter((item) => !item.met).map((item) => `${item.label} ${item.current}/${item.required}`).join(', ');
+  return addLog(next, `Hunter Association review complete. Missing: ${missing || 'no further rank available'}.`, 'world');
 }
 
 export function buySystemItem(life, itemId = 'recoveryPotion') {
@@ -9242,6 +9570,8 @@ export function extractShadow(life) {
     id: `${monsterId}-${next.hunterWorld.shadowArmy.length + 1}`,
     monsterId,
     name: `${monster?.name ?? labelFromId(monsterId)} Shadow`,
+    sourceBoss: monster?.name ?? labelFromId(monsterId),
+    extractedMonth: lifeMonth(next),
     rank,
     strength,
     power: 18 + next.hunterWorld.level * 2,
@@ -9249,8 +9579,50 @@ export function extractShadow(life) {
   next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
   next.hunterWorld.lastBossCleared = null;
   next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 10);
+  next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
+  next.hunterWorld.milestones.shadowsExtracted += 1;
   next.stats.control = clampLifeStat(next, 'control', next.stats.control + 3);
   return addLog(next, `Shadow Extraction succeeded: ${shadow.name} joins your army.`, 'world');
+}
+
+export function advanceMonarchTrace(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const milestones = getHunterMilestones(next);
+  const monarchMilestone = milestones.find((milestone) => milestone.id === 'monarch-trace');
+  if (!monarchMilestone?.ready && !next.hunterWorld.monarchTrace.unlocked) {
+    return addLog(next, 'Monarch Trace is dormant. Reach S-rank, Level 40, 50 Gate clears, and 3 shadows.', 'world');
+  }
+  const trace = normalizeMonarchTrace(next.hunterWorld.monarchTrace);
+  if (trace.completed) return addLog(next, 'Monarch Trace already completed.', 'world');
+
+  if (!trace.unlocked) {
+    trace.unlocked = true;
+    trace.stage = 1;
+    trace.influence = 25;
+    grantSystemPerk(next.hunterWorld, 'rulersAuthority');
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 8);
+    next.hunterWorld.milestones.monarchSteps += 1;
+    next.hunterWorld.monarchTrace = trace;
+    return addLog(next, "Monarch Trace awakened: Ruler's Authority has fused with your shadow army.", 'world');
+  }
+
+  trace.stage = clamp(trace.stage + 1, 0, 4);
+  trace.influence = clamp(trace.influence + 25, 0, 100);
+  trace.completed = trace.stage >= 4;
+  next.hunterWorld.milestones.monarchSteps += 1;
+  if (trace.stage >= 2 && !next.hunterWorld.gateOffers.some((offer) => offer.isMonarchGate)) {
+    const offer = createGateOffer(next, 'S', 9, { isRedGate: true, danger: true });
+    offer.id = `monarch-${lifeMonth(next)}-${trace.stage}`;
+    offer.name = 'MONARCH TRACE: Shadow Throne Rift';
+    offer.isMonarchGate = true;
+    offer.modifier = { id: 'monarch-trace', label: 'Monarch Trace', danger: 'Mythic', loot: '+Monarch rewards', scan: 'The Gate is responding to your shadow army directly.' };
+    next.hunterWorld.gateOffers = [offer, ...next.hunterWorld.gateOffers.filter((gate) => !gate.isMonarchGate)].slice(0, 3);
+  }
+  if (trace.stage >= 3) grantSystemPerk(next.hunterWorld, 'systemOverclock');
+  if (trace.completed) grantSystemPerk(next.hunterWorld, 'abyssalLeech');
+  next.hunterWorld.monarchTrace = trace;
+  return addLog(next, trace.completed ? 'Monarch Trace completed: Abyssal Leech unlocked.' : `Monarch Trace advanced to stage ${trace.stage}.`, 'world');
 }
 
 function queueTriggeredEvents(life, trigger, context = {}) {
