@@ -2807,6 +2807,7 @@ function renderHunterMoves(mode = 'quest') {
     analyzeWeakness: 'analysis',
     execute: 'finisher',
     shadowAssist: 'shadow',
+    abyssalLeech: 'finisher',
     shadowPierce: 'finisher',
     manaRend: 'finisher',
     reapingArc: 'finisher',
@@ -2822,6 +2823,7 @@ function renderHunterMoves(mode = 'quest') {
       move.moveType === 'special' && perkCount('specialStaminaMinus2') ? `Special stamina cost -${2 * perkCount('specialStaminaMinus2')} (${perkCount('specialStaminaMinus2')}/10).` : '',
       move.moveType === 'basic' && move.id !== 'conserve' && perkCount('basicDamagePlus5') ? `Basic damage +${5 * perkCount('basicDamagePlus5')}% (${perkCount('basicDamagePlus5')}/10).` : '',
       move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
+      move.id === 'abyssalLeech' ? 'Ultimate lifesteal move: restores health from damage dealt.' : '',
       move.id === 'shadowAssist' ? `Shadow army: ${shadowCount} shadow${shadowCount === 1 ? '' : 's'}, strength ${shadowStrengthTotal}.` : '',
       move.id === 'shadowAssist' && perkCount('shadowDamagePlus8') ? `Shadow Assist damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
     ].filter(Boolean).join(' ');
@@ -2894,6 +2896,7 @@ function systemPerkRarityLabel(option) {
     basic: 'BASIC SYSTEM PERK',
     rare: 'RARE SYSTEM PERK',
     special: 'SPECIAL OP SYSTEM PERK',
+    ultimate: 'ULTIMATE SYSTEM PERK',
   }[option.tier] ?? 'SYSTEM PERK';
 }
 

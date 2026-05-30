@@ -85,6 +85,7 @@ const SYSTEM_PERK_VALUES = {
   absoluteGuard: 1,
   rulersAuthority: 1,
   systemOverclock: 1,
+  abyssalLeech: 1,
 };
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
@@ -364,6 +365,18 @@ export const HUNTER_MOVES = {
     guardBias: 2,
     text: 'Shadow Assist drags the monster timing off-beat for one brutal opening.',
   },
+  abyssalLeech: {
+    label: 'Abyssal Leech',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN + 1,
+    category: 'ultimate',
+    hint: 'ULTIMATE System move. Deals heavy damage and restores health from the wound.',
+    staminaCost: 34,
+    damageBias: 1.72,
+    guardBias: -6,
+    requiresPerk: 'abyssalLeech',
+    text: 'Abyssal Leech opens a black System brand and pulls stolen vitality back into your body.',
+  },
   shadowPierce: {
     label: 'Shadow Pierce',
     moveType: 'special',
@@ -545,6 +558,7 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina' },
   rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Shadow Assist scales harder" },
   systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: all Basic System moves gain flat damage' },
+  abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlocks an ultimate lifesteal System move' },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -5744,6 +5758,7 @@ export function getUnlockedHunterMoves(life) {
   if (life.activeFight?.source !== 'hunterQuest' && life.activeFight?.source !== 'hunterDungeon') return [];
   const hunter = normalizeHunterWorld(life.hunterWorld);
   return Object.entries(HUNTER_MOVES)
+    .filter(([, move]) => !move.requiresPerk || hasSystemPerk({ hunterWorld: hunter }, move.requiresPerk))
     .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunterHasItem(hunter, move.requiresWeapon))
     .map(([id, move]) => ({
       id,
@@ -5756,6 +5771,7 @@ function hunterMoveDisabledReason(life, move) {
   const fight = life.activeFight;
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   const hunter = normalizeHunterWorld(life.hunterWorld);
+  if (move.requiresPerk && !hasSystemPerk(life, move.requiresPerk)) return 'Requires the matching ultimate System perk.';
   if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunterHasItem(hunter, move.requiresWeapon)) return 'Requires the matching System weapon.';
   if (move.id === 'shadowAssist' && !(hunter.shadowArmy?.length)) return 'Requires at least one shadow in your army.';
   const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
@@ -7949,6 +7965,11 @@ function hunterMoveProfile(move, life) {
       damageBonus: shadowPower * (1 + systemPerkValue(life, 'shadowDamagePlus8')) + (hasSystemPerk(life, 'rulersAuthority') ? shadowStrengthTotal * (12 + hunter.stats.intelligence) : 0),
       incomingReduction: shadowCount * 2 + shadowStrengthTotal,
     },
+    abyssalLeech: {
+      stat: stats.control * 1.05 + stats.willpower * 0.85 + stats.fightIq * 0.55 + hunter.stats.intelligence * 5 + hunter.level * 5,
+      damageBonus: hunter.stats.intelligence * 4 + hunter.stats.sense * 2 + shadowStrengthTotal * 6,
+      incomingReduction: 2 + hunter.stats.vitality,
+    },
     shadowPierce: {
       stat: stats.reflexes * 0.95 + stats.speed * 0.75 + stats.technique * 0.45 + hunter.level * 5,
       damageBonus: hunter.stats.sense * 3 + hunter.stats.agility * 2,
@@ -8020,6 +8041,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
+  const lifeSteal = move.id === 'abyssalLeech' ? Math.max(1, Math.round(playerDamage * 0.32 + next.hunterWorld.stats.intelligence * 0.8)) : 0;
+  if (lifeSteal) fight.meters.playerHealth = clamp(fight.meters.playerHealth + lifeSteal, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.guard = clamp(fight.meters.guard + move.guardBias, 0, 100);
   fight.meters.momentum = clamp(fight.meters.momentum + Math.round(swing / 8), -50, 50);
   const injuryDefense = stats.durability * 0.014 + stats.flexibility * 0.012 + stats.control * 0.01 + stats.willpower * 0.01;
@@ -8038,6 +8061,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
       : '';
   const perkLine = [
     move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.` : '',
+    lifeSteal ? ` Abyssal Leech restored ${lifeSteal} health.` : '',
     guardRecovery ? ` Absolute Guard recovery: +${guardRecovery} mana.` : '',
     appliedCooldown ? ` Cooldown set: ${appliedCooldown} exchange${appliedCooldown === 1 ? '' : 's'}.` : '',
   ].join('');
