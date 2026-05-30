@@ -1003,6 +1003,54 @@ select:focus {
   border-color: rgba(185, 135, 255, 0.28);
 }
 
+.system-perk-reward {
+  position: relative;
+  overflow: hidden;
+}
+
+.system-perk-reward em {
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.system-perk-reward.perk-basic {
+  border-color: rgba(120, 217, 255, 0.42);
+  box-shadow: inset 3px 0 0 rgba(120, 217, 255, 0.72);
+}
+
+.system-perk-reward.perk-basic em {
+  color: var(--system-cyan);
+  background: rgba(120, 217, 255, 0.1);
+}
+
+.system-perk-reward.perk-rare {
+  border-color: rgba(185, 135, 255, 0.56);
+  box-shadow: inset 3px 0 0 rgba(185, 135, 255, 0.78), 0 0 18px rgba(185, 135, 255, 0.1);
+}
+
+.system-perk-reward.perk-rare em {
+  color: var(--system-violet);
+  background: rgba(185, 135, 255, 0.12);
+}
+
+.system-perk-reward.perk-special {
+  border-color: rgba(229, 185, 79, 0.72);
+  box-shadow: inset 3px 0 0 rgba(229, 185, 79, 0.9), 0 0 22px rgba(229, 185, 79, 0.14);
+}
+
+.system-perk-reward.perk-special em {
+  color: #f7d677;
+  background: rgba(229, 185, 79, 0.16);
+}
+
 .gate-offer-grid {
   display: grid;
   gap: 10px;

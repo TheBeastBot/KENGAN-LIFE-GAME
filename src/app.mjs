@@ -2856,7 +2856,8 @@ function renderHunterLevelRewardPopup() {
         <p>The +5 Hunter stat points are already yours. Choose one extra System reward.</p>
         <section class="event-choice-grid hunter-level-reward-grid">
           ${pending.options.map((option) => `
-            <button data-action="hunter-level-reward-${option.id}">
+            <button class="${option.type === 'perk' ? `system-perk-reward perk-${option.tier ?? 'basic'}` : ''}" data-action="hunter-level-reward-${option.id}">
+              ${option.type === 'perk' ? `<em>${escapeHtml(systemPerkRarityLabel(option))}</em>` : ''}
               <strong>${escapeHtml(option.label)}</strong>
               <span>${escapeHtml(hunterRewardTypeLabel(option))}</span>
             </button>
@@ -2865,6 +2866,14 @@ function renderHunterLevelRewardPopup() {
       </article>
     </main>
   `;
+}
+
+function systemPerkRarityLabel(option) {
+  return {
+    basic: 'BASIC SYSTEM PERK',
+    rare: 'RARE SYSTEM PERK',
+    special: 'SPECIAL OP SYSTEM PERK',
+  }[option.tier] ?? 'SYSTEM PERK';
 }
 
 function hunterRewardTypeLabel(option) {
