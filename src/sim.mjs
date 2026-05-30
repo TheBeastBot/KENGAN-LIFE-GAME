@@ -699,6 +699,42 @@ function normalizeActiveHunterDungeon(dungeon) {
   };
 }
 
+function hunterRankPower(rank) {
+  const index = HUNTER_RANKS.indexOf(rank);
+  return index >= 0 ? index + 1 : 1;
+}
+
+function shadowStrength(shadow = {}) {
+  const monster = HUNTER_MONSTERS[shadow.monsterId] ?? HUNTER_MONSTERS[shadow.sourceMonsterId] ?? null;
+  const storedPower = Number.isFinite(shadow.power) ? Math.max(1, Math.round(shadow.power / 18)) : 0;
+  const storedStrength = Number.isFinite(shadow.strength) ? Math.max(1, Math.floor(shadow.strength)) : 0;
+  const rankPower = hunterRankPower(shadow.rank ?? monster?.tier);
+  const monsterPower = monster?.power ? Math.max(1, Math.round(monster.power / 90)) : 0;
+  return Math.max(1, storedStrength, storedPower, rankPower + monsterPower);
+}
+
+function normalizeShadowArmy(shadowArmy = []) {
+  if (!Array.isArray(shadowArmy)) return [];
+  return shadowArmy
+    .filter(Boolean)
+    .map((shadow, index) => {
+      const monster = HUNTER_MONSTERS[shadow.monsterId] ?? HUNTER_MONSTERS[shadow.sourceMonsterId] ?? null;
+      const rank = shadow.rank ?? monster?.tier ?? DEFAULT_HUNTER_WORLD.rank;
+      return {
+        ...shadow,
+        id: typeof shadow.id === 'string' ? shadow.id : `shadow-${index + 1}`,
+        name: typeof shadow.name === 'string' ? shadow.name : 'Extracted Shadow',
+        monsterId: shadow.monsterId ?? shadow.sourceMonsterId ?? null,
+        rank,
+        strength: shadowStrength({ ...shadow, rank }),
+      };
+    });
+}
+
+function shadowArmyStrength(hunterWorld) {
+  return (hunterWorld?.shadowArmy ?? []).reduce((sum, shadow) => sum + shadowStrength(shadow), 0);
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   const rank = HUNTER_RANKS.includes(hunterWorld.rank) ? hunterWorld.rank : DEFAULT_HUNTER_WORLD.rank;
   return {
@@ -714,7 +750,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     gatesCleared: Math.max(0, Math.floor(hunterWorld.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld.dailyQuestsCompleted ?? 0)),
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
-    shadowArmy: Array.isArray(hunterWorld.shadowArmy) ? hunterWorld.shadowArmy : [],
+    shadowArmy: normalizeShadowArmy(hunterWorld.shadowArmy),
     inventory: normalizeHunterInventory(hunterWorld.inventory),
     equippedWeapon: typeof hunterWorld.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld.gateOffers)
@@ -3500,7 +3536,7 @@ function hunterPower(life) {
     (stats.control ?? 0)
   ) / 8;
   const hunter = normalizeHunterWorld(life.hunterWorld);
-  const shadowPower = hunter.shadowArmy.length * 18;
+  const shadowPower = shadowArmyStrength(hunter) * 18;
   return Math.round(statPower + hunter.level * 8 + shadowPower);
 }
 
@@ -7874,7 +7910,9 @@ function resolveBottomConserveExchange({ life, opponent, fight, move, playerScor
 function hunterMoveProfile(move, life) {
   const stats = getHunterEffectiveStats(life);
   const hunter = normalizeHunterWorld(life.hunterWorld);
-  const shadowPower = hunter.shadowArmy.length * (8 + hunter.stats.intelligence * 0.6);
+  const shadowCount = hunter.shadowArmy.length;
+  const shadowStrengthTotal = shadowArmyStrength(hunter);
+  const shadowPower = shadowStrengthTotal * (8 + hunter.stats.intelligence * 0.6);
   const profiles = {
     slash: {
       stat: stats.strength * 1.05 + stats.technique * 0.45 + stats.fightIq * 0.25 + hunter.level * 4,
@@ -7908,8 +7946,8 @@ function hunterMoveProfile(move, life) {
     },
     shadowAssist: {
       stat: stats.control * 0.9 + stats.fightIq * 0.75 + shadowPower + hunter.level * 4,
-      damageBonus: shadowPower * (1 + systemPerkValue(life, 'shadowDamagePlus8')) + (hasSystemPerk(life, 'rulersAuthority') ? hunter.shadowArmy.length * (12 + hunter.stats.intelligence) : 0),
-      incomingReduction: hunter.shadowArmy.length * 2,
+      damageBonus: shadowPower * (1 + systemPerkValue(life, 'shadowDamagePlus8')) + (hasSystemPerk(life, 'rulersAuthority') ? shadowStrengthTotal * (12 + hunter.stats.intelligence) : 0),
+      incomingReduction: shadowCount * 2 + shadowStrengthTotal,
     },
     shadowPierce: {
       stat: stats.reflexes * 0.95 + stats.speed * 0.75 + stats.technique * 0.45 + hunter.level * 5,
@@ -9172,9 +9210,16 @@ export function extractShadow(life) {
   if (!next.hunterWorld.unlocked || !next.hunterWorld.lastBossCleared || next.hunterWorld.level < 10) {
     return addLog(next, 'Shadow Extraction failed. The System needs a stronger boss echo.', 'world');
   }
+  const monsterId = next.hunterWorld.lastBossCleared;
+  const monster = HUNTER_MONSTERS[monsterId] ?? null;
+  const rank = monster?.tier ?? next.hunterWorld.rank;
+  const strength = shadowStrength({ monsterId, rank, power: 18 + next.hunterWorld.level * 2 });
   const shadow = {
-    id: `${next.hunterWorld.lastBossCleared}-${next.hunterWorld.shadowArmy.length + 1}`,
-    name: `${labelFromId(next.hunterWorld.lastBossCleared)} Shadow`,
+    id: `${monsterId}-${next.hunterWorld.shadowArmy.length + 1}`,
+    monsterId,
+    name: `${monster?.name ?? labelFromId(monsterId)} Shadow`,
+    rank,
+    strength,
     power: 18 + next.hunterWorld.level * 2,
   };
   next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];

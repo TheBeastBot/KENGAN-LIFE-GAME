@@ -404,6 +404,16 @@ function systemPerkCount(hunter, perkId) {
   return normalizeSystemPerks(hunter?.unlockedSystemPerks).find((item) => item.id === perkId)?.count ?? 0;
 }
 
+function shadowStrength(shadow = {}) {
+  if (Number.isFinite(shadow.strength)) return Math.max(1, Math.floor(shadow.strength));
+  if (Number.isFinite(shadow.power)) return Math.max(1, Math.round(shadow.power / 18));
+  return 1;
+}
+
+function shadowArmyStrength(hunterWorld) {
+  return (hunterWorld?.shadowArmy ?? []).reduce((sum, shadow) => sum + shadowStrength(shadow), 0);
+}
+
 function normalizeHunterWorld(hunterWorld = {}) {
   return {
     ...DEFAULT_HUNTER_WORLD,
@@ -420,7 +430,14 @@ function normalizeHunterWorld(hunterWorld = {}) {
     gatesCleared: Math.max(0, Math.floor(hunterWorld?.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld?.dailyQuestsCompleted ?? 0)),
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
-    shadowArmy: Array.isArray(hunterWorld?.shadowArmy) ? hunterWorld.shadowArmy : [],
+    shadowArmy: Array.isArray(hunterWorld?.shadowArmy)
+      ? hunterWorld.shadowArmy.map((shadow, index) => ({
+        ...shadow,
+        id: typeof shadow?.id === 'string' ? shadow.id : `shadow-${index + 1}`,
+        name: typeof shadow?.name === 'string' ? shadow.name : 'Extracted Shadow',
+        strength: shadowStrength(shadow),
+      }))
+      : [],
     inventory: normalizeHunterInventory(hunterWorld?.inventory),
     equippedWeapon: typeof hunterWorld?.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld?.gateOffers) ? hunterWorld.gateOffers.slice(0, 3) : [],
@@ -2778,6 +2795,9 @@ function renderHunterMonsterReadout(fight, opponent, mode = 'quest') {
 
 function renderHunterMoves(mode = 'quest') {
   const moves = getUnlockedHunterMoves(state);
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const shadowCount = hunter.shadowArmy.length;
+  const shadowStrengthTotal = shadowArmyStrength(hunter);
   const dungeon = mode === 'dungeon';
   const moveRoles = {
     slash: 'attack',
@@ -2802,6 +2822,7 @@ function renderHunterMoves(mode = 'quest') {
       move.moveType === 'special' && perkCount('specialStaminaMinus2') ? `Special stamina cost -${2 * perkCount('specialStaminaMinus2')} (${perkCount('specialStaminaMinus2')}/10).` : '',
       move.moveType === 'basic' && move.id !== 'conserve' && perkCount('basicDamagePlus5') ? `Basic damage +${5 * perkCount('basicDamagePlus5')}% (${perkCount('basicDamagePlus5')}/10).` : '',
       move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
+      move.id === 'shadowAssist' ? `Shadow army: ${shadowCount} shadow${shadowCount === 1 ? '' : 's'}, strength ${shadowStrengthTotal}.` : '',
       move.id === 'shadowAssist' && perkCount('shadowDamagePlus8') ? `Shadow Assist damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
     ].filter(Boolean).join(' ');
     return `
