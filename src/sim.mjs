@@ -70,6 +70,7 @@ const DEFAULT_HUNTER_WORLD = {
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
+const SECRET_MENTOR_PASSWORD = 'MENTOR21';
 const SYSTEM_PERK_VALUES = {
   executeCooldownMinus1: 1,
   specialStaminaMinus2: 2,
@@ -2787,6 +2788,22 @@ export const MENTORS = [
     requiresHiddenWorld: true,
     lesson: 'They do not coach so much as expose what your style is still hiding. Auto: all training and recovery, with the sharpest efficiency.',
   },
+  {
+    id: 'systemSage',
+    name: 'The System Sage',
+    title: 'Secret S-Rank Mentor',
+    rarity: 'Secret',
+    focus: ['strength', 'speed', 'durability', 'technique', 'fightIq', 'willpower', 'reflexes', 'flexibility', 'aggression', 'control'],
+    autoTrainingIds: 'all',
+    autoRecoveryIds: 'all',
+    minReputation: 0,
+    minWins: 0,
+    fee: 0,
+    successBonus: 100,
+    trainingMultiplier: 2,
+    requiresHiddenWorld: true,
+    lesson: 'The Sage turns every session into a System correction. All normal training gains are doubled.',
+  },
 ];
 
 function starterMentor() {
@@ -4811,6 +4828,19 @@ export function redeemHunterPassword(life, password) {
   return addLog(next, 'Hunter password accepted: the Gate event is opening.', 'world');
 }
 
+export function redeemMentorPassword(life, password) {
+  if ((password ?? '').trim().toUpperCase() !== SECRET_MENTOR_PASSWORD) {
+    return addLog(life, 'Mentor password rejected.', 'mentor');
+  }
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (next.hunterWorld.rank !== 'S') return addLog(next, 'Mentor password locked: reach S-rank Hunter first.', 'mentor');
+  const mentor = MENTORS.find((item) => item.id === 'systemSage');
+  next.mentor = clone(mentor);
+  next.relationships.mentor = 100;
+  return addLog(next, 'Mentor password accepted: The System Sage is now your mentor. Normal training gains are doubled.', 'mentor');
+}
+
 export function useSocialAction(life, actionId) {
   const action = SOCIAL_ACTIONS[actionId];
   if (!action) return addLog(life, 'Unknown social media action.', 'social');
@@ -4919,7 +4949,7 @@ export function train(life, actionId) {
   for (const [stat, amount] of Object.entries(action.gains)) {
     const mentorBonus = next.mentor?.focus?.includes(stat) ? 1 : 0;
     const homeGymBonus = next.ownedAssets?.includes('homeGym') && stat === Object.keys(action.gains)[0] ? 1 : 0;
-    next.stats[stat] = clampLifeStat(next, stat, next.stats[stat] + amount * rarity.powerMultiplier + mentorBonus + homeGymBonus);
+    next.stats[stat] = clampLifeStat(next, stat, next.stats[stat] + amount * rarity.powerMultiplier * mentorTrainingMultiplier(next.mentor) + mentorBonus + homeGymBonus);
   }
   applyVitalCapGrowth(beforeGrowth, next);
 
@@ -4958,7 +4988,7 @@ function applyTrainingNoPopup(life, actionId) {
     const mentorBonus = life.mentor?.focus?.includes(stat) ? 1 : 0;
     const homeGymBonus = life.ownedAssets?.includes('homeGym') && stat === Object.keys(action.gains)[0] ? 1 : 0;
     const autoBonus = mentorAutoStatBonus(life.mentor, stat);
-    life.stats[stat] = clampLifeStat(life, stat, life.stats[stat] + amount * rarity.powerMultiplier + mentorBonus + homeGymBonus + autoBonus);
+    life.stats[stat] = clampLifeStat(life, stat, life.stats[stat] + amount * rarity.powerMultiplier * mentorTrainingMultiplier(life.mentor) + mentorBonus + homeGymBonus + autoBonus);
   }
   applyVitalCapGrowth(beforeGrowth, life);
   if (life.style === 'Unformed' && life.stats.technique >= 28) life.style = 'Hybrid Striker';
@@ -4991,6 +5021,10 @@ function normalizedMentor(mentor) {
   if (!mentor) return null;
   const catalog = MENTORS.find((item) => item.id === mentor.id);
   return catalog ? { ...catalog, ...mentor } : mentor;
+}
+
+function mentorTrainingMultiplier(mentor) {
+  return Math.max(1, Number(normalizedMentor(mentor)?.trainingMultiplier ?? 1));
 }
 
 function mentorAllows(mentor, key, actionId) {
@@ -9008,6 +9042,23 @@ export function visitHunterAssociation(life) {
     next.hunterWorld.rank = nextRank;
     next.resources.reputation = clamp(next.resources.reputation + 10 + currentIndex * 4, 0, 999);
     next.resources.money += 750 * (currentIndex + 1);
+    if (nextRank === 'S' && !next.eventFlags?.mentorPasswordRevealed) {
+      next.pendingEvent = {
+        id: 'mentor-password-reveal',
+        flag: 'mentorPasswordRevealed',
+        title: 'S-Rank Mentor Signal',
+        body: 'The Association terminal flickers after your S-rank promotion. A private System note appears: Secret mentor password recovered: mentor21.',
+        choices: [
+          {
+            id: 'memorize-mentor21',
+            label: 'Memorize mentor21',
+            result: 'You memorized the secret mentor password: mentor21.',
+            effects: {},
+          },
+        ],
+      };
+      next.eventFlags = { ...next.eventFlags, mentorPasswordRevealed: true };
+    }
     return addLog(next, `Hunter Association rank reassessment: promoted to ${nextRank}-rank.`, 'world');
   }
   next.resources.mood = clamp(next.resources.mood + 2);

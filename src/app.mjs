@@ -47,6 +47,7 @@ import {
   recover,
   redeemClanPassword,
   redeemHunterPassword,
+  redeemMentorPassword,
   rerollClan,
   resolveEventChoice,
   advanceHunterDailyQuest,
@@ -1095,6 +1096,17 @@ function renderLife() {
         <div class="password-row">
           <input id="hunter-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
           <button class="primary" data-action="redeem-hunter-password">Redeem</button>
+        </div>
+      </article>
+      <article class="clan-password-card hunter-password-card">
+        <div>
+          <p class="eyebrow">Mentor Password</p>
+          <h2>Secret Mentor</h2>
+          <p class="muted">Reach S-rank Hunter to recover the password for a mentor with 2x normal training growth.</p>
+        </div>
+        <div class="password-row">
+          <input id="mentor-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
+          <button class="primary" data-action="redeem-mentor-password">Redeem</button>
         </div>
       </article>
       ${renderCollapsibleSection({
@@ -2353,6 +2365,7 @@ function renderMentorSummary(expanded = false) {
         <h2>${state.mentor.name}</h2>
         <p>${state.mentor.title} / ${state.mentor.rarity ?? 'Common'}</p>
         <p class="muted">Focus: ${state.mentor.focus.map(labelize).join(', ')}. Focused training gets bonus growth.</p>
+        ${state.mentor.trainingMultiplier ? `<p class="muted">Secret boost: ${state.mentor.trainingMultiplier}x normal training growth.</p>` : ''}
         <p class="muted">Auto Training: ${formatMentorAutoList(state.mentor.autoTrainingIds, TRAINING_ACTIONS)}</p>
         <p class="muted">Auto Recovery: ${formatMentorAutoList(state.mentor.autoRecoveryIds, RECOVERY_ACTIONS)}</p>
       </div>
@@ -3470,6 +3483,11 @@ function handleAction(action, source = null) {
   if (action === 'redeem-hunter-password') {
     const input = document.querySelector('#hunter-password-input');
     setState(redeemHunterPassword(state, input?.value ?? ''));
+    return;
+  }
+  if (action === 'redeem-mentor-password') {
+    const input = document.querySelector('#mentor-password-input');
+    setState(redeemMentorPassword(state, input?.value ?? ''));
     return;
   }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));
