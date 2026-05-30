@@ -153,3 +153,15 @@ test('large popup menus use replacement screens while small popups stay modal ca
   assert.doesNotMatch(cssSource, /\.screen-view\s*{[\s\S]*position:\s*fixed;/);
   assert.match(cssSource, /\.screen-panel\s*{[\s\S]*min-height:\s*100dvh;/);
 });
+
+test('Shadow Domain map renders as a square tactical node board', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /class="shadow-domain-map tactical-board"/);
+  assert.match(appSource, /<circle class="domain-node-ring"/);
+  assert.match(appSource, /class="domain-route/);
+  assert.doesNotMatch(appSource, /<rect x="\$\{domain\.x\}" y="\$\{domain\.y\}" width="\$\{domain\.width\}"/);
+  assert.match(cssSource, /\.shadow-domain-map\s*{[\s\S]*aspect-ratio:\s*1\s*\/\s*1;/);
+  assert.match(cssSource, /\.domain-map-legend\s*{/);
+});

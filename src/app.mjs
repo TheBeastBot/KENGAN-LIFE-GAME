@@ -2783,6 +2783,8 @@ function renderShadowDomainsPanel() {
     conquered: 'Conquered',
     core: 'Core Domain',
   };
+  const domainById = Object.fromEntries(map.domains.map((domain) => [domain.id, domain]));
+  const links = map.domains.flatMap((domain) => (domain.requires ?? []).map((sourceId) => ({ from: domainById[sourceId], to: domain })).filter((link) => link.from && link.to));
   return `
     <section class="shadow-domain-layout">
       <article class="system-window shadow-map-card">
@@ -2793,15 +2795,30 @@ function renderShadowDomainsPanel() {
           </div>
           <span class="system-chip">Army ${map.armyPower}</span>
         </div>
-        <svg class="shadow-domain-map" viewBox="0 0 100 100" role="img" aria-label="Interactive Shadow Domain map">
-          <path class="domain-map-backdrop" d="M8 68 L26 30 L56 16 L88 35 L82 82 L46 92 Z"></path>
+        <svg class="shadow-domain-map tactical-board" viewBox="0 0 100 100" role="img" aria-label="Interactive Shadow Domain tactical map">
+          <rect class="domain-map-backdrop" x="6" y="6" width="88" height="88" rx="6"></rect>
+          <g class="domain-grid-lines">
+            ${[24, 42, 60, 78].map((line) => `<line x1="8" y1="${line}" x2="92" y2="${line}"></line><line x1="${line}" y1="8" x2="${line}" y2="92"></line>`).join('')}
+          </g>
+          <g class="domain-routes">
+            ${links.map((link) => `<line class="domain-route ${link.to.state === 'conquered' ? 'conquered' : link.to.state === 'locked' ? 'locked' : 'active'}" x1="${link.from.x}" y1="${link.from.y}" x2="${link.to.x}" y2="${link.to.y}"></line>`).join('')}
+          </g>
           ${map.domains.map((domain) => `
             <g class="domain-node state-${domain.state} ${selected?.id === domain.id ? 'selected' : ''}" data-action="shadow-domain-select-${domain.id}" tabindex="0" role="button" aria-label="${escapeHtml(domain.name)}">
-              <rect x="${domain.x}" y="${domain.y}" width="${domain.width}" height="${domain.height}" rx="4"></rect>
-              <text x="${domain.x + domain.width / 2}" y="${domain.y + domain.height / 2}">${domain.core ? 'M' : domain.name.split(' ')[0][0]}</text>
+              <circle class="domain-node-ring" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 8.5 : 7.2}"></circle>
+              <circle class="domain-node-core" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 5.4 : 4.4}"></circle>
+              <text class="domain-node-label" x="${domain.x}" y="${domain.y - 11}">${domain.core ? 'CORE' : domain.name.split(' ')[0].toUpperCase()}</text>
+              <text class="domain-node-power" x="${domain.x}" y="${domain.y + 1}">${domain.enemyPower}</text>
             </g>
           `).join('')}
         </svg>
+        <div class="domain-map-legend" aria-hidden="true">
+          <span><i class="legend-dot locked"></i>Locked</span>
+          <span><i class="legend-dot enemy"></i>Enemy</span>
+          <span><i class="legend-dot ready"></i>Ready</span>
+          <span><i class="legend-dot conquered"></i>Conquered</span>
+          <span><i class="legend-dot core"></i>Core</span>
+        </div>
       </article>
       <article class="option-card system-window domain-detail-card ${selected?.state ? `state-${selected.state}` : ''}">
         <div>
