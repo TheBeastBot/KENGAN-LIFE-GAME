@@ -11,7 +11,7 @@ export const CLAN_RARITIES = [
 export const STAT_CAP = 500;
 export const SECRET_CLAN_PASSWORD = 'BUCKY21';
 export const HUNTER_EVENT_PASSWORD = 'SOLO21';
-export const MONARCH_BODY_PASSWORD = 'CHYRISH21';
+export const MONARCH_BODY_PASSWORD = 'MONARCH21';
 
 export const TECHNIQUE_TRACKS = {
   striking: {
@@ -66,6 +66,7 @@ const DEFAULT_HUNTER_WORLD = {
   redGatePending: false,
   lastGateMonth: null,
   arisePrompt: null,
+  pendingArisePrompt: null,
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
@@ -1051,9 +1052,16 @@ function createArisePrompt(life, monsterId, source = 'boss') {
 function queueArisePrompt(life, monsterId, source = 'boss') {
   const prompt = createArisePrompt(life, monsterId, source);
   if (!prompt) return false;
-  life.hunterWorld.arisePrompt = prompt;
+  if (life.hunterWorld.pendingLevelRewards?.length) life.hunterWorld.pendingArisePrompt = prompt;
+  else life.hunterWorld.arisePrompt = prompt;
   life.hunterWorld.lastBossCleared = null;
   return true;
+}
+
+function activatePendingArisePrompt(hunterWorld) {
+  if (hunterWorld.pendingLevelRewards?.length || hunterWorld.arisePrompt || !hunterWorld.pendingArisePrompt) return;
+  hunterWorld.arisePrompt = hunterWorld.pendingArisePrompt;
+  hunterWorld.pendingArisePrompt = null;
 }
 
 function ariseSuccessChance(hunter, prompt) {
@@ -1116,6 +1124,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
     arisePrompt: normalizeArisePrompt(hunterWorld.arisePrompt),
+    pendingArisePrompt: normalizeArisePrompt(hunterWorld.pendingArisePrompt),
     dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
     pendingLevelRewards: Array.isArray(hunterWorld.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld.unlockedSystemPerks),
@@ -4166,6 +4175,7 @@ export function claimHunterLevelReward(life, rewardId) {
   }
 
   next.hunterWorld.pendingLevelRewards = next.hunterWorld.pendingLevelRewards.slice(1);
+  activatePendingArisePrompt(next.hunterWorld);
   return addLog(next, `System Level Reward claimed: ${reward.label}.`, 'world');
 }
 
@@ -10073,6 +10083,7 @@ export function attemptAriseShadow(life) {
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   const prompt = next.hunterWorld.arisePrompt;
   if (!prompt) return addLog(next, 'No defeated boss shadow is answering ARISE.', 'world');
+  if (next.hunterWorld.pendingLevelRewards.length) return addLog(next, 'Claim the pending System Level Reward before commanding ARISE.', 'world');
   if (prompt.status !== 'active' || prompt.attemptsLeft <= 0) return addLog(next, 'That ARISE echo has already resolved.', 'world');
 
   const chance = ariseSuccessChance(next.hunterWorld, prompt);

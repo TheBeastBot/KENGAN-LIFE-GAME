@@ -822,6 +822,47 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
   assert.equal(next.stats.strength, beforeStrength);
 });
 
+test('ARISE waits until pending Hunter level rewards are claimed', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 924 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 924 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 924 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
+  life = advanceHunterDungeon(life);
+  life.hunterWorld.xp = 134;
+  life.hunterWorld.pendingLevelRewards = [];
+  life.activeFight.meters.opponentHealth = 1;
+
+  const cleared = takeFightTurn(life, 'slash');
+
+  assert.equal(cleared.hunterWorld.pendingLevelRewards.length, 1);
+  assert.equal(cleared.hunterWorld.arisePrompt, null);
+  assert.ok(cleared.hunterWorld.pendingArisePrompt);
+
+  const rewardId = cleared.hunterWorld.pendingLevelRewards[0].options[0].id;
+  const rewarded = claimHunterLevelReward(cleared, rewardId);
+
+  assert.equal(rewarded.hunterWorld.pendingLevelRewards.length, 0);
+  assert.equal(rewarded.hunterWorld.pendingArisePrompt, null);
+  assert.equal(rewarded.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
+  assert.equal(rewarded.hunterWorld.arisePrompt.attemptsLeft, 3);
+});
+
 test('Hunter level reward choices apply one queued bonus at a time', () => {
   const base = createNewLife({ gender: 'Male', seed: 9301 });
   const life = {
@@ -1607,7 +1648,7 @@ test('wrong clan password does not change clan or resources', () => {
   assert.ok(next.log[0].text.includes('rejected'));
 });
 
-test('chyrish21 password unlocks Monarch Body and raises current stats to current caps', () => {
+test('monarch21 password unlocks Monarch Body and raises current stats to current caps', () => {
   const life = {
     ...createNewLife({ gender: 'Male', seed: 1311 }),
     identity: { ...createNewLife({ gender: 'Male', seed: 1311 }).identity, age: 22 },
@@ -1618,7 +1659,7 @@ test('chyrish21 password unlocks Monarch Body and raises current stats to curren
   };
   const expectedCaps = Object.fromEntries(Object.keys(life.stats).map((stat) => [stat, getStatCap(life, stat)]));
 
-  const next = redeemMonarchBodyPassword(life, ' chyrish21 ');
+  const next = redeemMonarchBodyPassword(life, ' monarch21 ');
 
   assert.deepEqual(next.stats, expectedCaps);
   assert.deepEqual(next.baseStats, expectedCaps);
@@ -5801,17 +5842,18 @@ test('ground submission critical narration describes a submission instead of a s
   assert.doesNotMatch(found.text, /Critical strike:/);
 });
 
-test('Monarch Body password UI is hidden while the hidden redeem function still works', () => {
+test('Monarch Body password UI is visible without revealing the passcode', () => {
   const appSource = readFileSync(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const life = {
     ...createNewLife({ gender: 'Male', seed: 16001 }),
     stats: { ...createNewLife({ gender: 'Male', seed: 16001 }).stats, strength: 20, speed: 30 },
   };
 
-  const unlocked = redeemMonarchBodyPassword(life, 'chyrish21');
+  const unlocked = redeemMonarchBodyPassword(life, 'monarch21');
 
-  assert.equal(appSource.includes('CHYRISH21'), false);
-  assert.equal(appSource.includes('monarch-body-password-input'), false);
+  assert.equal(appSource.toLowerCase().includes('monarch21'), false);
+  assert.equal(appSource.includes('monarch-body-password-input'), true);
+  assert.equal(appSource.includes('redeem-monarch-body-password'), true);
   assert.equal(unlocked.stats.strength, getStatCap(unlocked, 'strength'));
   assert.equal(unlocked.stats.speed, getStatCap(unlocked, 'speed'));
 });

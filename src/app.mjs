@@ -57,6 +57,7 @@ import {
   redeemClanPassword,
   redeemHunterPassword,
   redeemMentorPassword,
+  redeemMonarchBodyPassword,
   rerollClan,
   resolveEventChoice,
   advanceHunterDailyQuest,
@@ -135,6 +136,8 @@ const DEFAULT_HUNTER_WORLD = {
   activeDungeon: null,
   redGatePending: false,
   lastGateMonth: null,
+  arisePrompt: null,
+  pendingArisePrompt: null,
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
@@ -331,6 +334,12 @@ const NAV_SECTIONS = [
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function clearStoredGameData() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(DROPDOWN_STORAGE_KEY);
+  localStorage.removeItem(NAV_FAVORITES_STORAGE_KEY);
 }
 
 function preloadMoveIcons() {
@@ -556,6 +565,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
     arisePrompt: hunterWorld?.arisePrompt ?? null,
+    pendingArisePrompt: hunterWorld?.pendingArisePrompt ?? null,
     dailyQuest: hunterWorld?.dailyQuest ?? null,
     pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
@@ -984,7 +994,30 @@ function renderStart() {
   `;
 }
 
+function renderRecoveryScreen(error) {
+  console.error('Underground Life Sim render failed', error);
+  syncBodyScrollLock(false);
+  app.innerHTML = `
+    <main class="shell start-shell">
+      <section class="hero-panel">
+        <p class="eyebrow">Underground Life Sim</p>
+        <h1>Save recovery needed.</h1>
+        <p class="subcopy">The page hit a bad saved UI state while loading. Clear the broken local data, then start again.</p>
+        <button class="primary wide" data-action="clear-broken-save">Clear Broken Save</button>
+      </section>
+    </main>
+  `;
+}
+
 function render() {
+  try {
+    renderApp();
+  } catch (error) {
+    renderRecoveryScreen(error);
+  }
+}
+
+function renderApp() {
   if (!state) {
     syncBodyScrollLock(false);
     renderStart();
@@ -1262,6 +1295,17 @@ function renderLife() {
         <div class="password-row">
           <input id="mentor-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
           <button class="primary" data-action="redeem-mentor-password">Redeem</button>
+        </div>
+      </article>
+      <article class="clan-password-card hunter-password-card">
+        <div>
+          <p class="eyebrow">Monarch Body Password</p>
+          <h2>Body Override</h2>
+          <p class="muted">Enter the hidden body override password to raise current stats to their current caps.</p>
+        </div>
+        <div class="password-row">
+          <input id="monarch-body-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
+          <button class="primary" data-action="redeem-monarch-body-password">Redeem</button>
         </div>
       </article>
       ${renderCollapsibleSection({
@@ -3940,6 +3984,19 @@ function handleAction(action, source = null) {
     navMenuOpen = false;
     return;
   }
+  if (action === 'clear-broken-save') {
+    clearStoredGameData();
+    state = null;
+    activeTab = 'life';
+    selectedFightCategory = null;
+    hunterQuestPopupOpen = false;
+    hunterDungeonPopupOpen = false;
+    systemShopPopupOpen = false;
+    hunterItemsPopupOpen = false;
+    navMenuOpen = false;
+    render();
+    return;
+  }
   if (!state) return;
   if (action === 'nav-menu-open') {
     navMenuOpen = true;
@@ -3980,12 +4037,17 @@ function handleAction(action, source = null) {
     setState(redeemMentorPassword(state, input?.value ?? ''));
     return;
   }
+  if (action === 'redeem-monarch-body-password') {
+    const input = document.querySelector('#monarch-body-password-input');
+    setState(redeemMonarchBodyPassword(state, input?.value ?? ''));
+    return;
+  }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));
   if (action === 'choice-street') setState(spendLifeChoice(state, 'street'));
   if (action === 'choice-job') setState(spendLifeChoice(state, 'job'));
   if (action === 'choice-mentor') setState(spendLifeChoice(state, 'mentor'));
   if (action === 'reset') {
-    localStorage.removeItem(STORAGE_KEY);
+    clearStoredGameData();
     state = null;
     activeTab = 'life';
     hunterQuestPopupOpen = false;
