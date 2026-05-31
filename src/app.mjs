@@ -2630,6 +2630,152 @@ function hunterObjectiveSummary(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WOR
   };
 }
 
+function hunterGuidanceCue(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD) {
+  const quest = hunter.dailyQuest;
+  const dungeon = hunter.activeDungeon;
+  if (hunter.pendingLevelRewards?.length) {
+    return {
+      label: 'Claim System Level Reward',
+      text: hunter.pendingArisePrompt
+        ? 'Choose your level bonus first. The queued boss shadow will answer ARISE after the reward closes.'
+        : 'Choose your level bonus before continuing the System loop.',
+      tone: 'ready',
+    };
+  }
+  if (hunter.arisePrompt) {
+    return {
+      label: 'Resolve ARISE',
+      text: 'A defeated boss shadow is waiting. Attempt ARISE or dismiss the echo before moving on.',
+      tone: 'danger',
+    };
+  }
+  if (state.activeFight?.source === 'hunterDungeon') {
+    return {
+      label: 'Finish Dungeon Fight',
+      text: 'Resolve the active Gate encounter to update room rewards and route progress.',
+      tone: 'danger',
+    };
+  }
+  if (state.activeFight?.source === 'hunterQuest') {
+    return {
+      label: 'Finish Daily Quest Fight',
+      text: 'Clear or survive the current monster objective to update the Daily Quest.',
+      tone: 'danger',
+    };
+  }
+  if (dungeon?.completed) {
+    return {
+      label: 'Review Gate Report',
+      text: dungeon.outcome === 'cleared'
+        ? 'Close the clear report to refresh the Gate Board.'
+        : 'Close the exit report to return to Gate selection.',
+      tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger',
+    };
+  }
+  if (dungeon?.awaitingAdvance) {
+    return {
+      label: 'Continue Dungeon',
+      text: 'A cleared room is waiting. Proceed deeper or retreat before the next chamber.',
+      tone: 'active',
+    };
+  }
+  if (dungeon) {
+    return {
+      label: 'Enter Next Chamber',
+      text: `Room ${dungeon.encounterIndex + 1} of ${dungeon.encounters.length} is ready. Health and mana carry forward.`,
+      tone: dungeon.isRedGate ? 'danger' : 'active',
+    };
+  }
+  if (quest?.outcome === 'retreated') {
+    return {
+      label: 'Clear Retreated Quest',
+      text: 'Dismiss the abandoned Daily Quest result before generating another.',
+      tone: 'danger',
+    };
+  }
+  if (quest?.completed) {
+    return {
+      label: 'Claim Daily Quest Reward',
+      text: 'The System reward window is ready. Claim it to free the Daily Quest slot.',
+      tone: quest.failed ? 'danger' : 'clear',
+    };
+  }
+  if (quest) {
+    return {
+      label: 'Continue Daily Quest',
+      text: 'Advance the current Daily Quest stage or start the monster encounter.',
+      tone: 'active',
+    };
+  }
+  if (hunter.redGatePending) {
+    return {
+      label: 'Scan Red Gate',
+      text: 'An emergency Red Gate can appear on the next Gate Board refresh.',
+      tone: 'danger',
+    };
+  }
+  if (hunter.gateOffers?.length) {
+    return {
+      label: 'Choose Gate',
+      text: 'Pick a Gate signal to start a dungeon route with room rewards and a boss jackpot.',
+      tone: 'active',
+    };
+  }
+  if (hunter.statPoints) {
+    return {
+      label: 'Spend Hunter Stat Points',
+      text: 'Unspent System stats are available in the Hunter stat panel.',
+      tone: 'ready',
+    };
+  }
+  return {
+    label: 'Generate Gate Board',
+    text: 'No urgent System task is pending. Generate or choose your next Hunter objective.',
+    tone: 'idle',
+  };
+}
+
+function renderHunterGuidanceStrip(hunter) {
+  const guidance = hunterGuidanceCue(hunter);
+  return `
+    <div class="system-guidance-strip ${guidance.tone}">
+      <span>Next</span>
+      <strong>${escapeHtml(guidance.label)}</strong>
+      <p>${escapeHtml(guidance.text)}</p>
+    </div>
+  `;
+}
+
+function renderPendingStateBadges(badges = []) {
+  if (!badges.length) return '';
+  return `
+    <div class="pending-state-badges">
+      ${badges.map((badge) => `<span class="pending-state-badge ${badge.tone ?? ''}">${escapeHtml(badge.label)}</span>`).join('')}
+    </div>
+  `;
+}
+
+function hunterPendingBadges(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD, area = 'status') {
+  const badges = [];
+  const dungeon = hunter.activeDungeon;
+  const quest = hunter.dailyQuest;
+  const include = (...areas) => areas.includes(area) || area === 'status';
+
+  if (include('level') && hunter.pendingLevelRewards?.length) badges.push({ label: 'Level reward pending', tone: 'ready' });
+  if (include('arise') && hunter.pendingArisePrompt) badges.push({ label: 'ARISE queued after level reward', tone: 'danger' });
+  if (include('arise') && hunter.arisePrompt) badges.push({ label: 'ARISE pending', tone: 'danger' });
+  if (include('gate') && dungeon && !dungeon.completed) {
+    badges.push({ label: dungeon.isRedGate ? 'Red Gate room active' : 'Dungeon room active', tone: dungeon.isRedGate ? 'danger' : 'active' });
+  }
+  if (include('gate') && dungeon?.completed) badges.push({ label: 'Gate report pending', tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger' });
+  if (include('gate') && hunter.redGatePending) badges.push({ label: 'Red Gate signal', tone: 'danger' });
+  if (include('quest') && quest?.completed) badges.push({ label: 'Daily Quest reward', tone: quest.failed ? 'danger' : 'clear' });
+  if (include('quest') && quest && !quest.completed && quest.outcome !== 'retreated') badges.push({ label: 'Daily Quest active', tone: 'active' });
+  if (include('stats') && hunter.statPoints) badges.push({ label: `${hunter.statPoints} stat point${hunter.statPoints === 1 ? '' : 's'}`, tone: 'ready' });
+
+  return badges;
+}
+
 function systemChip(label, value, tone = '') {
   return `
     <span class="system-chip ${tone}">
@@ -2679,6 +2825,8 @@ function renderHunterSystemStatus(hunter) {
         <span>${escapeHtml(objective.label)}</span>
         <strong>${escapeHtml(objective.text)}</strong>
       </div>
+      ${renderHunterGuidanceStrip(hunter)}
+      ${renderPendingStateBadges(hunterPendingBadges(hunter, 'status'))}
     </article>
   `;
 }
@@ -2692,7 +2840,7 @@ function hunterActivityToneState({ title, locked = false, tone = '', cta = '' })
   return '';
 }
 
-function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open' }) {
+function renderHunterActivity({ icon, title, subtitle, meta, action, locked = false, tone = '', cta = 'Open', badges = [] }) {
   const stateTone = hunterActivityToneState({ title, locked, tone, cta });
   return `
     <article class="hunter-activity option-card system-module ${locked ? 'locked' : ''} ${tone} ${stateTone}">
@@ -2701,6 +2849,7 @@ function renderHunterActivity({ icon, title, subtitle, meta, action, locked = fa
         <h2>${title}</h2>
         <p>${subtitle}</p>
         <span class="activity-meta system-chip compact"><small>Status</small><strong>${meta}</strong></span>
+        ${renderPendingStateBadges(badges)}
       </div>
       ${locked ? '<span class="lock-pill">Locked</span>' : button(cta, action, 'activity-open')}
     </article>
@@ -3010,6 +3159,7 @@ function renderHunterQuestPanel() {
           <h2>${escapeHtml(quest.title)}</h2>
           <p>You escaped the monster encounter alive, but abandoned the objective. No System reward is available.</p>
           <p class="muted">Consequences: +10 fatigue / -8 mood / -3 reputation</p>
+          <p class="muted">Next: dismiss this quest result to generate a fresh Daily Quest.</p>
           ${renderSystemScanRows([
             { label: 'Outcome', value: 'Retreated', tone: 'danger' },
             { label: 'Reward', value: 'None', tone: 'danger' },
@@ -3029,6 +3179,7 @@ function renderHunterQuestPanel() {
           <h2>${escapeHtml(quest.title)}</h2>
           <p>${quest.failed ? 'Objective failed. The System converts survival data into a partial reward.' : 'All objectives complete. The blue reward window is waiting.'}</p>
           <p class="muted">Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+          <p class="muted">Next: claim the reward window to unlock a new Daily Quest roll.</p>
           ${renderSystemScanRows([
             { label: 'Outcome', value: quest.failed ? 'Partial clear' : 'Complete', tone: quest.failed ? 'danger' : 'clear' },
             { label: 'Reward Window', value: 'Ready', tone: 'clear' },
@@ -3049,6 +3200,7 @@ function renderHunterQuestPanel() {
         <h2>${escapeHtml(stage?.title ?? quest.title)}</h2>
         <p>${escapeHtml(stage?.body ?? 'The System is waiting for your next action.')}</p>
         <p class="muted">Quest: ${escapeHtml(quest.title)}. Rewards: ${(quest.rewardsPreview ?? []).map(escapeHtml).join(' / ')}</p>
+        <p class="muted">Next: ${stage?.type === 'combat' ? 'enter the monster encounter; retreating fails the quest with no reward.' : 'pick one event response to advance the Daily Quest chain.'}</p>
         ${renderSystemScanRows([
           { label: 'Objective Progress', value: progress, tone: 'active' },
           { label: 'Current Stage', value: stage?.type === 'combat' ? 'Monster encounter' : 'Choice event', tone: stage?.type === 'combat' ? 'danger' : 'active' },
@@ -3430,6 +3582,7 @@ function renderHunterDungeonPanel() {
           <p>${escapeHtml(dungeon.resultText ?? (dungeon.outcome === 'retreated' ? 'You survived the retreat. Cleared-room rewards were kept.' : 'The Gate run has ended.'))}</p>
           ${dungeon.outcome === 'retreated' ? '<p class="muted">Penalties: +12 fatigue / -10 mood / -4 reputation</p>' : ''}
           ${dungeon.outcome === 'failed' ? '<p class="muted">Penalties: +16 fatigue / -12 mood / -6 reputation</p>' : ''}
+          ${state.hunterWorld?.pendingArisePrompt ? '<p class="muted">Next: claim the pending level reward, then ARISE will open for the defeated boss shadow.</p>' : '<p class="muted">Next: close this report to refresh the Gate Board.</p>'}
           ${renderSystemScanRows([
             { label: 'Outcome', value: dungeon.outcome ?? 'Ended', tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger' },
             { label: 'Boss', value: dungeon.bossDefeated ? 'Defeated' : 'Not cleared', tone: dungeon.bossDefeated ? 'clear' : 'danger' },
@@ -3446,6 +3599,7 @@ function renderHunterDungeonPanel() {
         <h2>${escapeHtml(dungeon.name)}</h2>
         <p>${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'The boss chamber is ahead.' : 'A hostile signature blocks the next room.'} Health and mana do not refill between encounters.</p>
         <p class="muted">Cleared rooms: ${dungeon.rewardsEarned.filter((reward) => reward.type === 'room').length} / Final boss: ${escapeHtml(dungeon.bossName)}</p>
+        <p class="muted">Next: ${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'clear the boss for the jackpot and possible ARISE prompt.' : 'clear this room to bank its reward and unlock the next chamber.'}</p>
         ${renderSystemScanRows([
           { label: 'Condition Carry', value: 'HP and mana persist', tone: 'danger' },
           { label: 'Next Chamber', value: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'Boss signal' : 'Monster signal', tone: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'danger' : 'active' },
@@ -3655,6 +3809,7 @@ function renderHunter() {
           action: questActivity.action,
           cta: questActivity.cta,
           tone: 'daily',
+          badges: hunterPendingBadges(hunter, 'quest'),
         })}
         ${renderHunterActivity({
           icon: 'GT',
@@ -3664,6 +3819,7 @@ function renderHunter() {
           action: 'hunter-gates-open',
           cta: gateActivity.cta,
           tone: 'gate',
+          badges: hunterPendingBadges(hunter, 'gate'),
         })}
         ${renderHunterActivity({
           icon: 'IT',
@@ -3680,6 +3836,7 @@ function renderHunter() {
           meta: `Current ${hunter.rank}-rank`,
           action: 'hunter-association',
           tone: 'association',
+          badges: hunterPendingBadges(hunter, 'stats'),
         })}
         ${renderHunterActivity({
           icon: 'SP',
@@ -3705,6 +3862,7 @@ function renderHunter() {
           action: 'hunter-monarch',
           locked: !hunter.monarchTrace?.unlocked && !monarchMilestone?.ready,
           tone: 'monarch',
+          badges: hunterPendingBadges(hunter, 'level').concat(hunterPendingBadges(hunter, 'arise')),
         })}
       </div>`,
       })}

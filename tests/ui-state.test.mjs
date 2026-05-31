@@ -122,6 +122,36 @@ test('Hunter activity and quest cards override generic option-card grids', async
   assert.match(cssSource, /\.quest-choice-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(160px,\s*1fr\)\);/);
 });
 
+test('Hunter System guidance exposes next actions and pending badges', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /function hunterGuidanceCue/);
+  assert.match(appSource, /system-guidance-strip/);
+  assert.match(appSource, /Claim System Level Reward/);
+  assert.match(appSource, /Resolve ARISE/);
+  assert.match(appSource, /pendingArisePrompt/);
+  assert.match(appSource, /hunterPendingBadges/);
+  assert.match(appSource, /pending-state-badges/);
+  assert.match(cssSource, /\.system-guidance-strip\s*{/);
+  assert.match(cssSource, /\.pending-state-badges\s*{/);
+});
+
+test('global interaction polish covers core interactive UI and reduced motion', async () => {
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(cssSource, /--tap-scale:\s*0\.985/);
+  assert.match(cssSource, /input\[type="password"\]/);
+  assert.match(cssSource, /\.collapsible-summary/);
+  assert.match(cssSource, /\.event-choice-grid button/);
+  assert.match(cssSource, /\.gate-offer/);
+  assert.match(cssSource, /\.domain-node/);
+  assert.match(cssSource, /@keyframes system-scan-sheen/);
+  assert.match(cssSource, /prefers-reduced-motion:\s*reduce/);
+  assert.match(cssSource, /animation:\s*none !important/);
+  assert.match(cssSource, /transition:\s*none !important/);
+});
+
 test('main navigation uses menu with four favorite section slots', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');

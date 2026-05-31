@@ -16,6 +16,9 @@
   --system-deep: #101827;
   --system-line: rgba(120, 217, 255, 0.36);
   --system-glow: rgba(120, 217, 255, 0.18);
+  --tap-scale: 0.985;
+  --tap-lift: translateY(-1px);
+  --tap-glow: 0 0 0 1px rgba(120, 217, 255, 0.28), 0 0 18px rgba(120, 217, 255, 0.14);
   --gray: #9ba3ad;
   --focus: #e96a3a;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -694,6 +697,100 @@ select:focus {
 .system-objective-line strong {
   color: var(--text);
   line-height: 1.25;
+}
+
+.system-guidance-strip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(120, 217, 255, 0.24);
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, rgba(120, 217, 255, 0.12), rgba(185, 135, 255, 0.055)),
+    rgba(8, 13, 23, 0.52);
+}
+
+.system-guidance-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0 38%, rgba(255, 255, 255, 0.16) 48%, transparent 60% 100%);
+  transform: translateX(-120%);
+  animation: system-scan-sheen 0.78s ease-out both;
+}
+
+.system-guidance-strip span,
+.pending-state-badge {
+  color: var(--system-cyan);
+  font-size: 0.62rem;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-guidance-strip strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.15;
+}
+
+.system-guidance-strip p {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.system-guidance-strip.ready,
+.system-guidance-strip.clear {
+  border-color: rgba(125, 243, 198, 0.42);
+  box-shadow: 0 0 18px rgba(125, 243, 198, 0.1);
+}
+
+.system-guidance-strip.danger {
+  border-color: rgba(222, 63, 79, 0.52);
+  box-shadow: 0 0 18px rgba(222, 63, 79, 0.12);
+}
+
+.pending-state-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.system-status-panel > .pending-state-badges {
+  margin-top: 0;
+}
+
+.pending-state-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid rgba(120, 217, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(8, 13, 23, 0.58);
+  overflow-wrap: anywhere;
+}
+
+.pending-state-badge.ready,
+.pending-state-badge.clear {
+  border-color: rgba(125, 243, 198, 0.38);
+  color: #a9f7d8;
+}
+
+.pending-state-badge.danger {
+  border-color: rgba(222, 63, 79, 0.46);
+  color: #ff9aa4;
 }
 
 .system-objective-line.danger,
@@ -1554,6 +1651,22 @@ select:focus {
       inset 3px 0 0 rgba(120, 217, 255, 0.68),
       0 0 0 1px rgba(120, 217, 255, 0.12),
       0 0 24px rgba(120, 217, 255, 0.12);
+  }
+}
+
+@keyframes system-scan-sheen {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+
+  35% {
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
   }
 }
 
@@ -2906,14 +3019,87 @@ button:focus-visible {
 }
 
 button,
+.tab-btn,
+input[type="password"],
+input[type="text"],
+select,
+.collapsible-summary,
 .move-card,
-.option-card {
-  transition: transform 120ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+.option-card,
+.event-choice-grid button,
+.gate-offer,
+.shop-item,
+.crafting-card,
+.hunter-activity,
+.reward-option,
+.domain-node {
+  transition:
+    transform 120ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    filter 160ms ease;
 }
 
 button:active,
-.move-card:active {
-  transform: scale(0.985);
+.tab-btn:active,
+input[type="password"]:focus,
+input[type="text"]:focus,
+select:focus,
+.collapsible-summary:active,
+.move-card:active,
+.option-card:active,
+.event-choice-grid button:active,
+.gate-offer:active,
+.shop-item:active,
+.crafting-card:active,
+.hunter-activity:active,
+.reward-option:active {
+  transform: scale(var(--tap-scale));
+}
+
+button:focus-visible,
+.tab-btn.active,
+.collapsible-section[open] > .collapsible-summary,
+.option-card:focus-within,
+.move-card:focus-visible,
+.gate-offer:focus-within,
+.shop-item:focus-within,
+.crafting-card:focus-within,
+.hunter-activity:focus-within,
+input[type="password"]:focus,
+input[type="text"]:focus,
+select:focus {
+  border-color: rgba(120, 217, 255, 0.5);
+  box-shadow: var(--tap-glow);
+}
+
+.system-module.ready,
+.system-module.active,
+.system-window.active,
+.system-guidance-strip.active,
+.system-guidance-strip.ready {
+  box-shadow:
+    inset 3px 0 0 rgba(120, 217, 255, 0.46),
+    var(--tap-glow);
+}
+
+.system-module.ready::after,
+.system-module.active::after,
+.system-window.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0 42%, rgba(120, 217, 255, 0.1) 50%, transparent 58% 100%);
+  transform: translateX(-120%);
+  animation: system-scan-sheen 0.82s ease-out both;
+}
+
+.domain-node:active .domain-node-ring,
+.domain-node:active .domain-node-core {
+  transform: scale(var(--tap-scale));
+  filter: drop-shadow(0 0 10px rgba(216, 180, 254, 0.82));
 }
 
 .tabs {
@@ -3370,9 +3556,8 @@ button:active,
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  button:active,
-  .move-card:active {
-    transform: none;
+  .system-guidance-strip {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .fighter-passport {
