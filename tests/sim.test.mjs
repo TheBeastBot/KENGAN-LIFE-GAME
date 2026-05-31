@@ -755,6 +755,43 @@ test('System Conserve mana recovered in a dungeon carries into the following roo
   assert.ok(carriedMana > 0);
 });
 
+test('low-mana Hunter boss fights still allow Slash as a desperation finish', () => {
+  let life = {
+    ...createNewLife({ gender: 'Male', seed: 9222 }),
+    stats: {
+      ...createNewLife({ gender: 'Male', seed: 9222 }).stats,
+      strength: 450,
+      speed: 450,
+      durability: 450,
+      technique: 450,
+      fightIq: 450,
+      willpower: 450,
+      reflexes: 450,
+      control: 450,
+    },
+    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 9222 }).hunterWorld, unlocked: true, playerAwakened: true },
+  };
+  life = generateHunterGateOffers(life);
+  life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
+  life = startHunterDungeonEncounter(life);
+  life.activeFight.meters.opponentHealth = 1;
+  life = takeFightTurn(life, 'slash');
+  life = advanceHunterDungeon(life);
+  life.activeFight.meters.playerHealth = 9999;
+  life.activeFight.meters.maxPlayerHealth = 9999;
+  life.activeFight.meters.playerStamina = 0;
+  life.activeFight.meters.opponentHealth = 1;
+
+  const slash = getUnlockedHunterMoves(life).find((move) => move.id === 'slash');
+  const cleared = takeFightTurn(life, 'slash');
+
+  assert.equal(life.activeFight.isBoss, true);
+  assert.equal(slash.disabledReason, '');
+  assert.equal(cleared.activeFight.finished, true);
+  assert.equal(cleared.activeFight.result.won, true);
+  assert.match(cleared.activeFight.exchanges[0].text, /Desperation Slash/i);
+});
+
 test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and ARISE prompt', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 923 }),

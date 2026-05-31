@@ -6376,6 +6376,7 @@ function hunterMoveDisabledReason(life, move) {
   if (move.moveType === 'special' && cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'} remaining.`;
   const staminaCost = hunterMoveStaminaCost(life, move);
   const staminaRequired = staminaCost === 0 ? 0 : Math.max(1, staminaCost - 4);
+  if (move.id === 'slash' && move.moveType === 'basic') return '';
   if ((fight.meters.playerStamina ?? 0) < staminaRequired) return 'Not enough stamina for this System skill.';
   return '';
 }
@@ -8642,6 +8643,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const profile = hunterMoveProfile(move, next);
   const enemyMove = chooseHunterMonsterMove(opponent, fight);
   const staminaCost = hunterMoveStaminaCost(next, move);
+  const staminaRequired = staminaCost === 0 ? 0 : Math.max(1, staminaCost - 4);
+  const desperationSlash = move.id === 'slash' && move.moveType === 'basic' && (fight.meters.playerStamina ?? 0) < staminaRequired;
   const specialStaminaDiscount = move.moveType === 'special' ? systemPerkValue(next, 'specialStaminaMinus2') : 0;
   const executeCooldownReduction = move.id === 'execute' ? systemPerkValue(next, 'executeCooldownMinus1') : 0;
   const opponentTactic = enemyMove.category;
@@ -8675,7 +8678,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     : 0;
   const monarchInstinctActive = hasSystemPerk(next, 'monarchsInstinct') && next.hunterWorld.shadowMonarch.unlocked && (SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id] || move.requiresShadowMonarch);
   const monarchInstinctMultiplier = monarchInstinctActive ? 1 + systemPerkValue(next, 'monarchsInstinct') : 1;
-  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus - opponentDefense)));
+  const desperationMultiplier = desperationSlash ? 0.42 : 1;
+  const basePlayerDamage = Math.max(1, Math.round(desperationMultiplier * basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
     : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0), 0.05, 0.57);
@@ -8773,6 +8777,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     limitBreakActive ? ' Limit Break Protocol restored emergency stamina.' : '',
     executionWindowActive ? ' Execution Window opened after the monster was outread.' : '',
     monarchInstinctActive ? " Monarch's Instinct adds black-violet pressure." : '',
+    desperationSlash ? ' Desperation Slash: low mana weakens the hit, but the System still lets you swing.' : '',
     appliedCooldown ? ` Cooldown set: ${appliedCooldown} exchange${appliedCooldown === 1 ? '' : 's'}.` : '',
   ].join('');
   fight.exchanges.unshift({
