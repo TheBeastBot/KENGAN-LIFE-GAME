@@ -77,7 +77,8 @@ import {
   selectHunterGate,
   spendMoneyAction,
   spendHunterStatPoint,
-  extractShadow,
+  attemptAriseShadow,
+  dismissArisePrompt,
   fightMonarchBoss,
   startFight,
   startHunterDungeonEncounter,
@@ -754,7 +755,7 @@ test('System Conserve mana recovered in a dungeon carries into the following roo
   assert.ok(carriedMana > 0);
 });
 
-test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and shadow eligibility', () => {
+test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and ARISE prompt', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 923 }),
     stats: {
@@ -786,7 +787,8 @@ test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and s
   assert.equal(cleared.hunterWorld.gatesCleared, 1);
   assert.equal(cleared.resources.money, beforeBossMoney + 1000);
   assert.equal(Object.values(cleared.hunterWorld.stats).reduce((sum, value) => sum + value, 0), beforeStats + 1);
-  assert.ok(cleared.hunterWorld.lastBossCleared);
+  assert.equal(cleared.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
+  assert.equal(cleared.hunterWorld.arisePrompt.attemptsLeft, 3);
   assert.ok(cleared.hunterWorld.xp >= 90);
 });
 
@@ -946,7 +948,7 @@ test('Hunter crafting consumes dungeon materials and upgrades System gear', () =
   assert.ok(crafted.log[0].text.includes('Crafting complete'));
 });
 
-test('Shadow army summary includes roster strength, bonuses, and extraction eligibility', () => {
+test('Shadow army summary includes roster strength, bonuses, and ARISE prompt state', () => {
   const base = createNewLife({ gender: 'Female', seed: 9305 });
   const life = {
     ...base,
@@ -956,7 +958,14 @@ test('Shadow army summary includes roster strength, bonuses, and extraction elig
       playerAwakened: true,
       rank: 'C',
       level: 20,
-      lastBossCleared: 'bloodOgreBoss',
+      arisePrompt: {
+        monsterId: 'bloodOgreBoss',
+        sourceBoss: 'Blood Ogre',
+        rank: 'C',
+        attemptsLeft: 3,
+        attemptsUsed: 0,
+        status: 'active',
+      },
       shadowArmy: [
         { id: 'shadow-1', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
       ],
@@ -964,36 +973,44 @@ test('Shadow army summary includes roster strength, bonuses, and extraction elig
   };
 
   const summary = getShadowArmySummary(life);
-  const extracted = extractShadow(life);
 
-  assert.equal(summary.canExtract, true);
+  assert.equal(summary.arisePrompt.monsterId, 'bloodOgreBoss');
   assert.equal(summary.count, 1);
   assert.ok(summary.totalStrength >= 4);
   assert.ok(summary.bonuses.some((bonus) => bonus.includes('Domain army')));
-  assert.equal(extracted.hunterWorld.shadowArmy[1].sourceBoss, 'Blood Ogre');
-  assert.ok(extracted.hunterWorld.shadowArmy[1].armyPower > 0);
-  assert.equal(extracted.hunterWorld.milestones.shadowsExtracted, 1);
 });
 
-test('Shadow extraction rejects weak low-tier boss echoes', () => {
+test('ARISE can fail three times and then releases the boss echo', () => {
   const base = createNewLife({ gender: 'Female', seed: 93051 });
-  const life = {
+  let life = {
     ...base,
+    rngSeed: 3,
     hunterWorld: {
       ...base.hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      rank: 'C',
-      level: 20,
-      lastBossCleared: 'goblinCaptain',
+      rank: 'E',
+      level: 1,
+      stats: { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 },
+      arisePrompt: {
+        monsterId: 'bloodOgreBoss',
+        sourceBoss: 'Blood Ogre',
+        rank: 'C',
+        attemptsLeft: 3,
+        attemptsUsed: 0,
+        status: 'active',
+      },
       shadowArmy: [],
     },
   };
 
-  const next = extractShadow(life);
+  life = attemptAriseShadow(life);
+  life = attemptAriseShadow(life);
+  const next = attemptAriseShadow(life);
 
   assert.equal(next.hunterWorld.shadowArmy.length, 0);
-  assert.ok(next.log[0].text.includes('C-rank+'));
+  assert.equal(next.hunterWorld.arisePrompt.status, 'failed');
+  assert.equal(next.hunterWorld.arisePrompt.attemptsLeft, 0);
 });
 
 test('Monarch Trace unlocks at S-rank with three shadows and progresses as an endgame arc', () => {
@@ -1426,25 +1443,38 @@ test('system shop weapons persist, equip, and unlock weapon System abilities', (
   assert.ok(getUnlockedHunterMoves(fighting).some((move) => move.id === 'shadowPierce'));
 });
 
-test('shadow extraction requires boss gate clearance and adds a shadow ally', () => {
+test('ARISE adds a boss shadow ally directly to the Domain army', () => {
   const life = {
     ...createNewLife({ gender: 'Female', seed: 95 }),
+    rngSeed: 2,
     hunterWorld: {
       ...createNewLife({ gender: 'Female', seed: 95 }).hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      rank: 'C',
-      level: 20,
-      lastBossCleared: 'bloodOgreBoss',
+      rank: 'S',
+      level: 60,
+      stats: { strength: 20, agility: 20, vitality: 20, sense: 20, intelligence: 20 },
+      arisePrompt: {
+        monsterId: 'bloodOgreBoss',
+        sourceBoss: 'Blood Ogre',
+        rank: 'C',
+        attemptsLeft: 3,
+        attemptsUsed: 0,
+        status: 'active',
+      },
     },
   };
 
-  const next = extractShadow(life);
+  const next = attemptAriseShadow(life);
 
   assert.equal(next.hunterWorld.shadowArmy.length, 1);
   assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
-  assert.equal(next.hunterWorld.lastBossCleared, null);
+  assert.equal(next.hunterWorld.arisePrompt.status, 'success');
+  assert.ok(next.hunterWorld.shadowArmy[0].armyPower > 0);
   assert.ok(next.stats.control > life.stats.control);
+
+  const dismissed = dismissArisePrompt(next);
+  assert.equal(dismissed.hunterWorld.arisePrompt, null);
 });
 
 test('blank custom first name falls back to a generated first name', () => {

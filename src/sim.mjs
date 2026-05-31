@@ -65,6 +65,7 @@ const DEFAULT_HUNTER_WORLD = {
   activeDungeon: null,
   redGatePending: false,
   lastGateMonth: null,
+  arisePrompt: null,
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
@@ -1003,22 +1004,89 @@ function shadowArmyStrength(hunterWorld) {
   return (hunterWorld?.shadowArmy ?? []).reduce((sum, shadow) => sum + shadowStrength(shadow), 0);
 }
 
-function shadowExtractionEligibility(hunter) {
-  const bossId = hunter.lastBossCleared;
-  const monster = HUNTER_MONSTERS[bossId] ?? null;
-  const rank = monster?.tier ?? hunter.rank;
-  const rankIndex = HUNTER_RANKS.indexOf(rank);
-  const isBoss = Boolean(monster?.threat?.includes('Boss'));
-  const isRed = Boolean(bossId?.startsWith('red'));
-  const isMonarch = Boolean(monster?.threat?.includes('Monarch') || bossId?.includes('monarch') || bossId?.includes('Monarch'));
-  const levelReady = hunter.level >= 18;
-  const rankReady = HUNTER_RANKS.indexOf(hunter.rank) >= HUNTER_RANKS.indexOf('C');
-  const bossReady = isBoss && (rankIndex >= HUNTER_RANKS.indexOf('C') || isRed || isMonarch);
-  if (!hunter.unlocked || !bossId) return { eligible: false, reason: 'No cleared boss echo is available.' };
-  if (!levelReady) return { eligible: false, reason: 'Reach Hunter Level 18 before stable extraction.' };
-  if (!rankReady) return { eligible: false, reason: 'Reach C-rank before commanding real shadows.' };
-  if (!bossReady) return { eligible: false, reason: 'Only C-rank+, Red Gate, or Monarch boss echoes can become useful shadows.' };
-  return { eligible: true, monster, rank };
+function isAriseEligibleBoss(monsterId) {
+  const monster = HUNTER_MONSTERS[monsterId] ?? null;
+  if (!monster) return false;
+  const threat = `${monster.threat ?? ''}`.toLowerCase();
+  return threat.includes('boss') || threat.includes('monarch') || monsterId?.startsWith('red');
+}
+
+function normalizeArisePrompt(prompt) {
+  if (!prompt?.monsterId || !HUNTER_MONSTERS[prompt.monsterId]) return null;
+  const monster = HUNTER_MONSTERS[prompt.monsterId];
+  const attemptsUsed = clamp(Math.floor(prompt.attemptsUsed ?? 0), 0, 3);
+  const attemptsLeft = clamp(Math.floor(prompt.attemptsLeft ?? (3 - attemptsUsed)), 0, 3);
+  const status = ['active', 'success', 'failed'].includes(prompt.status) ? prompt.status : (attemptsLeft > 0 ? 'active' : 'failed');
+  return {
+    monsterId: prompt.monsterId,
+    source: typeof prompt.source === 'string' ? prompt.source : 'boss',
+    sourceBoss: typeof prompt.sourceBoss === 'string' ? prompt.sourceBoss : monster.name,
+    rank: HUNTER_RANKS.includes(prompt.rank) ? prompt.rank : monster.tier,
+    attemptsLeft,
+    attemptsUsed,
+    status,
+    resultText: typeof prompt.resultText === 'string' ? prompt.resultText : '',
+    shadowName: typeof prompt.shadowName === 'string' ? prompt.shadowName : null,
+    createdMonth: prompt.createdMonth ?? null,
+  };
+}
+
+function createArisePrompt(life, monsterId, source = 'boss') {
+  if (!isAriseEligibleBoss(monsterId)) return null;
+  const monster = HUNTER_MONSTERS[monsterId];
+  return {
+    monsterId,
+    source,
+    sourceBoss: monster.name,
+    rank: monster.tier,
+    attemptsLeft: 3,
+    attemptsUsed: 0,
+    status: 'active',
+    resultText: '',
+    shadowName: null,
+    createdMonth: lifeMonth(life),
+  };
+}
+
+function queueArisePrompt(life, monsterId, source = 'boss') {
+  const prompt = createArisePrompt(life, monsterId, source);
+  if (!prompt) return false;
+  life.hunterWorld.arisePrompt = prompt;
+  life.hunterWorld.lastBossCleared = null;
+  return true;
+}
+
+function ariseSuccessChance(hunter, prompt) {
+  const monster = HUNTER_MONSTERS[prompt.monsterId] ?? null;
+  const rankIndex = Math.max(0, HUNTER_RANKS.indexOf(monster?.tier ?? prompt.rank ?? hunter.rank));
+  const hunterRankIndex = Math.max(0, HUNTER_RANKS.indexOf(hunter.rank));
+  const monarchBonus = `${monster?.threat ?? ''}`.includes('Monarch') ? 0.06 : 0;
+  return clampFloat(
+    0.18 + hunter.level * 0.006 + hunter.stats.sense * 0.006 + hunter.stats.intelligence * 0.005 + hunterRankIndex * 0.025 + rankIndex * 0.02 + monarchBonus,
+    0.1,
+    0.82
+  );
+}
+
+function createShadowFromBoss(life, monsterId, source = 'ARISE') {
+  const monster = HUNTER_MONSTERS[monsterId] ?? null;
+  const rank = monster?.tier ?? life.hunterWorld.rank;
+  const power = 35 + life.hunterWorld.level * 4 + (monster?.power ?? 0) / 3;
+  const strength = shadowStrength({ monsterId, rank, power });
+  const role = shadowRole(monster, rank);
+  return {
+    id: `${monsterId}-${life.hunterWorld.shadowArmy.length + 1}`,
+    monsterId,
+    name: `${monster?.name ?? labelFromId(monsterId)} Shadow`,
+    sourceBoss: monster?.name ?? labelFromId(monsterId),
+    source,
+    extractedMonth: lifeMonth(life),
+    rank,
+    role,
+    strength,
+    armyPower: strength * 14 + Math.floor((monster?.power ?? 0) / 8),
+    power,
+  };
 }
 
 function normalizeHunterWorld(hunterWorld = {}) {
@@ -1047,6 +1115,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastGateMonth: hunterWorld.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld.lastBossCleared ?? null,
+    arisePrompt: normalizeArisePrompt(hunterWorld.arisePrompt),
     dailyQuest: normalizeHunterDailyQuest(hunterWorld.dailyQuest),
     pendingLevelRewards: Array.isArray(hunterWorld.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld.unlockedSystemPerks),
@@ -3874,15 +3943,11 @@ export function getShadowArmySummary(life) {
   const hunter = normalizeHunterWorld(life?.hunterWorld);
   const totalStrength = shadowArmyStrength(hunter);
   const armyPower = shadowArmyPower(hunter);
-  const lastBoss = HUNTER_MONSTERS[hunter.lastBossCleared];
-  const eligibility = shadowExtractionEligibility(hunter);
   return {
     count: hunter.shadowArmy.length,
     totalStrength,
     armyPower,
-    canExtract: eligibility.eligible,
-    extractReason: eligibility.reason ?? '',
-    pendingBoss: lastBoss?.name ?? (hunter.lastBossCleared ? labelFromId(hunter.lastBossCleared) : null),
+    arisePrompt: hunter.arisePrompt,
     roster: hunter.shadowArmy.map((shadow) => ({
       ...shadow,
       sourceBoss: HUNTER_MONSTERS[shadow.monsterId]?.name ?? shadow.sourceBoss ?? labelFromId(shadow.monsterId),
@@ -4545,6 +4610,9 @@ function applyHunterQuestFightResult(life, fight, won) {
     life.hunterWorld.stats.sense = Math.max(0, (life.hunterWorld.stats.sense ?? 0) + 1);
     fight.result.rewards.push('Quest progress: monster objective cleared');
     fight.result.rewards.push('+1 Hunter Sense from live System combat');
+    if (queueArisePrompt(life, stage?.monsterId, 'quest')) {
+      fight.result.rewards.push('ARISE prompt unlocked: 3 chances to bind the defeated boss');
+    }
   } else {
     quest.completed = true;
     quest.failed = true;
@@ -4612,11 +4680,12 @@ function applyHunterDungeonFightResult(life, fight, won) {
   dungeon.bossDefeated = true;
   dungeon.outcome = 'cleared';
   life.hunterWorld.gatesCleared += 1;
-  life.hunterWorld.lastBossCleared = encounter.monsterId;
+  queueArisePrompt(life, encounter.monsterId, dungeon.isRedGate ? 'red-gate' : 'gate');
   dungeon.redGateTriggered = deterministicRoll(life.rngSeed, dungeon.id, life.hunterWorld.gatesCleared, 'red-gate-trigger') < redGateChance(life);
   life.hunterWorld.redGatePending = dungeon.redGateTriggered;
   fight.result.rewards.push(`Boss clear jackpot: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
   fight.result.rewards.push(`Hunter stat growth: +${statCount} (${gainedStats.join(', ')})`);
+  if (life.hunterWorld.arisePrompt?.monsterId === encounter.monsterId) fight.result.rewards.push('ARISE prompt unlocked: 3 chances to bind the boss shadow');
   if (itemDrops.length) fight.result.rewards.push(`Boss loot: ${itemDrops.map(itemDropText).join(', ')}`);
   if (dungeon.redGateTriggered) fight.result.rewards.push('Emergency alert: a Red Gate has appeared on the next Gate Board');
   life.hunterWorld.activeDungeon = dungeon;
@@ -9999,37 +10068,50 @@ export function equipHunterItem(life, itemId) {
   return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
 }
 
-export function extractShadow(life) {
+export function attemptAriseShadow(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
-  const eligibility = shadowExtractionEligibility(next.hunterWorld);
-  if (!eligibility.eligible) {
-    return addLog(next, `Shadow Extraction failed. ${eligibility.reason}`, 'world');
+  const prompt = next.hunterWorld.arisePrompt;
+  if (!prompt) return addLog(next, 'No defeated boss shadow is answering ARISE.', 'world');
+  if (prompt.status !== 'active' || prompt.attemptsLeft <= 0) return addLog(next, 'That ARISE echo has already resolved.', 'world');
+
+  const chance = ariseSuccessChance(next.hunterWorld, prompt);
+  const roll = deterministicRoll(next.rngSeed, prompt.monsterId, prompt.createdMonth, prompt.attemptsUsed, next.hunterWorld.shadowArmy.length, 'arise');
+  prompt.attemptsUsed += 1;
+  prompt.attemptsLeft = Math.max(0, 3 - prompt.attemptsUsed);
+  if (roll < chance) {
+    const shadow = createShadowFromBoss(next, prompt.monsterId, 'ARISE');
+    next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
+    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 6);
+    next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
+    next.hunterWorld.milestones.shadowsExtracted += 1;
+    next.stats.control = clampLifeStat(next, 'control', next.stats.control + 2);
+    prompt.status = 'success';
+    prompt.shadowName = shadow.name;
+    prompt.resultText = `${shadow.name} rises and joins the Shadow Domain army.`;
+    next.hunterWorld.arisePrompt = prompt;
+    return addLog(next, `ARISE succeeded: ${shadow.name} joined your army.`, 'world');
   }
-  const monsterId = next.hunterWorld.lastBossCleared;
-  const monster = HUNTER_MONSTERS[monsterId] ?? null;
-  const rank = monster?.tier ?? next.hunterWorld.rank;
-  const strength = shadowStrength({ monsterId, rank, power: 30 + next.hunterWorld.level * 3 + (monster?.power ?? 0) / 4 });
-  const role = shadowRole(monster, rank);
-  const shadow = {
-    id: `${monsterId}-${next.hunterWorld.shadowArmy.length + 1}`,
-    monsterId,
-    name: `${monster?.name ?? labelFromId(monsterId)} Shadow`,
-    sourceBoss: monster?.name ?? labelFromId(monsterId),
-    extractedMonth: lifeMonth(next),
-    rank,
-    role,
-    strength,
-    armyPower: strength * 12 + Math.floor((monster?.power ?? 0) / 10),
-    power: 30 + next.hunterWorld.level * 3,
-  };
-  next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
-  next.hunterWorld.lastBossCleared = null;
-  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 10);
-  next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
-  next.hunterWorld.milestones.shadowsExtracted += 1;
-  next.stats.control = clampLifeStat(next, 'control', next.stats.control + 3);
-  return addLog(next, `Shadow Extraction succeeded: ${shadow.name} joins your army.`, 'world');
+
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 3);
+  prompt.status = prompt.attemptsLeft > 0 ? 'active' : 'failed';
+  prompt.resultText = prompt.status === 'failed'
+    ? `${prompt.sourceBoss} resisted every command. The echo is gone.`
+    : `${prompt.sourceBoss} resisted ARISE. ${prompt.attemptsLeft} attempt${prompt.attemptsLeft === 1 ? '' : 's'} remain.`;
+  next.hunterWorld.arisePrompt = prompt;
+  return addLog(next, `ARISE failed: ${prompt.resultText}`, 'world');
+}
+
+export function dismissArisePrompt(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const prompt = next.hunterWorld.arisePrompt;
+  if (!prompt) return next;
+  next.hunterWorld.arisePrompt = null;
+  const text = prompt.status === 'success'
+    ? `${prompt.shadowName ?? prompt.sourceBoss} is now marching with your Shadow Domain army.`
+    : `${prompt.sourceBoss} echo fades.`;
+  return addLog(next, text, 'world');
 }
 
 export function advanceMonarchTrace(life) {

@@ -88,7 +88,8 @@ import {
   toggleFavoriteTraining,
   useSocialAction,
   spendHunterStatPoint,
-  extractShadow,
+  attemptAriseShadow,
+  dismissArisePrompt,
   fightMonarchBoss,
   selectHunterGate,
   startHunterDungeonEncounter,
@@ -554,6 +555,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastGateMonth: hunterWorld?.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
+    arisePrompt: hunterWorld?.arisePrompt ?? null,
     dailyQuest: hunterWorld?.dailyQuest ?? null,
     pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
@@ -1017,6 +1019,7 @@ function renderFullScreenView() {
   return navMenuOpen
     ? renderNavMenu()
     : renderHunterLevelRewardPopup()
+      || renderArisePopup()
       || renderHunterQuestPopup()
       || renderHunterDungeonPopup()
       || renderHunterItemsPopup()
@@ -2754,10 +2757,10 @@ function renderShadowArmyPanel() {
       <div>
         <p class="eyebrow">Shadow Army</p>
         <h2>${summary.count} Shadows / Army Power ${summary.armyPower}</h2>
-        <p>${summary.canExtract ? `Boss echo ready: ${escapeHtml(summary.pendingBoss)}.` : escapeHtml(summary.extractReason || 'Extract C-rank+, Red Gate, or Monarch boss echoes to build a real army.')}</p>
+        <p>Defeated bosses trigger ARISE with three chances. Successful commands join this army immediately for Domain conquest.</p>
         ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 2 && summary.count >= 3 ? 'clear' : '' })))}
       </div>
-      ${summary.canExtract ? button('Extract Shadow', 'hunter-extract', 'primary') : '<span class="lock-pill">No Echo</span>'}
+      <span class="lock-pill">ARISE only</span>
     </article>
     <div class="world-grid shadow-roster-grid">
       ${summary.roster.length ? summary.roster.map((shadow) => `
@@ -2768,7 +2771,7 @@ function renderShadowArmyPanel() {
             <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / ${escapeHtml(shadow.role ?? 'vanguard')} / Power ${escapeHtml(String(shadow.armyPower ?? shadow.strength))}</p>
           </div>
         </article>
-      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Boss echoes will appear here after extraction.</p></div></article>'}
+      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Boss shadows will appear here after a successful ARISE.</p></div></article>'}
     </div>
   `;
 }
@@ -3051,6 +3054,42 @@ function renderHunterQuestPopup() {
           <button class="small-btn" data-action="hunter-quest-close">Close</button>
         </div>
         ${state.activeFight?.source === 'hunterQuest' ? renderHunterMonsterFight() : renderHunterQuestPanel()}
+      </section>
+    </main>
+  `;
+}
+
+function renderArisePopup() {
+  const prompt = state.hunterWorld?.arisePrompt;
+  if (!prompt) return '';
+  const monster = HUNTER_MONSTERS[prompt.monsterId] ?? {};
+  const chance = prompt.status === 'active' ? 'Unstable' : prompt.status === 'success' ? 'Bound' : 'Lost';
+  const action = prompt.status === 'active'
+    ? button(`ARISE (${prompt.attemptsLeft}/3)`, 'hunter-arise-attempt', 'primary wide')
+    : button('Close', 'hunter-arise-dismiss', 'primary wide');
+  return `
+    <main class="screen-view hunter-screen">
+      <section class="screen-panel hunter-quest-popup arise-popup system-popup" data-scroll-key="hunter-arise">
+        <div class="hunter-popup-header">
+          <div>
+            <p class="eyebrow">Shadow Command</p>
+            <h2>ARISE</h2>
+          </div>
+          <button class="small-btn" data-action="hunter-arise-dismiss">${prompt.status === 'active' ? 'Skip' : 'Close'}</button>
+        </div>
+        <article class="option-card system-window arise-card ${prompt.status}">
+          <div>
+            <p class="eyebrow">${escapeHtml(prompt.rank ?? monster.tier ?? 'E')}-Rank Boss Echo</p>
+            <h3>${escapeHtml(prompt.sourceBoss ?? monster.name ?? 'Defeated Boss')}</h3>
+            <p>${escapeHtml(prompt.resultText || 'The boss echo is still fresh. You have three chances to command it into your Shadow Domain army.')}</p>
+            ${renderSystemScanRows([
+              { label: 'Attempts', value: `${prompt.attemptsLeft}/3`, tone: prompt.attemptsLeft > 0 ? 'clear' : 'danger' },
+              { label: 'State', value: chance, tone: prompt.status === 'success' ? 'clear' : prompt.status === 'failed' ? 'danger' : '' },
+              { label: 'Army Result', value: prompt.status === 'success' ? `${prompt.shadowName ?? 'Shadow'} added` : 'On success, joins Domain army immediately', tone: prompt.status === 'success' ? 'clear' : '' },
+            ])}
+          </div>
+          ${action}
+        </article>
       </section>
     </main>
   `;
@@ -3544,7 +3583,6 @@ function renderHunter() {
     `;
   }
   const activeDungeon = hunter.activeDungeon;
-  const canExtract = hunter.lastBossCleared && hunter.level >= 10;
   const questActivity = hunterQuestActivity(hunter.dailyQuest);
   const gateActivity = hunterGateActivity(hunter);
   const inventoryStacks = normalizeHunterInventory(hunter.inventory);
@@ -3585,8 +3623,8 @@ function renderHunter() {
       ${renderCollapsibleSection({
         id: 'hunter-actions',
         title: 'Hunter Activities',
-        subtitle: 'Daily quests, Domains, items, association work, shop, and shadow growth.',
-        count: 8,
+        subtitle: 'Daily quests, Domains, items, association work, shop, and Monarch Trace.',
+        count: 7,
         body: `<div class="activity-list">
         ${renderHunterActivity({
           icon: 'DQ',
@@ -3629,15 +3667,6 @@ function renderHunter() {
           meta: hunter.equippedWeapon ? `Equipped: ${HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon)}` : `${inventoryTotal} item${inventoryTotal === 1 ? '' : 's'} owned`,
           action: 'hunter-shop',
           tone: 'shop',
-        })}
-        ${renderHunterActivity({
-          icon: 'SX',
-          title: 'Shadow Extraction',
-          subtitle: 'Bind strong boss echoes, build army power, and prepare Domain conquest.',
-          meta: canExtract ? `Boss echo: ${shadowSummary.pendingBoss}` : `${shadowSummary.count} shadows / strength ${shadowSummary.totalStrength}`,
-          action: 'hunter-extract',
-          locked: !canExtract,
-          tone: 'shadow',
         })}
         ${renderHunterActivity({
           icon: 'DM',
@@ -4179,8 +4208,12 @@ function handleAction(action, source = null) {
     setState(craftHunterItem(state, action.replace('hunter-craft-', '')));
     return;
   }
-  if (action === 'hunter-extract') {
-    setState(extractShadow(state));
+  if (action === 'hunter-arise-attempt') {
+    setState(attemptAriseShadow(state));
+    return;
+  }
+  if (action === 'hunter-arise-dismiss') {
+    setState(dismissArisePrompt(state));
     return;
   }
   if (action.startsWith('trash-')) {

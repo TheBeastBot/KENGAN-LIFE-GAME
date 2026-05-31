@@ -940,6 +940,29 @@ select:focus {
   margin-top: 2px;
 }
 
+.arise-popup {
+  border-color: rgba(177, 92, 255, 0.7);
+  background:
+    radial-gradient(circle at 50% 0, rgba(177, 92, 255, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(22, 16, 32, 0.98), rgba(45, 20, 72, 0.9)),
+    var(--panel);
+  box-shadow: 0 0 42px rgba(145, 74, 255, 0.22);
+}
+
+.arise-popup .hunter-popup-header h2 {
+  color: #d6b4ff;
+  text-shadow: 0 0 18px rgba(177, 92, 255, 0.72);
+}
+
+.arise-card.success {
+  border-color: rgba(190, 132, 255, 0.68);
+  box-shadow: inset 3px 0 0 rgba(190, 132, 255, 0.64), 0 0 28px rgba(118, 52, 210, 0.22);
+}
+
+.arise-card.failed {
+  border-color: rgba(255, 88, 116, 0.5);
+}
+
 .hunter-stat-grid {
   margin-bottom: 10px;
 }
