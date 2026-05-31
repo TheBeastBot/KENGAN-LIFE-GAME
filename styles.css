@@ -3723,18 +3723,34 @@ button:active,
   align-items: start;
 }
 
-.shadow-domain-map {
+.shadow-domain-scroll {
   width: 100%;
-  aspect-ratio: 1 / 1;
-  min-height: 320px;
-  max-height: 520px;
+  max-height: min(68vh, 560px);
   margin-top: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
   border-radius: 8px;
+  border: 1px solid rgba(159, 91, 255, 0.26);
+  background: rgba(8, 8, 15, 0.86);
+  scrollbar-color: rgba(192, 132, 252, 0.72) rgba(24, 10, 36, 0.82);
+}
+
+.shadow-domain-scroll:focus {
+  outline: 2px solid rgba(192, 132, 252, 0.75);
+  outline-offset: 2px;
+}
+
+.shadow-domain-map {
+  display: block;
+  width: 1120px;
+  max-width: none;
+  height: 720px;
+  margin-top: 12px;
+  margin: 0;
   background:
     radial-gradient(circle at 82% 64%, rgba(250, 204, 21, 0.12), transparent 16%),
     radial-gradient(circle at 42% 82%, rgba(244, 63, 94, 0.14), transparent 19%),
     linear-gradient(135deg, rgba(7, 9, 15, 0.98), rgba(24, 10, 36, 0.95));
-  border: 1px solid rgba(159, 91, 255, 0.26);
 }
 
 .domain-map-backdrop {
@@ -3893,7 +3909,8 @@ button:active,
   }
 
   .shadow-domain-map {
-    min-height: 220px;
+    width: 980px;
+    height: 640px;
   }
 }
 
