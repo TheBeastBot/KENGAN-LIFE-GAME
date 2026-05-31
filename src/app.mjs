@@ -994,30 +994,7 @@ function renderStart() {
   `;
 }
 
-function renderRecoveryScreen(error) {
-  console.error('Underground Life Sim render failed', error);
-  syncBodyScrollLock(false);
-  app.innerHTML = `
-    <main class="shell start-shell">
-      <section class="hero-panel">
-        <p class="eyebrow">Underground Life Sim</p>
-        <h1>Save recovery needed.</h1>
-        <p class="subcopy">The page hit a bad saved UI state while loading. Clear the broken local data, then start again.</p>
-        <button class="primary wide" data-action="clear-broken-save">Clear Broken Save</button>
-      </section>
-    </main>
-  `;
-}
-
 function render() {
-  try {
-    renderApp();
-  } catch (error) {
-    renderRecoveryScreen(error);
-  }
-}
-
-function renderApp() {
   if (!state) {
     syncBodyScrollLock(false);
     renderStart();
@@ -3982,19 +3959,6 @@ function handleAction(action, source = null) {
     systemShopPopupOpen = false;
     hunterItemsPopupOpen = false;
     navMenuOpen = false;
-    return;
-  }
-  if (action === 'clear-broken-save') {
-    clearStoredGameData();
-    state = null;
-    activeTab = 'life';
-    selectedFightCategory = null;
-    hunterQuestPopupOpen = false;
-    hunterDungeonPopupOpen = false;
-    systemShopPopupOpen = false;
-    hunterItemsPopupOpen = false;
-    navMenuOpen = false;
-    render();
     return;
   }
   if (!state) return;

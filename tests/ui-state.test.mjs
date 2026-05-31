@@ -134,16 +134,13 @@ test('main navigation uses menu with four favorite section slots', async () => {
   assert.match(cssSource, /\.nav-menu-row\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\) 48px;/);
 });
 
-test('reset and render recovery clear every game-owned storage key', async () => {
+test('render no longer catches broken saves with a recovery screen', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 
-  assert.match(appSource, /function clearStoredGameData/);
-  assert.match(appSource, /localStorage\.removeItem\(STORAGE_KEY\)/);
-  assert.match(appSource, /localStorage\.removeItem\(DROPDOWN_STORAGE_KEY\)/);
-  assert.match(appSource, /localStorage\.removeItem\(NAV_FAVORITES_STORAGE_KEY\)/);
-  assert.match(appSource, /function renderRecoveryScreen/);
-  assert.match(appSource, /catch \(error\) \{\s*renderRecoveryScreen\(error\);/);
-  assert.match(appSource, /data-action="clear-broken-save"/);
+  assert.doesNotMatch(appSource, /function renderRecoveryScreen/);
+  assert.doesNotMatch(appSource, /renderRecoveryScreen\(error\)/);
+  assert.doesNotMatch(appSource, /data-action="clear-broken-save"/);
+  assert.doesNotMatch(appSource, /action === 'clear-broken-save'/);
 });
 
 test('large popup menus use replacement screens while small popups stay modal cards', async () => {
