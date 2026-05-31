@@ -1028,10 +1028,10 @@ function render() {
 function renderFullScreenView() {
   return navMenuOpen
     ? renderNavMenu()
-    : renderHunterLevelRewardPopup()
-      || renderArisePopup()
-      || renderHunterQuestPopup()
+    : renderHunterQuestPopup()
       || renderHunterDungeonPopup()
+      || renderHunterLevelRewardPopup()
+      || renderArisePopup()
       || renderHunterItemsPopup()
       || renderSystemShopPopup();
 }

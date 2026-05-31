@@ -137,6 +137,17 @@ test('Hunter System guidance exposes next actions and pending badges', async () 
   assert.match(cssSource, /\.pending-state-badges\s*{/);
 });
 
+test('Hunter fight reports render before level reward and ARISE popups', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const match = appSource.match(/function renderFullScreenView\(\) \{[\s\S]*?\n\}/);
+
+  assert.ok(match, 'renderFullScreenView should exist');
+  const body = match[0];
+  assert.ok(body.indexOf('renderHunterQuestPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
+  assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
+  assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderArisePopup()'));
+});
+
 test('global interaction polish covers core interactive UI and reduced motion', async () => {
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
