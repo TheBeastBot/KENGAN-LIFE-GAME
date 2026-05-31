@@ -699,32 +699,32 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   fieldRecovery: { id: 'fieldRecovery', type: 'recovery', health: 30, energy: 20, label: 'Restore 30 health and 20 stamina' },
   moneyCache: { id: 'moneyCache', type: 'money', amount: 1000, label: '+$1,000 money' },
   reputationPing: { id: 'reputationPing', type: 'reputation', amount: 8, label: '+8 reputation' },
-  basicDamage: { id: 'basicDamage', type: 'perk', perk: 'basicDamagePlus5', tier: 'basic', maxStacks: 10, label: 'Basic Move damage +5% per stack' },
-  specialEfficiency: { id: 'specialEfficiency', type: 'perk', perk: 'specialStaminaMinus2', tier: 'basic', maxStacks: 10, label: 'Special Move stamina costs -2 per stack' },
-  conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', tier: 'basic', maxStacks: 10, label: 'Conserve restores +6 more stamina per stack' },
-  manaGuardMastery: { id: 'manaGuardMastery', type: 'perk', perk: 'manaGuardPlus3', tier: 'basic', maxStacks: 10, label: 'Mana Guard reduction +3 per stack' },
-  dashStrikeMastery: { id: 'dashStrikeMastery', type: 'perk', perk: 'dashStrikePlus4', tier: 'basic', maxStacks: 10, label: 'Dash Strike damage +4 per stack' },
-  perfectFootwork: { id: 'perfectFootwork', type: 'perk', perk: 'perfectFootwork', tier: 'basic', maxStacks: 1, label: 'Perfect Footwork: Dash Strike primes an enemy miss window' },
-  manaThreading: { id: 'manaThreading', type: 'perk', perk: 'manaThreading', tier: 'basic', maxStacks: 1, label: 'Mana Threading: Mana Guard refunds stamina when it blocks pressure' },
-  predatorRhythm: { id: 'predatorRhythm', type: 'perk', perk: 'predatorRhythm', tier: 'basic', maxStacks: 3, label: 'Predator Rhythm: alternating basic moves stacks damage' },
-  vitalPulse: { id: 'vitalPulse', type: 'perk', perk: 'vitalPulse', tier: 'basic', maxStacks: 1, label: 'Vital Pulse: Conserve heals when Hunter health is low' },
-  executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', tier: 'rare', maxStacks: 5, label: 'Execute cooldown -1 per stack' },
-  analysisCrit: { id: 'analysisCrit', type: 'perk', perk: 'analysisCritPlus3', tier: 'rare', maxStacks: 5, label: 'System analysis crit/read chance +3% per stack' },
-  shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow army Domain damage +8% per stack' },
-  weaponSkillDamage: { id: 'weaponSkillDamage', type: 'perk', perk: 'weaponSkillPlus10', tier: 'rare', maxStacks: 5, label: 'Weapon System skill damage +10% per stack' },
-  fractureMark: { id: 'fractureMark', type: 'perk', perk: 'fractureMark', tier: 'rare', maxStacks: 1, label: 'Fracture Mark: Analyze Weakness marks targets for Execute' },
-  afterimageChain: { id: 'afterimageChain', type: 'perk', perk: 'afterimageChain', tier: 'rare', maxStacks: 1, label: 'Afterimage Chain: Dash Strike can cut special cooldowns' },
-  bloodScent: { id: 'bloodScent', type: 'perk', perk: 'bloodScent', tier: 'rare', maxStacks: 1, label: 'Blood Scent: hurt monsters take extra attack damage' },
-  coreSight: { id: 'coreSight', type: 'perk', perk: 'coreSight', tier: 'rare', maxStacks: 1, label: 'Core Sight: analysis follow-ups bite harder into bosses' },
-  monarchExecution: { id: 'monarchExecution', type: 'perk', perk: 'monarchExecution', tier: 'special', maxStacks: 1, label: 'Monarch Execution: Execute crushes wounded monsters' },
-  absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina' },
-  rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Domain conquest and Monarch progression bonus" },
-  systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: all Basic System moves gain flat damage' },
-  blackFlash: { id: 'blackFlash', type: 'perk', perk: 'blackFlash', tier: 'special', maxStacks: 1, label: 'Black Flash: basic moves can spike into a critical System strike' },
-  limitBreakProtocol: { id: 'limitBreakProtocol', type: 'perk', perk: 'limitBreakProtocol', tier: 'special', maxStacks: 1, label: 'Limit Break Protocol: once per fight, low health triggers emergency output' },
-  executionWindow: { id: 'executionWindow', type: 'perk', perk: 'executionWindow', tier: 'special', maxStacks: 1, label: 'Execution Window: Execute spikes after a monster miss or hard outread' },
-  abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlocks an ultimate lifesteal System move' },
-  monarchsInstinct: { id: 'monarchsInstinct', type: 'perk', perk: 'monarchsInstinct', tier: 'ultimate', maxStacks: 1, label: "Monarch's Instinct: evolved Shadow Monarch skills gain black-violet pressure" },
+  basicDamage: { id: 'basicDamage', type: 'perk', perk: 'basicDamagePlus5', tier: 'basic', maxStacks: 10, label: 'Basic Damage: +5% basic attack damage per stack', description: 'Hunter basic attacks except Conserve deal +5% damage per stack. The Hunter fight log shows the damage boost when it applies.' },
+  specialEfficiency: { id: 'specialEfficiency', type: 'perk', perk: 'specialStaminaMinus2', tier: 'basic', maxStacks: 10, label: 'Special Efficiency: -2 stamina cost per stack', description: 'Every Special Move costs 2 less stamina per stack. The fight log shows the discount when you use a Special Move.' },
+  conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', tier: 'basic', maxStacks: 10, label: 'Conserve Mastery: +6 stamina recovery per stack', description: 'Conserve restores 6 extra stamina per stack. The log shows the total Conserve recovery each time.' },
+  manaGuardMastery: { id: 'manaGuardMastery', type: 'perk', perk: 'manaGuardPlus3', tier: 'basic', maxStacks: 10, label: 'Mana Guard Mastery: +3 damage reduction per stack', description: 'Mana Guard reduces incoming monster damage by 3 more per stack. The fight log shows the extra guard reduction.' },
+  dashStrikeMastery: { id: 'dashStrikeMastery', type: 'perk', perk: 'dashStrikePlus4', tier: 'basic', maxStacks: 10, label: 'Dash Strike Mastery: +4 damage per stack', description: 'Dash Strike gains 4 flat damage per stack. The fight log calls out the bonus when Dash Strike is used.' },
+  perfectFootwork: { id: 'perfectFootwork', type: 'perk', perk: 'perfectFootwork', tier: 'basic', maxStacks: 1, label: 'Perfect Footwork: Dash Strike primes a miss window', description: 'After you use Dash Strike, the next monster attack has reduced accuracy. The log triggers when the miss window is consumed.' },
+  manaThreading: { id: 'manaThreading', type: 'perk', perk: 'manaThreading', tier: 'basic', maxStacks: 1, label: 'Mana Threading: Mana Guard refunds stamina', description: 'When Mana Guard blocks meaningful damage, it refunds stamina based on the block. The log shows the stamina refunded.' },
+  predatorRhythm: { id: 'predatorRhythm', type: 'perk', perk: 'predatorRhythm', tier: 'basic', maxStacks: 3, label: 'Predator Rhythm: alternating basics stack damage', description: 'Using a different Basic Move than your previous Hunter exchange builds a stacking damage bonus, up to the perk stack count.' },
+  vitalPulse: { id: 'vitalPulse', type: 'perk', perk: 'vitalPulse', tier: 'basic', maxStacks: 1, label: 'Vital Pulse: Conserve heals at low health', description: 'When Hunter health is at or below half, Conserve also restores health. The fight log shows the heal amount.' },
+  executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', tier: 'rare', maxStacks: 5, label: 'Execute Cooldown: -1 cooldown exchange per stack', description: 'Execute sets a shorter cooldown after use, reduced by 1 exchange per stack to a minimum of 1. The log shows the reduced cooldown.' },
+  analysisCrit: { id: 'analysisCrit', type: 'perk', perk: 'analysisCritPlus3', tier: 'rare', maxStacks: 5, label: 'Analysis Crit: +3% crit/read chance per stack', description: 'After Analyze Weakness, the next attacking move gains +3% crit/read chance per stack. The log shows when analysis crit pressure is active.' },
+  shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow Pressure: +8% shadow skill damage per stack', description: 'In Hunter fights, shadow-linked System skills gain +8% damage per stack when you have shadows. This does not change Domain War power.' },
+  weaponSkillDamage: { id: 'weaponSkillDamage', type: 'perk', perk: 'weaponSkillPlus10', tier: 'rare', maxStacks: 5, label: 'Weapon Skill Damage: +10% weapon skill damage per stack', description: 'Hunter moves tagged as weapon skills deal +10% damage per stack. The log shows when weapon skill damage applies.' },
+  fractureMark: { id: 'fractureMark', type: 'perk', perk: 'fractureMark', tier: 'rare', maxStacks: 1, label: 'Fracture Mark: Analyze Weakness marks for Execute', description: 'Analyze Weakness places a mark. Execute consumes that mark for bonus damage and logs the detonation.' },
+  afterimageChain: { id: 'afterimageChain', type: 'perk', perk: 'afterimageChain', tier: 'rare', maxStacks: 1, label: 'Afterimage Chain: Dash Strike can cut cooldowns', description: 'Dash Strike has a chance to reduce all active Special Move cooldowns by 1. The log shows when it triggers.' },
+  bloodScent: { id: 'bloodScent', type: 'perk', perk: 'bloodScent', tier: 'rare', maxStacks: 1, label: 'Blood Scent: bonus damage to wounded monsters', description: 'Attacking a monster below 35% health deals bonus damage. The fight log shows when Blood Scent amplifies the hit.' },
+  coreSight: { id: 'coreSight', type: 'perk', perk: 'coreSight', tier: 'rare', maxStacks: 1, label: 'Core Sight: analysis follow-ups hit bosses harder', description: 'Against boss or Monarch threats, attacks after Analyze Weakness deal extra damage. The log shows when a boss core is exposed.' },
+  monarchExecution: { id: 'monarchExecution', type: 'perk', perk: 'monarchExecution', tier: 'special', maxStacks: 1, label: 'Monarch Execution: Execute crushes wounded monsters', description: 'Execute gains a large bonus when the monster has lost at least 65% health. The log shows when the finisher bonus activates.' },
+  absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina', description: 'Mana Guard restores extra stamina after guarding. The fight log shows the recovery amount.' },
+  rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: shadow command pressure in fights", description: 'When you have shadows, shadow-linked Hunter skills gain command pressure and extra damage in Hunter fights. This does not change Domain War power.' },
+  systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: +12 flat basic damage', description: 'All damaging Basic Moves gain +12 flat damage. The fight log shows Overclock when the bonus is applied.' },
+  blackFlash: { id: 'blackFlash', type: 'perk', perk: 'blackFlash', tier: 'special', maxStacks: 1, label: 'Black Flash: basic moves can spike critical damage', description: 'Damaging Basic Moves have a low chance to become a black System strike for much higher damage and unique log text.' },
+  limitBreakProtocol: { id: 'limitBreakProtocol', type: 'perk', perk: 'limitBreakProtocol', tier: 'special', maxStacks: 1, label: 'Limit Break Protocol: one low-health emergency boost', description: 'Once per Hunter fight, dropping to 25% health or lower grants emergency stamina, score, and damage. The log shows when it fires.' },
+  executionWindow: { id: 'executionWindow', type: 'perk', perk: 'executionWindow', tier: 'special', maxStacks: 1, label: 'Execution Window: Execute spikes after an outread', description: 'Execute deals extra damage right after the monster misses or you heavily outread it. The log shows when the window opens.' },
+  abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlock lifesteal System move', description: 'Unlocks Abyssal Leech, a Special Move that damages the monster and restores Hunter health based on damage dealt.' },
+  monarchsInstinct: { id: 'monarchsInstinct', type: 'perk', perk: 'monarchsInstinct', tier: 'ultimate', maxStacks: 1, label: "Monarch's Instinct: evolved skills gain black-violet pressure", description: 'After Shadow Monarch transformation, evolved skills gain bonus damage, reduction, cooldown pressure, and black-violet fight log text.' },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -975,10 +975,8 @@ function shadowRole(monster = {}, rank = 'E') {
 function shadowArmyPower(hunterWorld) {
   const hunter = normalizeHunterWorld(hunterWorld);
   const base = hunter.shadowArmy.reduce((sum, shadow) => sum + (shadow.armyPower ?? shadowStrength(shadow) * 10), 0);
-  const perkMultiplier = 1 + systemPerkValue({ hunterWorld: hunter }, 'shadowDamagePlus8');
-  const authorityBonus = hasSystemPerk({ hunterWorld: hunter }, 'rulersAuthority') ? 30 + hunter.stats.intelligence * 4 : 0;
   const sigilBonus = hunter.shadowSigilPower ?? 0;
-  return Math.max(0, Math.floor(base * perkMultiplier + authorityBonus + sigilBonus));
+  return Math.max(0, Math.floor(base + sigilBonus));
 }
 
 function normalizeShadowArmy(shadowArmy = []) {
@@ -8542,6 +8540,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const isBasicMove = move.moveType === 'basic';
   const isAttackMove = move.id !== 'conserve' && move.id !== 'manaGuard';
   const bossMonster = Boolean(opponent?.threat?.includes('Boss') || opponent?.threat?.includes('Monarch'));
+  const shadowLinkedSkill = ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id)
+    || Boolean(SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id])
+    || Boolean(move.requiresShadowMonarch);
   const footworkActive = hasSystemPerk(next, 'perfectFootwork') && perkState.perfectFootworkWindow;
   if (footworkActive) perkState.perfectFootworkWindow = false;
   const limitBreakActive = hasSystemPerk(next, 'limitBreakProtocol')
@@ -8562,15 +8563,18 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const profile = hunterMoveProfile(move, next);
   const enemyMove = chooseHunterMonsterMove(opponent, fight);
   const staminaCost = hunterMoveStaminaCost(next, move);
+  const specialStaminaDiscount = move.moveType === 'special' ? systemPerkValue(next, 'specialStaminaMinus2') : 0;
+  const executeCooldownReduction = move.id === 'execute' ? systemPerkValue(next, 'executeCooldownMinus1') : 0;
   const opponentTactic = enemyMove.category;
   const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22 - (footworkActive ? 18 : 0);
   const analyzeBonus = fight.systemAnalysis ? 18 + next.hunterWorld.stats.sense * 2 : 0;
   const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus + (limitBreakActive ? 35 : 0);
   const swing = playerScore - enemyScore;
   const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
+  const monarchExecutionActive = move.id === 'execute' && hasSystemPerk(next, 'monarchExecution') && hurtPercent >= 65;
   const executeBonus = move.id === 'execute'
     ? Math.round(hurtPercent / 4)
-      + (hasSystemPerk(next, 'monarchExecution') && hurtPercent >= 65 ? Math.round((fight.meters.maxOpponentHealth ?? 100) * 0.18) : 0)
+      + (monarchExecutionActive ? Math.round((fight.meters.maxOpponentHealth ?? 100) * 0.18) : 0)
       + (fractureActive ? Math.round((fight.meters.maxOpponentHealth ?? 100) * systemPerkValue(next, 'fractureMark')) : 0)
       + (executionWindowActive ? Math.round((fight.meters.maxOpponentHealth ?? 100) * systemPerkValue(next, 'executionWindow')) : 0)
     : 0;
@@ -8578,13 +8582,21 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const basicDamageMultiplier = move.moveType === 'basic' ? 1 + systemPerkValue(next, 'basicDamagePlus5') : 1;
   const weaponDamageMultiplier = move.category === 'weapon' ? 1 + systemPerkValue(next, 'weaponSkillPlus10') : 1;
   const overclockBonus = move.moveType === 'basic' && hasSystemPerk(next, 'systemOverclock') ? 12 : 0;
+  const dashStrikeBonus = move.id === 'dashStrike' ? systemPerkValue(next, 'dashStrikePlus4') : 0;
+  const manaGuardBonus = move.id === 'manaGuard' ? systemPerkValue(next, 'manaGuardPlus3') : 0;
   const rhythmMultiplier = 1 + rhythmStacks * systemPerkValue(next, 'predatorRhythm');
   const bloodScentMultiplier = hasSystemPerk(next, 'bloodScent') && isAttackMove && hurtPercent >= 65 ? 1 + systemPerkValue(next, 'bloodScent') : 1;
   const coreSightMultiplier = hasSystemPerk(next, 'coreSight') && bossMonster && fight.systemAnalysis && move.id !== 'analyzeWeakness' ? 1 + systemPerkValue(next, 'coreSight') : 1;
   const limitBreakMultiplier = limitBreakActive ? 1.25 : 1;
+  const shadowPressureActive = shadowLinkedSkill && next.hunterWorld.shadowArmy.length > 0 && hasSystemPerk(next, 'shadowDamagePlus8');
+  const shadowPressureMultiplier = shadowPressureActive ? 1 + systemPerkValue(next, 'shadowDamagePlus8') : 1;
+  const rulersAuthorityActive = shadowLinkedSkill && next.hunterWorld.shadowArmy.length > 0 && hasSystemPerk(next, 'rulersAuthority');
+  const rulersAuthorityBonus = rulersAuthorityActive
+    ? Math.max(8, Math.round(shadowArmyStrength(next.hunterWorld) * 0.35 + next.hunterWorld.stats.intelligence * 1.5))
+    : 0;
   const monarchInstinctActive = hasSystemPerk(next, 'monarchsInstinct') && next.hunterWorld.shadowMonarch.unlocked && (SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id] || move.requiresShadowMonarch);
   const monarchInstinctMultiplier = monarchInstinctActive ? 1 + systemPerkValue(next, 'monarchsInstinct') : 1;
-  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus - opponentDefense)));
+  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
     : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0), 0.05, 0.57);
@@ -8615,8 +8627,11 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
       else delete fight.moveCooldowns[id];
     }
   }
+  const analysisFollowUpActive = Boolean(fight.systemAnalysis) && move.id !== 'analyzeWeakness';
+  const analysisCritBonus = analysisFollowUpActive ? systemPerkValue(next, 'analysisCritPlus3') : 0;
   fight.systemAnalysis = move.id === 'analyzeWeakness';
-  const conserveGain = 18 + systemPerkValue(next, 'conservePlus6');
+  const conserveBonus = systemPerkValue(next, 'conservePlus6');
+  const conserveGain = 18 + conserveBonus;
   const guardRecovery = move.id === 'manaGuard' && hasSystemPerk(next, 'absoluteGuard') ? 8 : 0;
   const manaThreadingRefund = move.id === 'manaGuard' && hasSystemPerk(next, 'manaThreading') && baseEnemyDamage > enemyDamage && baseEnemyDamage >= 8
     ? systemPerkValue(next, 'manaThreading')
@@ -8649,11 +8664,21 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     : `${opponent.name} answers with ${enemyMove.label} for ${enemyDamage} damage.`;
   const analysisLine = move.id === 'analyzeWeakness'
     ? ' Next exchange gains a System analysis bonus.'
-    : fight.systemAnalysis
+    : analysisFollowUpActive
       ? ' The previous analysis turns one monster habit into a target.'
       : '';
   const perkLine = [
-    move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.` : '',
+    move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.${conserveBonus ? ` Conserve Mastery added ${conserveBonus}.` : ''}` : '',
+    isBasicMove && isAttackMove && basicDamageMultiplier > 1 ? ` Basic Damage active: +${Math.round((basicDamageMultiplier - 1) * 100)}%.` : '',
+    move.moveType === 'special' && specialStaminaDiscount ? ` Special Efficiency reduced the stamina cost by ${specialStaminaDiscount}.` : '',
+    executeCooldownReduction ? ` Execute Cooldown reduced the cooldown by ${executeCooldownReduction}.` : '',
+    dashStrikeBonus ? ` Dash Strike Mastery added ${dashStrikeBonus} damage.` : '',
+    manaGuardBonus ? ` Mana Guard Mastery added ${manaGuardBonus} damage reduction.` : '',
+    analysisCritBonus ? ` Analysis Crit pressure: +${Math.round(analysisCritBonus * 100)}% crit/read chance.` : '',
+    weaponDamageMultiplier > 1 ? ` Weapon Skill Damage active: +${Math.round((weaponDamageMultiplier - 1) * 100)}%.` : '',
+    overclockBonus ? ` System Overclock added ${overclockBonus} damage.` : '',
+    shadowPressureActive ? ` Shadow Pressure amplified the shadow skill by ${Math.round((shadowPressureMultiplier - 1) * 100)}%.` : '',
+    rulersAuthorityActive ? ` Ruler's Authority added ${rulersAuthorityBonus} command damage.` : '',
     lifeSteal ? ` Abyssal Leech restored ${lifeSteal} health.` : '',
     guardRecovery ? ` Absolute Guard recovery: +${guardRecovery} mana.` : '',
     manaThreadingRefund ? ` Mana Threading refunded ${manaThreadingRefund} stamina.` : '',
@@ -8661,6 +8686,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     footworkActive ? ' Perfect Footwork blurred the monster timing.' : '',
     rhythmStacks ? ` Predator Rhythm x${rhythmStacks}.` : '',
     fractureActive ? ' Fracture Mark detonated through Execute.' : '',
+    monarchExecutionActive ? ' Monarch Execution crushed the wounded monster.' : '',
     afterimageChain ? ' Afterimage Chain cut special cooldowns.' : '',
     bloodScentMultiplier > 1 ? ' Blood Scent amplified the wounded-target hit.' : '',
     coreSightMultiplier > 1 ? ' Core Sight exposed the boss core.' : '',
@@ -9693,8 +9719,7 @@ export function battleShadowDomain(life, domainId) {
   if (!domain) return addLog(next, 'That Shadow Domain does not exist on the map.', 'world');
   if (!domain.canAttack) return addLog(next, domain.lockReason || 'That Shadow Domain cannot be attacked right now.', 'world');
   const armyPower = mapView.armyPower;
-  const authorityBonus = hasSystemPerk(next, 'rulersAuthority') ? 18 : 0;
-  const resultPower = armyPower + authorityBonus + next.hunterWorld.level;
+  const resultPower = armyPower + next.hunterWorld.level;
   const won = resultPower >= domain.enemyPower;
   next.hunterWorld.domainMap = normalizeDomainMap(next.hunterWorld.domainMap);
   next.hunterWorld.domainMap.lastBattle = {

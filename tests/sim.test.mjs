@@ -5952,8 +5952,91 @@ test('new Hunter fight perks are level-up rewards and do not change Domain War p
   for (const id of newPerks) {
     assert.equal(HUNTER_LEVEL_REWARD_OPTIONS[id].type, 'perk');
     assert.ok(['basic', 'rare', 'special', 'ultimate'].includes(HUNTER_LEVEL_REWARD_OPTIONS[id].tier));
+    assert.ok(HUNTER_LEVEL_REWARD_OPTIONS[id].description.length > 40);
   }
   assert.equal(getShadowDomainMap(perkLife).armyPower, getShadowDomainMap(life).armyPower);
+});
+
+test('System perk reward text explains mechanics and Hunter fight logs show perk triggers', () => {
+  const perkOptions = Object.values(HUNTER_LEVEL_REWARD_OPTIONS).filter((option) => option.type === 'perk');
+  for (const option of perkOptions) {
+    assert.equal(typeof option.description, 'string');
+    assert.ok(option.description.length > 35, `${option.id} needs a useful description`);
+    assert.notEqual(option.description, 'System combat perk');
+  }
+
+  const base = createNewLife({ gender: 'Female', seed: 160055 });
+  const fighting = (perks, meters = {}) => ({
+    ...base,
+    stats: {
+      ...base.stats,
+      strength: 1000,
+      speed: 1000,
+      durability: 1000,
+      technique: 1000,
+      fightIq: 1000,
+      willpower: 1000,
+      reflexes: 1000,
+      flexibility: 1000,
+      control: 1000,
+    },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 60,
+      stats: { strength: 30, agility: 30, vitality: 30, sense: 30, intelligence: 30 },
+      shadowArmy: [{ id: 's1', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 35, role: 'elite', armyPower: 9000 }],
+      shadowMonarch: perks.includes('monarchsInstinct') ? { unlocked: true, evolvedSkills: true, transformedMonth: 1 } : base.hunterWorld.shadowMonarch,
+      unlockedSystemPerks: perks.map((id) => ({ id, count: ['basicDamagePlus5', 'specialStaminaMinus2', 'dashStrikePlus4', 'manaGuardPlus3', 'analysisCritPlus3', 'shadowDamagePlus8', 'weaponSkillPlus10'].includes(id) ? 2 : 1 })),
+    },
+    activeFight: {
+      source: 'hunterQuest',
+      opponentId: 'bloodOgreBoss',
+      round: 1,
+      exchanges: [],
+      moveCooldowns: {},
+      meters: {
+        playerHealth: 5000,
+        maxPlayerHealth: 5000,
+        opponentHealth: 50000,
+        maxOpponentHealth: 50000,
+        playerStamina: 95,
+        maxPlayerStamina: 100,
+        opponentStamina: 85,
+        maxOpponentStamina: 100,
+        guard: 0,
+        momentum: 0,
+        ...meters,
+      },
+    },
+  });
+  const exchangeText = (life, move) => takeFightTurn(life, move).activeFight.exchanges[0].text;
+
+  const dashText = exchangeText(fighting(['basicDamagePlus5', 'dashStrikePlus4', 'systemOverclock']), 'dashStrike');
+  assert.match(dashText, /Basic Damage active/);
+  assert.match(dashText, /Dash Strike Mastery/);
+  assert.match(dashText, /System Overclock/);
+
+  const guardText = exchangeText(fighting(['manaGuardPlus3', 'absoluteGuard']), 'manaGuard');
+  assert.match(guardText, /Mana Guard Mastery/);
+  assert.match(guardText, /Absolute Guard recovery/);
+
+  const analyzed = takeFightTurn(fighting(['analysisCritPlus3']), 'analyzeWeakness');
+  const analysisText = takeFightTurn(analyzed, 'slash').activeFight.exchanges[0].text;
+  assert.match(analysisText, /Analysis Crit pressure/);
+
+  const executeText = exchangeText(fighting(['executeCooldownMinus1', 'specialStaminaMinus2', 'monarchExecution'], { opponentHealth: 15000 }), 'execute');
+  assert.match(executeText, /Special Efficiency/);
+  assert.match(executeText, /Execute Cooldown/);
+  assert.match(executeText, /Monarch Execution/);
+  assert.match(executeText, /Cooldown set/);
+
+  const shadowText = exchangeText(fighting(['abyssalLeech', 'shadowDamagePlus8', 'rulersAuthority', 'specialStaminaMinus2']), 'abyssalLeech');
+  assert.match(shadowText, /Shadow Pressure/);
+  assert.match(shadowText, /Ruler's Authority/);
+  assert.match(shadowText, /Abyssal Leech restored/);
 });
 
 test('new Hunter fight perks trigger unique combat effects', () => {

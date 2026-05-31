@@ -3151,7 +3151,9 @@ function renderHunterMoves(mode = 'quest') {
       move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
       move.id === 'abyssalLeech' ? 'Ultimate lifesteal move: restores health from damage dealt.' : '',
       move.uiTone === 'shadow-monarch' ? `Shadow Monarch evolved skill. Army strength ${shadowStrengthTotal}.` : '',
-      move.id === 'monarchCommand' && perkCount('shadowDamagePlus8') ? `Domain army damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
+      ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id) && perkCount('shadowDamagePlus8') && shadowCount ? `Shadow Pressure damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
+      ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id) && perkCount('rulersAuthority') && shadowCount ? "Ruler's Authority adds command damage in Hunter fights." : '',
+      move.uiTone === 'shadow-monarch' && perkCount('monarchsInstinct') ? "Monarch's Instinct adds black-violet pressure." : '',
     ].filter(Boolean).join(' ');
     return `
       <button class="move-card system-move-card role-${moveRoles[move.id] ?? 'attack'} hunter-${move.moveType ?? 'basic'}-move ${move.uiTone === 'shadow-monarch' ? 'shadow-monarch-skill' : ''}" data-action="fight-turn-${move.id}" ${move.disabledReason ? 'disabled' : ''}>
@@ -3208,7 +3210,7 @@ function renderHunterLevelRewardPopup() {
             <button class="${option.type === 'perk' ? `system-perk-reward perk-${option.tier ?? 'basic'}` : ''}" data-action="hunter-level-reward-${option.id}">
               ${option.type === 'perk' ? `<em>${escapeHtml(systemPerkRarityLabel(option))}</em>` : ''}
               <strong>${escapeHtml(option.label)}</strong>
-              <span>${escapeHtml(hunterRewardTypeLabel(option))}</span>
+              <span>${escapeHtml(option.description ?? hunterRewardTypeLabel(option))}</span>
             </button>
           `).join('')}
         </section>
