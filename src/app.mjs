@@ -2793,7 +2793,7 @@ function renderShadowDomainsPanel() {
             <p class="eyebrow">Shadow Domains</p>
             <h2>Domain War Map</h2>
           </div>
-          <span class="system-chip">Army ${map.armyPower}</span>
+          <span class="system-chip">Army ${formatArmyPower(map.armyPower)}</span>
         </div>
         <svg class="shadow-domain-map tactical-board" viewBox="0 0 100 100" role="img" aria-label="Interactive Shadow Domain tactical map">
           <rect class="domain-map-backdrop" x="6" y="6" width="88" height="88" rx="6"></rect>
@@ -2805,10 +2805,10 @@ function renderShadowDomainsPanel() {
           </g>
           ${map.domains.map((domain) => `
             <g class="domain-node state-${domain.state} ${selected?.id === domain.id ? 'selected' : ''}" data-action="shadow-domain-select-${domain.id}" tabindex="0" role="button" aria-label="${escapeHtml(domain.name)}">
-              <circle class="domain-node-ring" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 8.5 : 7.2}"></circle>
-              <circle class="domain-node-core" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 5.4 : 4.4}"></circle>
+              <circle class="domain-node-ring" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 5.8 : 4.6}"></circle>
+              <circle class="domain-node-core" cx="${domain.x}" cy="${domain.y}" r="${domain.core ? 3.5 : 2.8}"></circle>
               <text class="domain-node-label" x="${domain.x}" y="${domain.y - 11}">${domain.core ? 'CORE' : domain.name.split(' ')[0].toUpperCase()}</text>
-              <text class="domain-node-power" x="${domain.x}" y="${domain.y + 1}">${domain.enemyPower}</text>
+              <text class="domain-node-power" x="${domain.x}" y="${domain.y + 1}">${compactArmyPower(domain.enemyPower)}</text>
             </g>
           `).join('')}
         </svg>
@@ -2826,8 +2826,8 @@ function renderShadowDomainsPanel() {
           <h2>${escapeHtml(selected?.name ?? 'No Domain')}</h2>
           <p>${escapeHtml(selected?.enemy ?? 'Enemy territory')} controls this region.</p>
           ${renderSystemScanRows([
-            { label: 'Enemy Army', value: String(selected?.enemyPower ?? 0), tone: 'danger' },
-            { label: 'Your Army', value: String(map.armyPower), tone: map.armyPower >= (selected?.enemyPower ?? 1) ? 'clear' : 'danger' },
+            { label: 'Enemy Army', value: formatArmyPower(selected?.enemyPower ?? 0), tone: 'danger' },
+            { label: 'Your Army', value: formatArmyPower(map.armyPower), tone: map.armyPower >= (selected?.enemyPower ?? 1) ? 'clear' : 'danger' },
             { label: 'Reward', value: `+${selected?.rewards?.statPoints ?? 0} stat points`, tone: 'clear' },
             { label: 'Status', value: selected?.lockReason || stateLabel[selected?.state] || 'Ready', tone: selected?.canAttack ? 'active' : selected?.state === 'conquered' ? 'clear' : 'danger' },
           ])}
@@ -3248,6 +3248,17 @@ function gateMoney(value) {
   return `$${Number(value ?? 0).toLocaleString()}`;
 }
 
+function formatArmyPower(value = 0) {
+  return Number(value ?? 0).toLocaleString();
+}
+
+function compactArmyPower(value = 0) {
+  const power = Number(value ?? 0);
+  if (power >= 1000000) return `${Math.round(power / 100000) / 10}M`;
+  if (power >= 1000) return `${Math.round(power / 100) / 10}K`;
+  return String(power);
+}
+
 function hunterGateActivity(hunter) {
   if (hunter.shadowMonarch?.unlocked) {
     return {
@@ -3625,7 +3636,7 @@ function renderHunter() {
           icon: 'DM',
           title: 'Shadow Domains',
           subtitle: 'Use your shadow army on the interactive Domain war map.',
-          meta: `${hunter.domainMap?.conquered?.length ?? 0}/5 conquered`,
+          meta: `${hunter.domainMap?.conquered?.length ?? 0}/25 conquered`,
           action: 'hunter-domains-open',
           tone: 'shadow',
         })}
@@ -3655,7 +3666,7 @@ function renderHunter() {
       ${renderCollapsibleSection({
         id: 'hunter-domains',
         title: 'Shadow Domains',
-        subtitle: `${hunter.domainMap?.conquered?.length ?? 0}/5 territories conquered`,
+        subtitle: `${hunter.domainMap?.conquered?.length ?? 0}/25 territories conquered`,
         body: renderShadowDomainsPanel(),
       })}
       ${hunter.shadowMonarch?.unlocked ? renderCollapsibleSection({

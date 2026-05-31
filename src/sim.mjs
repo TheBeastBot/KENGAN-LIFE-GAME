@@ -118,6 +118,18 @@ const SYSTEM_PERK_VALUES = {
   rulersAuthority: 1,
   systemOverclock: 1,
   abyssalLeech: 1,
+  perfectFootwork: 0.18,
+  manaThreading: 10,
+  predatorRhythm: 0.08,
+  vitalPulse: 0.05,
+  fractureMark: 0.22,
+  afterimageChain: 1,
+  bloodScent: 0.18,
+  coreSight: 0.2,
+  blackFlash: 0.08,
+  limitBreakProtocol: 1,
+  executionWindow: 0.2,
+  monarchsInstinct: 0.24,
 };
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
@@ -210,56 +222,31 @@ const HUNTER_CRAFTING_RECIPES = [
 ];
 
 export const SHADOW_DOMAIN_TEMPLATES = [
-  {
-    id: 'ashen-outskirts',
-    name: 'Ashen Outskirts',
-    enemy: 'Ash Legion Remnants',
-    enemyPower: 34,
-    x: 20,
-    y: 72,
-    rewards: { statPoints: 8, items: { monsterCore: 3, gateShard: 2 }, influence: 10 },
-  },
-  {
-    id: 'iron-bastion',
-    name: 'Iron Bastion',
-    enemy: 'Knight Domain',
-    enemyPower: 62,
-    requires: ['ashen-outskirts'],
-    x: 42,
-    y: 50,
-    rewards: { statPoints: 12, items: { bossEssence: 1, gateShard: 2 }, influence: 14 },
-  },
-  {
-    id: 'bloodwood-front',
-    name: 'Bloodwood Front',
-    enemy: 'Ogre Warband',
-    enemyPower: 86,
-    requires: ['ashen-outskirts'],
-    x: 42,
-    y: 82,
-    rewards: { statPoints: 16, items: { bossEssence: 2, monsterCore: 3 }, influence: 16 },
-  },
-  {
-    id: 'frost-citadel',
-    name: 'Frost Citadel',
-    enemy: 'Warden Host',
-    enemyPower: 126,
-    requires: ['iron-bastion', 'bloodwood-front'],
-    x: 66,
-    y: 38,
-    rewards: { statPoints: 22, items: { bossEssence: 2, redGateShard: 1 }, influence: 18 },
-  },
-  {
-    id: 'abyssal-throne',
-    name: 'Abyssal Throne',
-    enemy: 'Monarch Core Guard',
-    enemyPower: 176,
-    core: true,
-    requires: ['frost-citadel'],
-    x: 82,
-    y: 64,
-    rewards: { statPoints: 40, items: { monarchVial: 1, awakeningRune: 1 }, influence: 25 },
-  },
+  { id: 'ashen-outskirts', name: 'Ashen Outskirts', enemy: 'Ash Legion Remnants', enemyPower: 420, x: 12, y: 82, rewards: { statPoints: 8, items: { monsterCore: 3, gateShard: 2 }, influence: 8 } },
+  { id: 'hollow-market', name: 'Hollow Market', enemy: 'Crawler Battalion', enemyPower: 760, requires: ['ashen-outskirts'], x: 24, y: 70, rewards: { statPoints: 10, items: { monsterCore: 4, gateShard: 2 }, influence: 8 } },
+  { id: 'rust-fort', name: 'Rust Fort', enemy: 'Iron Imp Line', enemyPower: 1250, requires: ['ashen-outskirts'], x: 24, y: 90, rewards: { statPoints: 12, items: { monsterCore: 4, bossEssence: 1 }, influence: 9 } },
+  { id: 'goblin-redoubt', name: 'Goblin Redoubt', enemy: 'Red-Eyed Captains', enemyPower: 1800, requires: ['hollow-market'], x: 36, y: 60, rewards: { statPoints: 14, items: { gateShard: 3, bossEssence: 1 }, influence: 10 } },
+  { id: 'drowned-causeway', name: 'Drowned Causeway', enemy: 'Sentinel Phalanx', enemyPower: 2600, requires: ['hollow-market', 'rust-fort'], x: 38, y: 78, rewards: { statPoints: 16, items: { gateShard: 3, bossEssence: 2 }, influence: 10 } },
+  { id: 'razor-hive', name: 'Razor Hive', enemy: 'Razor-Jaw Packs', enemyPower: 3400, requires: ['rust-fort'], x: 38, y: 92, rewards: { statPoints: 16, items: { monsterCore: 5, bossEssence: 2 }, influence: 10 } },
+  { id: 'bloodwood-front', name: 'Bloodwood Front', enemy: 'Ogre Warband', enemyPower: 5200, requires: ['goblin-redoubt'], x: 50, y: 52, rewards: { statPoints: 20, items: { bossEssence: 2, redGateShard: 1 }, influence: 12 } },
+  { id: 'cathedral-hex', name: 'Cathedral Hex', enemy: 'Crypt Minotaur Guard', enemyPower: 7400, requires: ['goblin-redoubt', 'drowned-causeway'], x: 52, y: 68, rewards: { statPoints: 22, items: { bossEssence: 3, gateShard: 3 }, influence: 12 } },
+  { id: 'venom-marsh', name: 'Venom Marsh', enemy: 'Stalker Ambush Wing', enemyPower: 9200, requires: ['drowned-causeway', 'razor-hive'], x: 52, y: 84, rewards: { statPoints: 24, items: { monsterCore: 6, redGateShard: 1 }, influence: 12 } },
+  { id: 'iron-bastion', name: 'Iron Bastion', enemy: 'Knight Domain', enemyPower: 12000, requires: ['bloodwood-front'], x: 64, y: 40, rewards: { statPoints: 28, items: { bossEssence: 3, redGateShard: 1 }, influence: 14 } },
+  { id: 'frost-citadel', name: 'Frost Citadel', enemy: 'Warden Host', enemyPower: 16500, requires: ['bloodwood-front', 'cathedral-hex'], x: 66, y: 56, rewards: { statPoints: 30, items: { bossEssence: 4, redGateShard: 1 }, influence: 14 } },
+  { id: 'ashen-citadel', name: 'Ashen Citadel', enemy: 'Golem Siege Line', enemyPower: 21000, requires: ['cathedral-hex', 'venom-marsh'], x: 66, y: 72, rewards: { statPoints: 32, items: { bossEssence: 4, redGateShard: 2 }, influence: 14 } },
+  { id: 'void-caster-ring', name: 'Void Caster Ring', enemy: 'Void Spell Array', enemyPower: 28000, requires: ['iron-bastion', 'frost-citadel'], x: 76, y: 34, rewards: { statPoints: 36, items: { bossEssence: 5, monarchVial: 1 }, influence: 16 } },
+  { id: 'demon-knight-yard', name: 'Demon Knight Yard', enemy: 'Black Flame Knights', enemyPower: 36000, requires: ['frost-citadel'], x: 78, y: 50, rewards: { statPoints: 38, items: { redGateShard: 2, monarchVial: 1 }, influence: 16 } },
+  { id: 'lich-observatory', name: 'Lich Observatory', enemy: 'Death Array Legion', enemyPower: 45000, requires: ['frost-citadel', 'ashen-citadel'], x: 78, y: 66, rewards: { statPoints: 40, items: { bossEssence: 5, awakeningRune: 1 }, influence: 16 } },
+  { id: 'dragon-grave-line', name: 'Dragon Grave Line', enemy: 'Dragon Spawn Swarm', enemyPower: 58000, requires: ['void-caster-ring'], x: 86, y: 26, rewards: { statPoints: 48, items: { redGateShard: 3, monarchVial: 1 }, influence: 18 } },
+  { id: 'chaos-knight-span', name: 'Chaos Knight Span', enemy: 'Space Sever Battalion', enemyPower: 72000, requires: ['void-caster-ring', 'demon-knight-yard'], x: 88, y: 42, rewards: { statPoints: 52, items: { bossEssence: 6, monarchVial: 1 }, influence: 18 } },
+  { id: 'red-dragon-rampart', name: 'Red Dragon Rampart', enemy: 'Crimson Dragon Host', enemyPower: 88000, requires: ['demon-knight-yard', 'lich-observatory'], x: 88, y: 58, rewards: { statPoints: 56, items: { redGateShard: 3, awakeningRune: 1 }, influence: 18 } },
+  { id: 'monarch-rift-wall', name: 'Monarch Rift Wall', enemy: 'Avatar Guard', enemyPower: 105000, requires: ['lich-observatory'], x: 88, y: 74, rewards: { statPoints: 60, items: { monarchVial: 2, awakeningRune: 1 }, influence: 20 } },
+  { id: 'sovereign-gate', name: 'Sovereign Gate', enemy: 'Ruler-Class Vanguard', enemyPower: 118000, core: true, requires: ['dragon-grave-line', 'chaos-knight-span'], x: 74, y: 18, rewards: { statPoints: 70, items: { monarchVial: 2, awakeningRune: 1 }, influence: 20 } },
+  { id: 'eclipse-throne', name: 'Eclipse Throne', enemy: 'Eclipse Monarch Guard', enemyPower: 128000, core: true, requires: ['chaos-knight-span', 'red-dragon-rampart'], x: 84, y: 18, rewards: { statPoints: 78, items: { monarchVial: 2, awakeningRune: 2 }, influence: 22 } },
+  { id: 'abyssal-throne', name: 'Abyssal Throne', enemy: 'Monarch Core Guard', enemyPower: 136000, core: true, requires: ['red-dragon-rampart', 'monarch-rift-wall'], x: 94, y: 34, rewards: { statPoints: 86, items: { monarchVial: 3, awakeningRune: 2 }, influence: 22 } },
+  { id: 'crownless-army', name: 'Crownless Army', enemy: 'Nameless Monarch Host', enemyPower: 142000, core: true, requires: ['sovereign-gate', 'eclipse-throne'], x: 94, y: 50, rewards: { statPoints: 92, items: { redGateShard: 4, monarchVial: 3 }, influence: 24 } },
+  { id: 'final-shadow-core', name: 'Final Shadow Core', enemy: 'Planetary Portal Legion', enemyPower: 150000, core: true, requires: ['eclipse-throne', 'abyssal-throne', 'crownless-army'], x: 94, y: 66, rewards: { statPoints: 110, items: { monarchVial: 4, awakeningRune: 3 }, influence: 25 } },
+  { id: 'void-crown', name: 'Void Crown', enemy: 'Last Domain Throne', enemyPower: 155000, core: true, requires: ['final-shadow-core'], x: 82, y: 84, rewards: { statPoints: 130, items: { monarchVial: 5, awakeningRune: 3 }, influence: 25 } },
 ];
 
 export const MONARCH_BOSSES = [
@@ -717,15 +704,27 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   conserveMastery: { id: 'conserveMastery', type: 'perk', perk: 'conservePlus6', tier: 'basic', maxStacks: 10, label: 'Conserve restores +6 more stamina per stack' },
   manaGuardMastery: { id: 'manaGuardMastery', type: 'perk', perk: 'manaGuardPlus3', tier: 'basic', maxStacks: 10, label: 'Mana Guard reduction +3 per stack' },
   dashStrikeMastery: { id: 'dashStrikeMastery', type: 'perk', perk: 'dashStrikePlus4', tier: 'basic', maxStacks: 10, label: 'Dash Strike damage +4 per stack' },
+  perfectFootwork: { id: 'perfectFootwork', type: 'perk', perk: 'perfectFootwork', tier: 'basic', maxStacks: 1, label: 'Perfect Footwork: Dash Strike primes an enemy miss window' },
+  manaThreading: { id: 'manaThreading', type: 'perk', perk: 'manaThreading', tier: 'basic', maxStacks: 1, label: 'Mana Threading: Mana Guard refunds stamina when it blocks pressure' },
+  predatorRhythm: { id: 'predatorRhythm', type: 'perk', perk: 'predatorRhythm', tier: 'basic', maxStacks: 3, label: 'Predator Rhythm: alternating basic moves stacks damage' },
+  vitalPulse: { id: 'vitalPulse', type: 'perk', perk: 'vitalPulse', tier: 'basic', maxStacks: 1, label: 'Vital Pulse: Conserve heals when Hunter health is low' },
   executeCooldown: { id: 'executeCooldown', type: 'perk', perk: 'executeCooldownMinus1', tier: 'rare', maxStacks: 5, label: 'Execute cooldown -1 per stack' },
   analysisCrit: { id: 'analysisCrit', type: 'perk', perk: 'analysisCritPlus3', tier: 'rare', maxStacks: 5, label: 'System analysis crit/read chance +3% per stack' },
   shadowDamage: { id: 'shadowDamage', type: 'perk', perk: 'shadowDamagePlus8', tier: 'rare', maxStacks: 5, label: 'Shadow army Domain damage +8% per stack' },
   weaponSkillDamage: { id: 'weaponSkillDamage', type: 'perk', perk: 'weaponSkillPlus10', tier: 'rare', maxStacks: 5, label: 'Weapon System skill damage +10% per stack' },
+  fractureMark: { id: 'fractureMark', type: 'perk', perk: 'fractureMark', tier: 'rare', maxStacks: 1, label: 'Fracture Mark: Analyze Weakness marks targets for Execute' },
+  afterimageChain: { id: 'afterimageChain', type: 'perk', perk: 'afterimageChain', tier: 'rare', maxStacks: 1, label: 'Afterimage Chain: Dash Strike can cut special cooldowns' },
+  bloodScent: { id: 'bloodScent', type: 'perk', perk: 'bloodScent', tier: 'rare', maxStacks: 1, label: 'Blood Scent: hurt monsters take extra attack damage' },
+  coreSight: { id: 'coreSight', type: 'perk', perk: 'coreSight', tier: 'rare', maxStacks: 1, label: 'Core Sight: analysis follow-ups bite harder into bosses' },
   monarchExecution: { id: 'monarchExecution', type: 'perk', perk: 'monarchExecution', tier: 'special', maxStacks: 1, label: 'Monarch Execution: Execute crushes wounded monsters' },
   absoluteGuard: { id: 'absoluteGuard', type: 'perk', perk: 'absoluteGuard', tier: 'special', maxStacks: 1, label: 'Absolute Guard: Mana Guard restores stamina' },
   rulersAuthority: { id: 'rulersAuthority', type: 'perk', perk: 'rulersAuthority', tier: 'special', maxStacks: 1, label: "Ruler's Authority: Domain conquest and Monarch progression bonus" },
   systemOverclock: { id: 'systemOverclock', type: 'perk', perk: 'systemOverclock', tier: 'special', maxStacks: 1, label: 'System Overclock: all Basic System moves gain flat damage' },
+  blackFlash: { id: 'blackFlash', type: 'perk', perk: 'blackFlash', tier: 'special', maxStacks: 1, label: 'Black Flash: basic moves can spike into a critical System strike' },
+  limitBreakProtocol: { id: 'limitBreakProtocol', type: 'perk', perk: 'limitBreakProtocol', tier: 'special', maxStacks: 1, label: 'Limit Break Protocol: once per fight, low health triggers emergency output' },
+  executionWindow: { id: 'executionWindow', type: 'perk', perk: 'executionWindow', tier: 'special', maxStacks: 1, label: 'Execution Window: Execute spikes after a monster miss or hard outread' },
   abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlocks an ultimate lifesteal System move' },
+  monarchsInstinct: { id: 'monarchsInstinct', type: 'perk', perk: 'monarchsInstinct', tier: 'ultimate', maxStacks: 1, label: "Monarch's Instinct: evolved Shadow Monarch skills gain black-violet pressure" },
 };
 
 function clanPasswordHint(progress = 0) {
@@ -8517,11 +8516,12 @@ function hunterMoveProfile(move, life) {
   };
   const profile = profiles[move.id] ?? profiles.slash;
   if (!hunter.shadowMonarch.unlocked || !SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id]) return profile;
+  const instinctMultiplier = hasSystemPerk(life, 'monarchsInstinct') ? 1 + systemPerkValue(life, 'monarchsInstinct') : 1;
   return {
     ...profile,
-    stat: profile.stat * 1.18 + shadowPower * 0.15,
-    damageBonus: profile.damageBonus + 28 + shadowStrengthTotal * 2,
-    incomingReduction: profile.incomingReduction + 6,
+    stat: (profile.stat * 1.18 + shadowPower * 0.15) * instinctMultiplier,
+    damageBonus: profile.damageBonus + 28 + shadowStrengthTotal * 2 + (instinctMultiplier > 1 ? 22 : 0),
+    incomingReduction: profile.incomingReduction + 6 + (instinctMultiplier > 1 ? 4 : 0),
   };
 }
 
@@ -8536,23 +8536,55 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const opponent = getCombatOpponent(next, fight.opponentId);
   const stats = getHunterEffectiveStats(next);
   const opponentStats = getOpponentStats(opponent);
+  fight.hunterPerkState = fight.hunterPerkState ?? {};
+  const perkState = fight.hunterPerkState;
+  const previousHunterExchange = fight.exchanges?.[0] ?? null;
+  const isBasicMove = move.moveType === 'basic';
+  const isAttackMove = move.id !== 'conserve' && move.id !== 'manaGuard';
+  const bossMonster = Boolean(opponent?.threat?.includes('Boss') || opponent?.threat?.includes('Monarch'));
+  const footworkActive = hasSystemPerk(next, 'perfectFootwork') && perkState.perfectFootworkWindow;
+  if (footworkActive) perkState.perfectFootworkWindow = false;
+  const limitBreakActive = hasSystemPerk(next, 'limitBreakProtocol')
+    && !perkState.limitBreakUsed
+    && healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) <= 25;
+  if (limitBreakActive) perkState.limitBreakUsed = true;
+  if (isBasicMove && hasSystemPerk(next, 'predatorRhythm')) {
+    perkState.predatorRhythmStacks = previousHunterExchange?.moveId && previousHunterExchange.moveId !== move.id
+      ? clamp((perkState.predatorRhythmStacks ?? 0) + 1, 0, systemPerkCount(next, 'predatorRhythm'))
+      : 0;
+  }
+  const rhythmStacks = perkState.predatorRhythmStacks ?? 0;
+  const fractureActive = move.id === 'execute' && hasSystemPerk(next, 'fractureMark') && perkState.fractureMark;
+  const executionWindowActive = move.id === 'execute'
+    && hasSystemPerk(next, 'executionWindow')
+    && (previousHunterExchange?.dodged || (previousHunterExchange?.swing ?? 0) >= 38);
+  if (fractureActive) perkState.fractureMark = false;
   const profile = hunterMoveProfile(move, next);
   const enemyMove = chooseHunterMonsterMove(opponent, fight);
   const staminaCost = hunterMoveStaminaCost(next, move);
   const opponentTactic = enemyMove.category;
-  const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22;
+  const enemyScore = opponentScore(opponent, opponentTactic, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22 - (footworkActive ? 18 : 0);
   const analyzeBonus = fight.systemAnalysis ? 18 + next.hunterWorld.stats.sense * 2 : 0;
-  const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus;
+  const playerScore = profile.stat + fight.meters.playerStamina * 0.28 + fight.meters.momentum * 0.5 + analyzeBonus + (limitBreakActive ? 35 : 0);
   const swing = playerScore - enemyScore;
   const hurtPercent = 100 - healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
   const executeBonus = move.id === 'execute'
-    ? Math.round(hurtPercent / 4) + (hasSystemPerk(next, 'monarchExecution') && hurtPercent >= 65 ? Math.round((fight.meters.maxOpponentHealth ?? 100) * 0.18) : 0)
+    ? Math.round(hurtPercent / 4)
+      + (hasSystemPerk(next, 'monarchExecution') && hurtPercent >= 65 ? Math.round((fight.meters.maxOpponentHealth ?? 100) * 0.18) : 0)
+      + (fractureActive ? Math.round((fight.meters.maxOpponentHealth ?? 100) * systemPerkValue(next, 'fractureMark')) : 0)
+      + (executionWindowActive ? Math.round((fight.meters.maxOpponentHealth ?? 100) * systemPerkValue(next, 'executionWindow')) : 0)
     : 0;
   const opponentDefense = opponentStats.durability * 0.02 + opponentStats.willpower * 0.014 + fight.meters.opponentStamina * 0.018;
   const basicDamageMultiplier = move.moveType === 'basic' ? 1 + systemPerkValue(next, 'basicDamagePlus5') : 1;
   const weaponDamageMultiplier = move.category === 'weapon' ? 1 + systemPerkValue(next, 'weaponSkillPlus10') : 1;
   const overclockBonus = move.moveType === 'basic' && hasSystemPerk(next, 'systemOverclock') ? 12 : 0;
-  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus - opponentDefense)));
+  const rhythmMultiplier = 1 + rhythmStacks * systemPerkValue(next, 'predatorRhythm');
+  const bloodScentMultiplier = hasSystemPerk(next, 'bloodScent') && isAttackMove && hurtPercent >= 65 ? 1 + systemPerkValue(next, 'bloodScent') : 1;
+  const coreSightMultiplier = hasSystemPerk(next, 'coreSight') && bossMonster && fight.systemAnalysis && move.id !== 'analyzeWeakness' ? 1 + systemPerkValue(next, 'coreSight') : 1;
+  const limitBreakMultiplier = limitBreakActive ? 1.25 : 1;
+  const monarchInstinctActive = hasSystemPerk(next, 'monarchsInstinct') && next.hunterWorld.shadowMonarch.unlocked && (SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id] || move.requiresShadowMonarch);
+  const monarchInstinctMultiplier = monarchInstinctActive ? 1 + systemPerkValue(next, 'monarchsInstinct') : 1;
+  const basePlayerDamage = Math.max(1, Math.round(basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
     : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0), 0.05, 0.57);
@@ -8561,24 +8593,49 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
   const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1, guardBias: move.guardBias }, fight, -swing);
   const baseEnemyDamage = Math.max(1, Math.round(monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction));
-  const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0), 0.03, 0.38);
+  const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0) + (footworkActive ? systemPerkValue(next, 'perfectFootwork') : 0), 0.03, footworkActive ? 0.62 : 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
-  const enemyDamage = dodged ? 0 : baseEnemyDamage;
+  let enemyDamage = dodged ? 0 : baseEnemyDamage;
+  const blackFlash = hasSystemPerk(next, 'blackFlash') && isBasicMove && move.id !== 'conserve'
+    && deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'black-flash') < systemPerkValue(next, 'blackFlash');
+  if (blackFlash) playerDamage = Math.round(playerDamage * 1.85 + 12);
 
   tickHunterMoveCooldowns(fight);
   const appliedCooldown = move.moveType === 'special' ? hunterSpecialCooldown(next, move) : 0;
   if (move.moveType === 'special') fight.moveCooldowns[move.id] = appliedCooldown;
+  if (monarchInstinctActive && move.moveType === 'special' && fight.moveCooldowns[move.id]) {
+    fight.moveCooldowns[move.id] = Math.max(1, fight.moveCooldowns[move.id] - 1);
+  }
+  const afterimageChain = hasSystemPerk(next, 'afterimageChain') && move.id === 'dashStrike'
+    && deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'afterimage-chain') < 0.38;
+  if (afterimageChain) {
+    for (const [id, cooldown] of Object.entries(fight.moveCooldowns ?? {})) {
+      const remaining = Math.max(0, cooldown - systemPerkValue(next, 'afterimageChain'));
+      if (remaining) fight.moveCooldowns[id] = remaining;
+      else delete fight.moveCooldowns[id];
+    }
+  }
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   const conserveGain = 18 + systemPerkValue(next, 'conservePlus6');
   const guardRecovery = move.id === 'manaGuard' && hasSystemPerk(next, 'absoluteGuard') ? 8 : 0;
+  const manaThreadingRefund = move.id === 'manaGuard' && hasSystemPerk(next, 'manaThreading') && baseEnemyDamage > enemyDamage && baseEnemyDamage >= 8
+    ? systemPerkValue(next, 'manaThreading')
+    : 0;
+  const limitBreakStamina = limitBreakActive ? 22 : 0;
   fight.meters.playerStamina = move.id === 'conserve'
-    ? clamp(fight.meters.playerStamina + conserveGain, 0, fight.meters.maxPlayerStamina ?? 100)
-    : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 + guardRecovery : 0), 0, fight.meters.maxPlayerStamina ?? 100);
-  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
+    ? clamp(fight.meters.playerStamina + conserveGain + limitBreakStamina, 0, fight.meters.maxPlayerStamina ?? 100)
+    : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 + guardRecovery + manaThreadingRefund : 0) + limitBreakStamina, 0, fight.meters.maxPlayerStamina ?? 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0) - (monarchInstinctActive ? 12 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
   const lifeSteal = move.id === 'abyssalLeech' ? Math.max(1, Math.round(playerDamage * 0.32 + next.hunterWorld.stats.intelligence * 0.8)) : 0;
   if (lifeSteal) fight.meters.playerHealth = clamp(fight.meters.playerHealth + lifeSteal, 0, fight.meters.maxPlayerHealth ?? 100);
+  const vitalPulseHeal = move.id === 'conserve' && hasSystemPerk(next, 'vitalPulse') && healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) <= 50
+    ? Math.max(1, Math.round((fight.meters.maxPlayerHealth ?? 100) * systemPerkValue(next, 'vitalPulse')))
+    : 0;
+  if (vitalPulseHeal) fight.meters.playerHealth = clamp(fight.meters.playerHealth + vitalPulseHeal, 0, fight.meters.maxPlayerHealth ?? 100);
+  if (hasSystemPerk(next, 'perfectFootwork') && move.id === 'dashStrike') perkState.perfectFootworkWindow = true;
+  if (hasSystemPerk(next, 'fractureMark') && move.id === 'analyzeWeakness') perkState.fractureMark = true;
   fight.meters.guard = clamp(fight.meters.guard + move.guardBias, 0, 100);
   fight.meters.momentum = clamp(fight.meters.momentum + Math.round(swing / 8), -50, 50);
   const injuryDefense = stats.durability * 0.014 + stats.flexibility * 0.012 + stats.control * 0.01 + stats.willpower * 0.01;
@@ -8599,6 +8656,18 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.` : '',
     lifeSteal ? ` Abyssal Leech restored ${lifeSteal} health.` : '',
     guardRecovery ? ` Absolute Guard recovery: +${guardRecovery} mana.` : '',
+    manaThreadingRefund ? ` Mana Threading refunded ${manaThreadingRefund} stamina.` : '',
+    vitalPulseHeal ? ` Vital Pulse restored ${vitalPulseHeal} health.` : '',
+    footworkActive ? ' Perfect Footwork blurred the monster timing.' : '',
+    rhythmStacks ? ` Predator Rhythm x${rhythmStacks}.` : '',
+    fractureActive ? ' Fracture Mark detonated through Execute.' : '',
+    afterimageChain ? ' Afterimage Chain cut special cooldowns.' : '',
+    bloodScentMultiplier > 1 ? ' Blood Scent amplified the wounded-target hit.' : '',
+    coreSightMultiplier > 1 ? ' Core Sight exposed the boss core.' : '',
+    blackFlash ? ' Black Flash: a black System spark erupts on impact.' : '',
+    limitBreakActive ? ' Limit Break Protocol restored emergency stamina.' : '',
+    executionWindowActive ? ' Execution Window opened after the monster was outread.' : '',
+    monarchInstinctActive ? " Monarch's Instinct adds black-violet pressure." : '',
     appliedCooldown ? ` Cooldown set: ${appliedCooldown} exchange${appliedCooldown === 1 ? '' : 's'}.` : '',
   ].join('');
   fight.exchanges.unshift({

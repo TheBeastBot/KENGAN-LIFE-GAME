@@ -3794,12 +3794,12 @@ button:active,
 }
 
 .domain-node-label {
-  font-size: 3.1px;
+  font-size: 2.45px;
   opacity: 0.8;
 }
 
 .domain-node-power {
-  font-size: 3.8px;
+  font-size: 2.65px;
 }
 
 .domain-node.state-locked .domain-node-ring {

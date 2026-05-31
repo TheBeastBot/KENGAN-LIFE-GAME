@@ -16,6 +16,7 @@ import {
   HUNTER_MONSTERS,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  HUNTER_LEVEL_REWARD_OPTIONS,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
   MONEY_ACTIONS,
@@ -5798,20 +5799,22 @@ test('Shadow Domains use clickable map state and transform a traced full conquer
       gatesCleared: 55,
       stats: { strength: 35, agility: 35, vitality: 35, sense: 35, intelligence: 35 },
       shadowArmy: [
-        { id: 's1', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 8, role: 'vanguard', armyPower: 95 },
-        { id: 's2', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 12, role: 'elite', armyPower: 150 },
-        { id: 's3', monsterId: 'dragonMonarchBoss', name: 'Dragon Monarch Shadow', rank: 'S', strength: 16, role: 'elite', armyPower: 210 },
+        { id: 's1', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 80, role: 'vanguard', armyPower: 30000 },
+        { id: 's2', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 120, role: 'elite', armyPower: 60000 },
+        { id: 's3', monsterId: 'dragonMonarchBoss', name: 'Dragon Monarch Shadow', rank: 'S', strength: 160, role: 'elite', armyPower: 90000 },
       ],
       monarchTrace: { unlocked: true, stage: 4, influence: 100, completed: true },
-      unlockedSystemPerks: [{ id: 'rulersAuthority', count: 1 }, { id: 'shadowDamagePlus8', count: 3 }],
+      unlockedSystemPerks: [{ id: 'rulersAuthority', count: 1 }],
     },
   };
 
   const initialMap = getShadowDomainMap(life);
+  assert.equal(initialMap.domains.length, 25);
   assert.equal(initialMap.domains.find((domain) => domain.id === 'ashen-outskirts').canAttack, true);
   assert.equal(initialMap.domains.find((domain) => domain.id === 'iron-bastion').state, 'locked');
+  assert.ok(initialMap.domains.find((domain) => domain.id === 'void-crown').enemyPower >= 150000);
 
-  for (const id of ['ashen-outskirts', 'iron-bastion', 'bloodwood-front', 'frost-citadel', 'abyssal-throne']) {
+  for (const id of initialMap.domains.map((domain) => domain.id)) {
     life = battleShadowDomain(life, id);
   }
 
@@ -5820,6 +5823,29 @@ test('Shadow Domains use clickable map state and transform a traced full conquer
   assert.equal(life.hunterWorld.shadowMonarch.evolvedSkills, true);
   assert.ok(life.hunterWorld.statPoints >= 500);
   assert.equal(life.hunterWorld.gateOffers.length, 0);
+});
+
+test('late Shadow Domains reject low-thousands armies', () => {
+  const base = createNewLife({ gender: 'Female', seed: 16021 });
+  const conquered = getShadowDomainMap({
+    ...base,
+    hunterWorld: { ...base.hunterWorld, unlocked: true, playerAwakened: true },
+  }).domains.filter((domain) => domain.id !== 'void-crown').map((domain) => domain.id);
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      domainMap: { conquered, completed: false },
+      shadowArmy: [{ id: 's1', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 20, role: 'elite', armyPower: 5000 }],
+    },
+  };
+
+  const next = battleShadowDomain(life, 'void-crown');
+
+  assert.equal(next.hunterWorld.domainMap.conquered.includes('void-crown'), false);
+  assert.ok(next.log[0].text.includes('failed'));
 });
 
 test('Shadow Monarch evolves basic Hunter skills and stops normal Gate offers', () => {
@@ -5888,4 +5914,90 @@ test('Monarch War defeats all Monarchs and unlocks final System choices', () => 
   assert.equal(defender.hunterWorld.unlocked, true);
   assert.equal(closed.hunterWorld.systemEnding.choice, 'closePortals');
   assert.equal(closed.hunterWorld.unlocked, false);
+});
+
+test('new Hunter fight perks are level-up rewards and do not change Domain War power', () => {
+  const newPerks = [
+    'perfectFootwork',
+    'manaThreading',
+    'predatorRhythm',
+    'vitalPulse',
+    'fractureMark',
+    'afterimageChain',
+    'bloodScent',
+    'coreSight',
+    'blackFlash',
+    'limitBreakProtocol',
+    'executionWindow',
+    'monarchsInstinct',
+  ];
+  const base = createNewLife({ gender: 'Male', seed: 16005 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowArmy: [{ id: 's1', monsterId: 'dragonMonarchBoss', name: 'Dragon Monarch Shadow', rank: 'S', strength: 20, role: 'elite', armyPower: 6000 }],
+    },
+  };
+  const perkLife = {
+    ...life,
+    hunterWorld: {
+      ...life.hunterWorld,
+      unlockedSystemPerks: newPerks.map((id) => ({ id, count: HUNTER_LEVEL_REWARD_OPTIONS[id].maxStacks ?? 1 })),
+    },
+  };
+
+  for (const id of newPerks) {
+    assert.equal(HUNTER_LEVEL_REWARD_OPTIONS[id].type, 'perk');
+    assert.ok(['basic', 'rare', 'special', 'ultimate'].includes(HUNTER_LEVEL_REWARD_OPTIONS[id].tier));
+  }
+  assert.equal(getShadowDomainMap(perkLife).armyPower, getShadowDomainMap(life).armyPower);
+});
+
+test('new Hunter fight perks trigger unique combat effects', () => {
+  const base = createNewLife({ gender: 'Female', seed: 16006 });
+  const fighting = (perks, meters = {}) => ({
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 45,
+      stats: { strength: 25, agility: 25, vitality: 25, sense: 25, intelligence: 25 },
+      shadowMonarch: perks.includes('monarchsInstinct') ? { unlocked: true, evolvedSkills: true, transformedMonth: 1 } : base.hunterWorld.shadowMonarch,
+      unlockedSystemPerks: perks.map((id) => ({ id, count: id === 'predatorRhythm' ? 3 : 1 })),
+    },
+    activeFight: {
+      source: 'hunterQuest',
+      opponentId: 'bloodOgreBoss',
+      round: 1,
+      exchanges: [],
+      moveCooldowns: {},
+      meters: {
+        playerHealth: 80,
+        maxPlayerHealth: 100,
+        opponentHealth: 120,
+        maxOpponentHealth: 120,
+        playerStamina: 90,
+        maxPlayerStamina: 100,
+        opponentStamina: 85,
+        maxOpponentStamina: 100,
+        guard: 0,
+        momentum: 0,
+        ...meters,
+      },
+    },
+  });
+
+  const marked = takeFightTurn(takeFightTurn(fighting(['fractureMark']), 'analyzeWeakness'), 'execute');
+  const rhythm = takeFightTurn(takeFightTurn(fighting(['predatorRhythm']), 'slash'), 'dashStrike');
+  const limit = takeFightTurn(fighting(['limitBreakProtocol'], { playerHealth: 20 }), 'slash');
+  const monarch = takeFightTurn(fighting(['monarchsInstinct']), 'slash');
+
+  assert.match(marked.activeFight.exchanges[0].text, /Fracture Mark/);
+  assert.match(rhythm.activeFight.exchanges[0].text, /Predator Rhythm/);
+  assert.match(limit.activeFight.exchanges[0].text, /Limit Break Protocol/);
+  assert.match(monarch.activeFight.exchanges[0].text, /Monarch's Instinct/);
 });
