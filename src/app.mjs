@@ -4330,8 +4330,14 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === 'hunter-dungeon-dismiss') {
-    hunterDungeonPopupOpen = true;
-    setState(dismissHunterDungeonResult(state));
+    const dismissedDungeonState = dismissHunterDungeonResult(state);
+    const hasPendingHunterPopupAfterDungeon = Boolean(
+      dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length ||
+      dismissedDungeonState.hunterWorld?.arisePrompt ||
+      dismissedDungeonState.hunterWorld?.pendingArisePrompt
+    );
+    hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
+    setState(dismissedDungeonState);
     return;
   }
   if (action.startsWith('hunter-stat-')) {

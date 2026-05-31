@@ -148,6 +148,15 @@ test('Hunter fight reports render before level reward and ARISE popups', async (
   assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderArisePopup()'));
 });
 
+test('Hunter dungeon dismiss releases pending reward and ARISE popups', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /const dismissedDungeonState = dismissHunterDungeonResult\(state\);/);
+  assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingLevelRewards\?\.length/);
+  assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.arisePrompt/);
+  assert.match(appSource, /hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;/);
+});
+
 test('global interaction polish covers core interactive UI and reduced motion', async () => {
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
