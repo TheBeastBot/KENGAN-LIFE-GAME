@@ -139,22 +139,41 @@ test('Hunter System guidance exposes next actions and pending badges', async () 
 
 test('Hunter fight reports render before level reward and ARISE popups', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
-  const match = appSource.match(/function renderFullScreenView\(\) \{[\s\S]*?\n\}/);
+  const match = appSource.match(/function renderHunterFullScreenFlow\(\) \{[\s\S]*?\n\}/);
 
-  assert.ok(match, 'renderFullScreenView should exist');
+  assert.ok(match, 'renderHunterFullScreenFlow should exist');
   const body = match[0];
+  assert.match(appSource, /function hunterMandatoryPopupKind/);
   assert.ok(body.indexOf('renderHunterQuestPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
   assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
   assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderArisePopup()'));
+  assert.ok(body.indexOf('renderHunterLevelRewardPopup()') < body.indexOf('renderArisePopup()'));
 });
 
 test('Hunter dungeon dismiss releases pending reward and ARISE popups', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 
+  assert.match(appSource, /Continue to Level Reward/);
+  assert.match(appSource, /Continue to ARISE/);
   assert.match(appSource, /const dismissedDungeonState = dismissHunterDungeonResult\(state\);/);
   assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingLevelRewards\?\.length/);
   assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.arisePrompt/);
+  assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingArisePrompt/);
   assert.match(appSource, /hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;/);
+  assert.match(appSource, /clearHunterPopupFlags\(\);/);
+});
+
+test('Hunter reward and ARISE actions clear stale popup layers', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /function clearHunterPopupFlags/);
+  assert.match(appSource, /function applyHunterPopupHandoff/);
+  assert.match(appSource, /const levelRewardState = claimHunterLevelReward\(state, action\.replace\('hunter-level-reward-', ''\)\);/);
+  assert.match(appSource, /applyHunterPopupHandoff\(levelRewardState\);/);
+  assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
+  assert.match(appSource, /applyHunterPopupHandoff\(ariseAttemptState\);/);
+  assert.match(appSource, /const dismissedAriseState = dismissArisePrompt\(state\);/);
+  assert.match(appSource, /hunterDungeonPopupOpen = !hasMandatoryHunterPopup\(dismissedAriseState\.hunterWorld\)/);
 });
 
 test('global interaction polish covers core interactive UI and reduced motion', async () => {

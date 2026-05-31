@@ -1028,12 +1028,40 @@ function render() {
 function renderFullScreenView() {
   return navMenuOpen
     ? renderNavMenu()
-    : renderHunterQuestPopup()
-      || renderHunterDungeonPopup()
-      || renderHunterLevelRewardPopup()
-      || renderArisePopup()
+    : renderHunterFullScreenFlow()
       || renderHunterItemsPopup()
       || renderSystemShopPopup();
+}
+
+function hunterMandatoryPopupKind(hunter = state?.hunterWorld) {
+  if (hunter?.pendingLevelRewards?.length) return 'levelReward';
+  if (hunter?.arisePrompt) return 'arise';
+  return '';
+}
+
+function hasMandatoryHunterPopup(hunter = state?.hunterWorld) {
+  return Boolean(hunterMandatoryPopupKind(hunter));
+}
+
+function renderHunterFullScreenFlow() {
+  if (state.activeFight?.source === 'hunterQuest') return renderHunterQuestPopup();
+  if (state.activeFight?.source === 'hunterDungeon' || state.hunterWorld?.activeDungeon?.completed) return renderHunterDungeonPopup();
+  if (hunterMandatoryPopupKind() === 'levelReward') return renderHunterLevelRewardPopup();
+  if (hunterMandatoryPopupKind() === 'arise') return renderArisePopup();
+  if (hunterQuestPopupOpen) return renderHunterQuestPopup();
+  if (hunterDungeonPopupOpen) return renderHunterDungeonPopup();
+  return '';
+}
+
+function clearHunterPopupFlags() {
+  hunterQuestPopupOpen = false;
+  hunterDungeonPopupOpen = false;
+  hunterItemsPopupOpen = false;
+  systemShopPopupOpen = false;
+}
+
+function applyHunterPopupHandoff(nextState) {
+  if (hasMandatoryHunterPopup(nextState?.hunterWorld)) clearHunterPopupFlags();
 }
 
 function hasOpenModal() {
@@ -3544,7 +3572,7 @@ function renderHunterGateOffers() {
 function renderHunterDungeonFightReport(fight) {
   const dungeon = state.hunterWorld?.activeDungeon;
   const action = dungeon?.bossDefeated || dungeon?.failed ? 'hunter-dungeon-dismiss' : 'hunter-dungeon-advance';
-  const label = dungeon?.bossDefeated ? 'Return to Gate Board' : dungeon?.failed ? 'Leave Failed Gate' : 'Proceed Deeper';
+  const label = dungeon?.bossDefeated ? hunterDungeonReportActionLabel(state.hunterWorld) : dungeon?.failed ? 'Leave Failed Gate' : 'Proceed Deeper';
   return `
     <article class="fight-report dungeon-report system-window ${dungeon?.bossDefeated ? 'complete' : dungeon?.failed ? 'failed' : 'active'}">
       <h2>${escapeHtml(fight.result.summary)}</h2>
@@ -3568,6 +3596,12 @@ function renderHunterDungeonFightReport(fight) {
       ${button(label, action, 'primary wide')}
     </article>
   `;
+}
+
+function hunterDungeonReportActionLabel(hunter = state.hunterWorld) {
+  if (hunter?.pendingLevelRewards?.length) return 'Continue to Level Reward';
+  if (hunter?.arisePrompt || hunter?.pendingArisePrompt) return 'Continue to ARISE';
+  return 'Return to Gate Board';
 }
 
 function renderHunterDungeonPanel() {
@@ -3612,7 +3646,7 @@ function renderHunterDungeonPanel() {
 }
 
 function renderHunterDungeonPopup() {
-  if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon') return '';
+  if (!hunterDungeonPopupOpen && state.activeFight?.source !== 'hunterDungeon' && !state.hunterWorld?.activeDungeon?.completed) return '';
   return `
     <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup dungeon-popup system-popup" data-scroll-key="hunter-dungeon">
@@ -4229,7 +4263,9 @@ function handleAction(action, source = null) {
     return;
   }
   if (action.startsWith('hunter-level-reward-')) {
-    setState(claimHunterLevelReward(state, action.replace('hunter-level-reward-', '')));
+    const levelRewardState = claimHunterLevelReward(state, action.replace('hunter-level-reward-', ''));
+    applyHunterPopupHandoff(levelRewardState);
+    setState(levelRewardState);
     return;
   }
   if (action === 'hunter-daily') {
@@ -4336,6 +4372,7 @@ function handleAction(action, source = null) {
       dismissedDungeonState.hunterWorld?.arisePrompt ||
       dismissedDungeonState.hunterWorld?.pendingArisePrompt
     );
+    if (hasPendingHunterPopupAfterDungeon) clearHunterPopupFlags();
     hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
     setState(dismissedDungeonState);
     return;
@@ -4399,11 +4436,16 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === 'hunter-arise-attempt') {
-    setState(attemptAriseShadow(state));
+    const ariseAttemptState = attemptAriseShadow(state);
+    applyHunterPopupHandoff(ariseAttemptState);
+    setState(ariseAttemptState);
     return;
   }
   if (action === 'hunter-arise-dismiss') {
-    setState(dismissArisePrompt(state));
+    const dismissedAriseState = dismissArisePrompt(state);
+    clearHunterPopupFlags();
+    hunterDungeonPopupOpen = !hasMandatoryHunterPopup(dismissedAriseState.hunterWorld) && Boolean(dismissedAriseState.hunterWorld?.unlocked && !dismissedAriseState.hunterWorld?.shadowMonarch?.unlocked);
+    setState(dismissedAriseState);
     return;
   }
   if (action.startsWith('trash-')) {

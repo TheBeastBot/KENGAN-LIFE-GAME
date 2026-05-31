@@ -890,9 +890,18 @@ test('ARISE waits until pending Hunter level rewards are claimed', () => {
   assert.equal(cleared.hunterWorld.pendingLevelRewards.length, 1);
   assert.equal(cleared.hunterWorld.arisePrompt, null);
   assert.ok(cleared.hunterWorld.pendingArisePrompt);
+  assert.equal(cleared.hunterWorld.activeDungeon.bossDefeated, true);
+  assert.equal(cleared.hunterWorld.gateOffers.length, 0);
 
-  const rewardId = cleared.hunterWorld.pendingLevelRewards[0].options[0].id;
-  const rewarded = claimHunterLevelReward(cleared, rewardId);
+  const dismissedReport = dismissHunterDungeonResult(cleared);
+  assert.equal(dismissedReport.hunterWorld.activeDungeon, null);
+  assert.equal(dismissedReport.hunterWorld.pendingLevelRewards.length, 1);
+  assert.equal(dismissedReport.hunterWorld.arisePrompt, null);
+  assert.ok(dismissedReport.hunterWorld.pendingArisePrompt);
+  assert.ok(dismissedReport.hunterWorld.gateOffers.length > 0);
+
+  const rewardId = dismissedReport.hunterWorld.pendingLevelRewards[0].options[0].id;
+  const rewarded = claimHunterLevelReward(dismissedReport, rewardId);
 
   assert.equal(rewarded.hunterWorld.pendingLevelRewards.length, 0);
   assert.equal(rewarded.hunterWorld.pendingArisePrompt, null);
