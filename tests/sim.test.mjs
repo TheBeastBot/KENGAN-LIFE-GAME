@@ -4421,6 +4421,18 @@ test('fast enemies can dodge the player attack outright', () => {
   assert.ok(next.activeFight.exchanges[0].text.includes('Enemy dodge:'));
 });
 
+test('critically wounded enemies cannot dodge the finishing hit forever', () => {
+  const life = startFight(createNewLife({ gender: 'Male', seed: 4 }), 'localBrawler');
+  life.activeFight.meters.opponentHealth = 1;
+
+  const next = takeFightTurn(life, 'jab');
+
+  assert.equal(next.activeFight.exchanges[0].opponentDodged, false);
+  assert.ok(next.activeFight.exchanges[0].playerDamage >= 1);
+  assert.equal(next.activeFight.finished, true);
+  assert.equal(next.activeFight.result.won, true);
+});
+
 test('slow enemies rarely dodge clean technical entries', () => {
   const base = createNewLife({ gender: 'Female', seed: 541 });
   const sharpCounter = {

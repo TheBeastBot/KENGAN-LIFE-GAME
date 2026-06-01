@@ -7109,6 +7109,12 @@ function opponentDodgeResult(life, opponent, tactic, opponentTactic, fight, swin
   if (tactic === 'defend' || tactic === 'conserve') {
     return { dodged: false, chance: 0 };
   }
+  const opponentHealth = fight.meters?.opponentHealth ?? 0;
+  const maxOpponentHealth = fight.meters?.maxOpponentHealth ?? 100;
+  const criticalHealth = Math.max(3, Math.ceil(maxOpponentHealth * 0.02));
+  if (opponentHealth <= criticalHealth) {
+    return { dodged: false, chance: 0 };
+  }
   const stats = getOpponentStats(opponent);
   const tacticBonus = {
     pressure: 0.09,
