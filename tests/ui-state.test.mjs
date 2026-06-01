@@ -165,6 +165,18 @@ test('Hunter dungeon dismiss releases pending reward and ARISE popups', async ()
   assert.match(appSource, /clearHunterPopupFlags\(\);/);
 });
 
+test('Hunter dungeon close dismisses completed boss reports instead of trapping the overlay', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const match = appSource.match(/if \(action === 'hunter-dungeon-close'\) \{[\s\S]*?\n  \}/);
+
+  assert.ok(match, 'hunter-dungeon-close handler should exist');
+  const body = match[0];
+  assert.match(body, /state\.hunterWorld\?\.activeDungeon\?\.completed/);
+  assert.match(body, /dismissHunterDungeonResult\(state\)/);
+  assert.match(body, /hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;/);
+  assert.ok(body.indexOf('dismissHunterDungeonResult(state)') < body.indexOf('setState(dismissedDungeonState);'));
+});
+
 test('Hunter reward and ARISE actions clear stale popup layers', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 

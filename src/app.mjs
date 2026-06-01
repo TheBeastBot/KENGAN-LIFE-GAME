@@ -4353,6 +4353,18 @@ function handleAction(action, source = null) {
     return;
   }
   if (action === 'hunter-dungeon-close') {
+    if (state.hunterWorld?.activeDungeon?.completed) {
+      const dismissedDungeonState = dismissHunterDungeonResult(state);
+      const hasPendingHunterPopupAfterDungeon = Boolean(
+        dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length ||
+        dismissedDungeonState.hunterWorld?.arisePrompt ||
+        dismissedDungeonState.hunterWorld?.pendingArisePrompt
+      );
+      if (hasPendingHunterPopupAfterDungeon) clearHunterPopupFlags();
+      hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
+      setState(dismissedDungeonState);
+      return;
+    }
     hunterDungeonPopupOpen = false;
     render();
     return;
