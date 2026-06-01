@@ -332,6 +332,7 @@ const RED_GATE_BOSS_IDS = {
   A: 'redDemonKnight',
   S: 'redDragonMonarch',
 };
+const RED_GATE_BASE_BOSS_IDS = {};
 for (const [rank, bossId, baseBossId] of [
   ['E', 'redGoblinCaptain', 'goblinCaptain'],
   ['D', 'redIronKnight', 'ironKnightBoss'],
@@ -341,6 +342,7 @@ for (const [rank, bossId, baseBossId] of [
   ['S', 'redDragonMonarch', 'dragonMonarchBoss'],
 ]) {
   const boss = HUNTER_MONSTERS[baseBossId];
+  RED_GATE_BASE_BOSS_IDS[bossId] = baseBossId;
   HUNTER_MONSTERS[bossId] = {
     ...boss,
     name: `Elite Red ${boss.name}`,
@@ -349,6 +351,102 @@ for (const [rank, bossId, baseBossId] of [
     risk: Math.round(boss.risk * 1.25),
   };
 }
+
+const SHADOW_RANK_PASSIVE_SCALE = {
+  E: 1,
+  D: 1.2,
+  C: 1.55,
+  B: 1.9,
+  A: 2.35,
+  S: 3,
+};
+const RED_GATE_SHADOW_PASSIVE_MULTIPLIER = 1.25;
+const SHADOW_PASSIVE_CATALOG = {
+  goblinCaptain: {
+    id: 'dirty-feint',
+    label: 'Dirty Feint Echo',
+    tone: 'feint',
+    effects: { analysisCritChance: 0.015 },
+    description: 'After Analyze Weakness, follow-up attacks gain crit/read pressure.',
+  },
+  razorJawAlpha: {
+    id: 'pack-frenzy',
+    label: 'Pack Frenzy Echo',
+    tone: 'feral',
+    effects: { basicDamageMultiplier: 0.014, critChance: 0.008 },
+    description: 'Basic attacks gain bite pressure and a small crit/read chance.',
+  },
+  ironKnightBoss: {
+    id: 'guard-break',
+    label: 'Guard-Break Echo',
+    tone: 'steel',
+    effects: { weaponDamageMultiplier: 0.025, specialFlatDamage: 2 },
+    description: 'Weapon and special skills hit harder through armored targets.',
+  },
+  drownedSentinel: {
+    id: 'undertow-guard',
+    label: 'Undertow Guard Echo',
+    tone: 'tide',
+    effects: { incomingReduction: 2, staminaDamage: 2 },
+    description: 'Reduces incoming damage and drags extra stamina from monsters.',
+  },
+  bloodOgreBoss: {
+    id: 'maul-pressure',
+    label: 'Maul Pressure Echo',
+    tone: 'brutal',
+    effects: { specialFlatDamage: 4, basicDamageMultiplier: 0.015 },
+    description: 'Heavy System hits gain blunt force from the Blood Ogre shadow.',
+  },
+  cryptMinotaur: {
+    id: 'labyrinth-charge',
+    label: 'Labyrinth Charge Echo',
+    tone: 'brutal',
+    effects: { specialFlatDamage: 3, critChance: 0.01 },
+    description: 'Special attacks hit harder and find cleaner charge lanes.',
+  },
+  frostWardenBoss: {
+    id: 'ice-armor',
+    label: 'Ice Armor Echo',
+    tone: 'frost',
+    effects: { incomingReduction: 2, staminaDamage: 2 },
+    description: 'Incoming damage is reduced and your hits sap monster stamina.',
+  },
+  ashGolemBoss: {
+    id: 'stone-body',
+    label: 'Stone Body Echo',
+    tone: 'stone',
+    effects: { incomingReduction: 3 },
+    description: 'A dense ash shell reduces incoming monster damage.',
+  },
+  demonKnightBoss: {
+    id: 'black-flame',
+    label: 'Black Flame Echo',
+    tone: 'flame',
+    effects: { specialDamageMultiplier: 0.025, shadowDamageMultiplier: 0.035 },
+    description: 'Special and shadow-linked System skills burn hotter.',
+  },
+  archLichBoss: {
+    id: 'death-array',
+    label: 'Death Array Echo',
+    tone: 'hex',
+    effects: { analysisCritChance: 0.025, commandDamage: 2 },
+    description: 'Analysis follow-ups gain crit pressure and command damage.',
+  },
+  dragonMonarchBoss: {
+    id: 'calamity-breath',
+    label: 'Calamity Breath Echo',
+    tone: 'calamity',
+    effects: { shadowDamageMultiplier: 0.05, commandDamage: 5 },
+    description: 'Shadow-linked skills gain calamity damage and command pressure.',
+  },
+  monarchAvatarBoss: {
+    id: 'ruin-decree',
+    label: 'Ruin Decree Echo',
+    tone: 'decree',
+    effects: { allDamageMultiplier: 0.025, commandDamage: 6, incomingReduction: 1 },
+    description: 'All attacks gain ruin pressure, command damage, and protection.',
+  },
+};
 
 const HUNTER_MONSTER_ATTACK_LABELS = {
   systemGoblinScout: ['Raking Lunge', 'Ankle Bite', 'Shriek Pounce'],
@@ -973,6 +1071,161 @@ function shadowRole(monster = {}, rank = 'E') {
   return HUNTER_RANKS.indexOf(rank) >= HUNTER_RANKS.indexOf('A') ? 'elite' : 'vanguard';
 }
 
+function shadowPassiveBaseMonsterId(monsterId) {
+  return RED_GATE_BASE_BOSS_IDS[monsterId] ?? monsterId;
+}
+
+function shadowPassiveTier(rank = 'E') {
+  return HUNTER_RANKS.includes(rank) ? rank : 'E';
+}
+
+function shadowPassiveScale(rank = 'E', monsterId = null) {
+  const base = SHADOW_RANK_PASSIVE_SCALE[shadowPassiveTier(rank)] ?? 1;
+  return base * (RED_GATE_BASE_BOSS_IDS[monsterId] ? RED_GATE_SHADOW_PASSIVE_MULTIPLIER : 1);
+}
+
+function inferShadowPassiveTemplate(monster = {}, monsterId = null) {
+  const signature = `${monster.style ?? ''} ${(monster.strengths ?? []).join(' ')} ${monster.temperament ?? ''}`.toLowerCase();
+  if (signature.includes('armor') || signature.includes('guard') || signature.includes('warden') || signature.includes('golem') || signature.includes('body')) {
+    return {
+      id: 'armored-echo',
+      label: 'Armored Echo',
+      tone: 'stone',
+      effects: { incomingReduction: 2 },
+      description: 'This shadow hardens your guard and reduces incoming damage.',
+    };
+  }
+  if (signature.includes('ambush') || signature.includes('stalker') || signature.includes('fang') || signature.includes('feint')) {
+    return {
+      id: 'ambush-echo',
+      label: 'Ambush Echo',
+      tone: 'feint',
+      effects: { critChance: 0.012 },
+      description: 'This shadow sharpens openings and adds crit/read chance.',
+    };
+  }
+  if (signature.includes('lance') || signature.includes('caster') || signature.includes('array') || signature.includes('spell') || signature.includes('mana')) {
+    return {
+      id: 'mana-array',
+      label: 'Mana Array Echo',
+      tone: 'hex',
+      effects: { specialDamageMultiplier: 0.02, analysisCritChance: 0.012 },
+      description: 'This shadow reinforces special skills and analysis follow-ups.',
+    };
+  }
+  if (signature.includes('flame') || signature.includes('breath') || signature.includes('catastrophe') || signature.includes('calamity')) {
+    return {
+      id: 'cataclysm-echo',
+      label: 'Cataclysm Echo',
+      tone: 'calamity',
+      effects: { shadowDamageMultiplier: 0.03, specialDamageMultiplier: 0.018 },
+      description: 'This shadow empowers special and shadow-linked System attacks.',
+    };
+  }
+  return {
+    id: 'pressure-echo',
+    label: `${monster?.name ?? labelFromId(monsterId)} Echo`,
+    tone: 'brutal',
+    effects: { basicDamageMultiplier: 0.012, specialFlatDamage: 1 },
+    description: 'This shadow adds steady pressure to your Hunter attacks.',
+  };
+}
+
+function scaledShadowPassiveEffects(effects = {}, scale = 1) {
+  return Object.fromEntries(Object.entries(effects).map(([key, value]) => {
+    const scaled = value * scale;
+    const rounded = key.includes('Multiplier') || key.includes('Chance')
+      ? Math.round(scaled * 1000) / 1000
+      : Math.max(1, Math.round(scaled));
+    return [key, rounded];
+  }));
+}
+
+function shadowPassiveEffectText(effects = {}) {
+  const parts = [];
+  if (effects.basicDamageMultiplier) parts.push(`+${Math.round(effects.basicDamageMultiplier * 100)}% basic damage`);
+  if (effects.specialDamageMultiplier) parts.push(`+${Math.round(effects.specialDamageMultiplier * 100)}% special damage`);
+  if (effects.shadowDamageMultiplier) parts.push(`+${Math.round(effects.shadowDamageMultiplier * 100)}% shadow skill damage`);
+  if (effects.weaponDamageMultiplier) parts.push(`+${Math.round(effects.weaponDamageMultiplier * 100)}% weapon skill damage`);
+  if (effects.allDamageMultiplier) parts.push(`+${Math.round(effects.allDamageMultiplier * 100)}% all damage`);
+  if (effects.specialFlatDamage) parts.push(`+${effects.specialFlatDamage} special damage`);
+  if (effects.commandDamage) parts.push(`+${effects.commandDamage} command damage`);
+  if (effects.incomingReduction) parts.push(`-${effects.incomingReduction} incoming damage`);
+  if (effects.staminaDamage) parts.push(`+${effects.staminaDamage} stamina damage`);
+  if (effects.critChance) parts.push(`+${Math.round(effects.critChance * 100)}% crit/read chance`);
+  if (effects.analysisCritChance) parts.push(`+${Math.round(effects.analysisCritChance * 100)}% analysis crit/read chance`);
+  return parts.join(' / ');
+}
+
+export function getShadowPassive(shadow = {}) {
+  const monsterId = shadow.monsterId ?? shadow.sourceMonsterId ?? null;
+  const baseMonsterId = shadowPassiveBaseMonsterId(monsterId);
+  const monster = HUNTER_MONSTERS[monsterId] ?? HUNTER_MONSTERS[baseMonsterId] ?? null;
+  const rank = shadow.rank ?? monster?.tier ?? 'E';
+  const template = SHADOW_PASSIVE_CATALOG[monsterId]
+    ?? SHADOW_PASSIVE_CATALOG[baseMonsterId]
+    ?? inferShadowPassiveTemplate(monster, monsterId);
+  const scale = shadowPassiveScale(rank, monsterId);
+  const effects = scaledShadowPassiveEffects(template.effects, scale);
+  const redGate = Boolean(RED_GATE_BASE_BOSS_IDS[monsterId]);
+  const label = `${redGate ? 'Crimson ' : ''}${template.label}`;
+  return {
+    id: redGate ? `red-${template.id}` : template.id,
+    baseId: template.id,
+    label,
+    description: `${template.description} ${shadowPassiveEffectText(effects)}.`,
+    effectText: shadowPassiveEffectText(effects),
+    tone: template.tone,
+    rank: shadowPassiveTier(rank),
+    scale: Math.round(scale * 100) / 100,
+    redGate,
+    effects,
+  };
+}
+
+function activeShadowPassiveEffects(hunterWorld, context = {}) {
+  const shadows = normalizeShadowArmy(hunterWorld?.shadowArmy);
+  const totals = {
+    basicDamageMultiplier: 0,
+    specialDamageMultiplier: 0,
+    shadowDamageMultiplier: 0,
+    weaponDamageMultiplier: 0,
+    allDamageMultiplier: 0,
+    specialFlatDamage: 0,
+    commandDamage: 0,
+    incomingReduction: 0,
+    staminaDamage: 0,
+    critChance: 0,
+    analysisCritChance: 0,
+  };
+  let strongest = null;
+  for (const shadow of shadows) {
+    const passive = shadow.passive ?? getShadowPassive(shadow);
+    for (const [key, value] of Object.entries(passive.effects ?? {})) {
+      if (Number.isFinite(value)) totals[key] = (totals[key] ?? 0) + value;
+    }
+    const weight = Object.values(passive.effects ?? {}).reduce((sum, value) => sum + Math.abs(value), 0) * (passive.scale ?? 1);
+    if (!strongest || weight > strongest.weight) strongest = { shadow, passive, weight };
+  }
+  const move = context.move ?? {};
+  const activeDamageMultiplier = 1
+    + totals.allDamageMultiplier
+    + (move.moveType === 'basic' ? totals.basicDamageMultiplier : 0)
+    + (move.moveType === 'special' ? totals.specialDamageMultiplier : 0)
+    + (move.category === 'weapon' ? totals.weaponDamageMultiplier : 0)
+    + (context.shadowLinkedSkill ? totals.shadowDamageMultiplier : 0);
+  const flatDamage = (move.moveType === 'special' ? totals.specialFlatDamage : 0)
+    + (context.shadowLinkedSkill || move.moveType === 'special' ? totals.commandDamage : 0);
+  const critChance = totals.critChance + (context.analysisFollowUpActive ? totals.analysisCritChance : 0);
+  return {
+    ...totals,
+    activeDamageMultiplier,
+    flatDamage,
+    critChance,
+    strongest,
+  };
+}
+
 function shadowArmyPower(hunterWorld) {
   const hunter = normalizeHunterWorld(hunterWorld);
   const base = hunter.shadowArmy.reduce((sum, shadow) => sum + (shadow.armyPower ?? shadowStrength(shadow) * 10), 0);
@@ -987,6 +1240,7 @@ function normalizeShadowArmy(shadowArmy = []) {
     .map((shadow, index) => {
       const monster = HUNTER_MONSTERS[shadow.monsterId] ?? HUNTER_MONSTERS[shadow.sourceMonsterId] ?? null;
       const rank = shadow.rank ?? monster?.tier ?? DEFAULT_HUNTER_WORLD.rank;
+      const passive = getShadowPassive({ ...shadow, rank });
       return {
         ...shadow,
         id: typeof shadow.id === 'string' ? shadow.id : `shadow-${index + 1}`,
@@ -996,6 +1250,11 @@ function normalizeShadowArmy(shadowArmy = []) {
         strength: shadowStrength({ ...shadow, rank }),
         role: shadow.role ?? shadowRole(monster, rank),
         armyPower: Math.max(1, Math.floor(shadow.armyPower ?? shadowStrength({ ...shadow, rank }) * 10)),
+        passive,
+        passiveId: passive.id,
+        passiveLabel: passive.label,
+        passiveDescription: passive.description,
+        passiveTone: passive.tone,
       };
     });
 }
@@ -1017,6 +1276,7 @@ function createShadowFromBoss(life, monsterId, source = 'ARISE') {
   const power = 35 + life.hunterWorld.level * 4 + (monster?.power ?? 0) / 3;
   const strength = shadowStrength({ monsterId, rank, power });
   const role = shadowRole(monster, rank);
+  const passive = getShadowPassive({ monsterId, rank });
   return {
     id: `${monsterId}-${life.hunterWorld.shadowArmy.length + 1}`,
     monsterId,
@@ -1029,6 +1289,11 @@ function createShadowFromBoss(life, monsterId, source = 'ARISE') {
     strength,
     armyPower: strength * 14 + Math.floor((monster?.power ?? 0) / 8),
     power,
+    passive,
+    passiveId: passive.id,
+    passiveLabel: passive.label,
+    passiveDescription: passive.description,
+    passiveTone: passive.tone,
   };
 }
 
@@ -3895,6 +4160,8 @@ export function getShadowArmySummary(life) {
   const hunter = normalizeHunterWorld(life?.hunterWorld);
   const totalStrength = shadowArmyStrength(hunter);
   const armyPower = shadowArmyPower(hunter);
+  const activePassives = activeShadowPassiveEffects(hunter);
+  const passiveCount = hunter.shadowArmy.filter((shadow) => shadow.passiveId || shadow.passive).length;
   return {
     count: hunter.shadowArmy.length,
     totalStrength,
@@ -3904,10 +4171,16 @@ export function getShadowArmySummary(life) {
       sourceBoss: HUNTER_MONSTERS[shadow.monsterId]?.name ?? shadow.sourceBoss ?? labelFromId(shadow.monsterId),
       strength: shadowStrength(shadow),
       armyPower: shadow.armyPower ?? shadowStrength(shadow) * 10,
+      passive: shadow.passive ?? getShadowPassive(shadow),
+      passiveId: shadow.passiveId ?? shadow.passive?.id,
+      passiveLabel: shadow.passiveLabel ?? shadow.passive?.label,
+      passiveDescription: shadow.passiveDescription ?? shadow.passive?.description,
+      passiveTone: shadow.passiveTone ?? shadow.passive?.tone,
     })),
     bonuses: [
       `Domain army pressure: ${armyPower} conquest power`,
       `Territory control bonus: +${hunter.shadowArmy.length * 2 + totalStrength}`,
+      passiveCount ? `Shadow passives active: ${passiveCount} boss echo${passiveCount === 1 ? '' : 'es'} / strongest ${activePassives.strongest?.passive?.label ?? 'none'}` : 'Shadow passives active: none',
       hunter.shadowArmy.length >= 3 ? 'Monarch Trace readiness: online' : `Monarch Trace readiness: ${hunter.shadowArmy.length}/3 shadows`,
     ],
   };
@@ -8569,6 +8842,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const shadowLinkedSkill = ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id)
     || Boolean(SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id])
     || Boolean(move.requiresShadowMonarch);
+  const analysisFollowUpActive = Boolean(fight.systemAnalysis) && move.id !== 'analyzeWeakness';
+  const shadowPassive = activeShadowPassiveEffects(next.hunterWorld, { move, shadowLinkedSkill, analysisFollowUpActive });
   const footworkActive = hasSystemPerk(next, 'perfectFootwork') && perkState.perfectFootworkWindow;
   if (footworkActive) perkState.perfectFootworkWindow = false;
   const limitBreakActive = hasSystemPerk(next, 'limitBreakProtocol')
@@ -8625,15 +8900,17 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const monarchInstinctActive = hasSystemPerk(next, 'monarchsInstinct') && next.hunterWorld.shadowMonarch.unlocked && (SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id] || move.requiresShadowMonarch);
   const monarchInstinctMultiplier = monarchInstinctActive ? 1 + systemPerkValue(next, 'monarchsInstinct') : 1;
   const desperationMultiplier = desperationSlash ? 0.42 : 1;
-  const basePlayerDamage = Math.max(1, Math.round(desperationMultiplier * basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus - opponentDefense)));
+  const shadowPassiveMultiplier = Math.max(1, shadowPassive.activeDamageMultiplier);
+  const shadowPassiveFlatDamage = shadowPassive.flatDamage;
+  const basePlayerDamage = Math.max(1, Math.round(desperationMultiplier * basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * shadowPassiveMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus + shadowPassiveFlatDamage - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
-    : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0), 0.05, 0.57);
+    : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0) + shadowPassive.critChance, 0.05, 0.67);
   const criticalRoll = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'hunter-crit');
   const critical = criticalRoll < criticalChance;
   let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
   const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1, guardBias: move.guardBias }, fight, -swing);
-  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction));
+  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction - shadowPassive.incomingReduction));
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0) + (footworkActive ? systemPerkValue(next, 'perfectFootwork') : 0), 0.03, footworkActive ? 0.62 : 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   let enemyDamage = dodged ? 0 : baseEnemyDamage;
@@ -8656,7 +8933,6 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
       else delete fight.moveCooldowns[id];
     }
   }
-  const analysisFollowUpActive = Boolean(fight.systemAnalysis) && move.id !== 'analyzeWeakness';
   const analysisCritBonus = analysisFollowUpActive ? systemPerkValue(next, 'analysisCritPlus3') : 0;
   fight.systemAnalysis = move.id === 'analyzeWeakness';
   const conserveBonus = systemPerkValue(next, 'conservePlus6');
@@ -8669,7 +8945,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   fight.meters.playerStamina = move.id === 'conserve'
     ? clamp(fight.meters.playerStamina + conserveGain + limitBreakStamina, 0, fight.meters.maxPlayerStamina ?? 100)
     : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 + guardRecovery + manaThreadingRefund : 0) + limitBreakStamina, 0, fight.meters.maxPlayerStamina ?? 100);
-  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - (move.id === 'analyzeWeakness' ? 8 : 0) - (monarchInstinctActive ? 12 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - shadowPassive.staminaDamage - (move.id === 'analyzeWeakness' ? 8 : 0) - (monarchInstinctActive ? 12 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
   const lifeSteal = move.id === 'abyssalLeech' ? Math.max(1, Math.round(playerDamage * 0.32 + next.hunterWorld.stats.intelligence * 0.8)) : 0;
@@ -8696,6 +8972,15 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     : analysisFollowUpActive
       ? ' The previous analysis turns one monster habit into a target.'
       : '';
+  const shadowPassiveLine = shadowPassive.strongest && (
+    shadowPassiveMultiplier > 1
+    || shadowPassiveFlatDamage
+    || shadowPassive.incomingReduction
+    || shadowPassive.staminaDamage
+    || shadowPassive.critChance
+  )
+    ? ` ${shadowPassive.strongest.shadow.name}'s ${shadowPassive.strongest.passive.label} lent power: ${shadowPassive.strongest.passive.effectText}.`
+    : '';
   const perkLine = [
     move.id === 'conserve' ? ` Conserve recovery: +${conserveGain} mana.${conserveBonus ? ` Conserve Mastery added ${conserveBonus}.` : ''}` : '',
     isBasicMove && isAttackMove && basicDamageMultiplier > 1 ? ` Basic Damage active: +${Math.round((basicDamageMultiplier - 1) * 100)}%.` : '',
@@ -8719,6 +9004,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     afterimageChain ? ' Afterimage Chain cut special cooldowns.' : '',
     bloodScentMultiplier > 1 ? ' Blood Scent amplified the wounded-target hit.' : '',
     coreSightMultiplier > 1 ? ' Core Sight exposed the boss core.' : '',
+    shadowPassiveLine,
     blackFlash ? ' Black Flash: a black System spark erupts on impact.' : '',
     limitBreakActive ? ' Limit Break Protocol restored emergency stamina.' : '',
     executionWindowActive ? ' Execution Window opened after the monster was outread.' : '',

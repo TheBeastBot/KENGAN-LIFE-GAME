@@ -289,3 +289,16 @@ test('Shadow Domain map renders as a scrollable tactical node board', async () =
   assert.match(cssSource, /\.shadow-domain-map\s*{[\s\S]*width:\s*1120px;/);
   assert.match(cssSource, /\.domain-map-legend\s*{/);
 });
+
+test('Shadow Army cards render boss passives and rarity visuals', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /shadow-passive-\$\{tone\}/);
+  assert.match(appSource, /shadow-rank-\$\{rank\}/);
+  assert.match(appSource, /shadow-passive-name/);
+  assert.match(appSource, /shadow-passive-effect/);
+  assert.match(cssSource, /\.shadow-card\s*{/);
+  assert.match(cssSource, /\.shadow-passive-calamity/);
+  assert.match(cssSource, /\.shadow-red-gate/);
+});

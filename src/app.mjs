@@ -2956,15 +2956,23 @@ function renderShadowArmyPanel() {
       <span class="lock-pill">Ultimate passive</span>
     </article>
     <div class="world-grid shadow-roster-grid">
-      ${summary.roster.length ? summary.roster.map((shadow) => `
-        <article class="option-card system-window shadow-card">
+      ${summary.roster.length ? summary.roster.map((shadow) => {
+    const passive = shadow.passive ?? {};
+    const tone = classToken(shadow.passiveTone ?? passive.tone ?? 'echo');
+    const rank = classToken(shadow.rank ?? 'E');
+    const redGate = passive.redGate ? ' shadow-red-gate' : '';
+    return `
+        <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}">
           <div>
             <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow</p>
             <h3>${escapeHtml(shadow.name)}</h3>
             <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / ${escapeHtml(shadow.role ?? 'vanguard')} / Power ${escapeHtml(String(shadow.armyPower ?? shadow.strength))}</p>
+            <p class="shadow-passive-name">${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</p>
+            <p class="shadow-passive-effect">${escapeHtml(shadow.passiveDescription ?? passive.description ?? 'This shadow lends a passive while bound to the army.')}</p>
           </div>
         </article>
-      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Unlock Ultimate ARISE to make eligible defeated bosses rise automatically.</p></div></article>'}
+      `;
+  }).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Unlock Ultimate ARISE to make eligible defeated bosses rise automatically.</p></div></article>'}
     </div>
   `;
 }
@@ -4026,6 +4034,10 @@ function previewEffects(effects = {}) {
 
 function labelize(value) {
   return value.replace(/[A-Z]/g, (match) => ` ${match}`).replace(/^./, (match) => match.toUpperCase());
+}
+
+function classToken(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
 }
 
 function escapeHtml(value) {

@@ -39,6 +39,7 @@ import {
   getHunterMilestones,
   getOpponentStats,
   getOpponentArchetype,
+  getShadowPassive,
   getShadowArmySummary,
   getShadowDomainMap,
   getTrainingAllowance,
@@ -1558,6 +1559,102 @@ test('Ultimate ARISE passively adds an eligible quest boss shadow to the Domain 
   assert.equal(next.hunterWorld.arisePrompt, undefined);
   assert.ok(next.hunterWorld.shadowArmy[0].armyPower > 0);
   assert.ok(next.activeFight.result.rewards.some((reward) => reward.includes('ARISE passive')));
+});
+
+test('boss-matched shadow passives are assigned, scaled by rank, and upgraded for Red Gates', () => {
+  const bossIds = Object.entries(HUNTER_MONSTERS)
+    .filter(([id, monster]) => id.startsWith('red') || `${monster.threat}`.includes('Boss') || `${monster.threat}`.includes('Monarch'))
+    .map(([id]) => id);
+
+  for (const monsterId of bossIds) {
+    const passive = getShadowPassive({ monsterId, rank: HUNTER_MONSTERS[monsterId].tier });
+    assert.ok(passive.id);
+    assert.ok(passive.label);
+    assert.ok(passive.effectText);
+  }
+
+  const goblin = getShadowPassive({ monsterId: 'goblinCaptain', rank: 'E' });
+  const dragon = getShadowPassive({ monsterId: 'dragonMonarchBoss', rank: 'S' });
+  const redDragon = getShadowPassive({ monsterId: 'redDragonMonarch', rank: 'S' });
+
+  assert.ok(dragon.scale > goblin.scale);
+  assert.equal(redDragon.baseId, dragon.baseId);
+  assert.ok(redDragon.scale > dragon.scale);
+  assert.equal(redDragon.redGate, true);
+});
+
+test('existing Shadow Army saves derive boss passives in the summary', () => {
+  const life = createNewLife({ gender: 'Male', seed: 9102 });
+  life.hunterWorld = {
+    ...life.hunterWorld,
+    unlocked: true,
+    shadowArmy: [
+      { id: 'old-shadow', monsterId: 'demonKnightBoss', name: 'Demon Knight Shadow', rank: 'A', strength: 20 },
+    ],
+  };
+
+  const summary = getShadowArmySummary(life);
+
+  assert.equal(summary.roster[0].passiveId, 'black-flame');
+  assert.match(summary.roster[0].passiveLabel, /Black Flame/);
+  assert.match(summary.roster[0].passiveDescription, /shadow-linked/i);
+  assert.match(summary.bonuses.join(' '), /Shadow passives active/);
+});
+
+test('shadow passives affect Hunter fights only while the shadow is in the army', () => {
+  const base = createNewLife({ gender: 'Female', seed: 705 });
+  const quest = {
+    id: 'passive-test',
+    templateId: 'passive-test',
+    tier: 'late',
+    title: 'Passive Test',
+    stageIndex: 0,
+    stages: [{ id: 'stage', type: 'combat', title: 'Defeat the scout', monsterId: 'systemGoblinScout' }],
+    startedMonth: 0,
+    completed: false,
+    failed: false,
+    outcome: null,
+    monsterFightId: null,
+    rewardsPreview: [],
+    stageResults: [],
+  };
+  const fighter = {
+    ...base,
+    rngSeed: 705,
+    stats: {
+      ...base.stats,
+      strength: 260,
+      speed: 240,
+      durability: 230,
+      technique: 230,
+      fightIq: 220,
+      willpower: 220,
+      reflexes: 220,
+      control: 220,
+    },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 45,
+      stats: { strength: 30, agility: 24, vitality: 24, sense: 20, intelligence: 18 },
+      dailyQuest: quest,
+    },
+  };
+  const withShadow = {
+    ...fighter,
+    hunterWorld: {
+      ...fighter.hunterWorld,
+      dailyQuest: structuredClone(quest),
+      shadowArmy: [{ id: 'blood-ogre-shadow', monsterId: 'bloodOgreBoss', name: 'Blood Ogre Shadow', rank: 'C', strength: 8 }],
+    },
+  };
+
+  const withoutPassive = takeFightTurn(startHunterQuestFight(fighter), 'slash');
+  const withPassive = takeFightTurn(startHunterQuestFight(withShadow), 'slash');
+
+  assert.ok(withPassive.activeFight.exchanges[0].playerDamage > withoutPassive.activeFight.exchanges[0].playerDamage);
+  assert.match(withPassive.activeFight.exchanges[0].text, /Maul Pressure Echo lent power/);
 });
 
 test('blank custom first name falls back to a generated first name', () => {
