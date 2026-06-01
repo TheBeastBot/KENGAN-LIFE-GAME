@@ -1052,7 +1052,7 @@ function createArisePrompt(life, monsterId, source = 'boss') {
 function queueArisePrompt(life, monsterId, source = 'boss') {
   const prompt = createArisePrompt(life, monsterId, source);
   if (!prompt) return false;
-  if (life.hunterWorld.pendingLevelRewards?.length) life.hunterWorld.pendingArisePrompt = prompt;
+  if (life.hunterWorld.arisePrompt) life.hunterWorld.pendingArisePrompt = prompt;
   else life.hunterWorld.arisePrompt = prompt;
   life.hunterWorld.lastBossCleared = null;
   return true;
@@ -4609,7 +4609,7 @@ function applyHunterQuestFightResult(life, fight, won) {
     fight.result.rewards.push('Quest progress: monster objective cleared');
     fight.result.rewards.push('+1 Hunter Sense from live System combat');
     if (queueArisePrompt(life, stage?.monsterId, 'quest')) {
-      fight.result.rewards.push('ARISE prompt unlocked: 3 chances to bind the defeated boss');
+      fight.result.rewards.push('ARISE command unlocked: bind the defeated boss shadow');
     }
   } else {
     quest.completed = true;
@@ -4683,7 +4683,7 @@ function applyHunterDungeonFightResult(life, fight, won) {
   life.hunterWorld.redGatePending = dungeon.redGateTriggered;
   fight.result.rewards.push(`Boss clear jackpot: +${xp} Hunter XP, +$${money}, +${reputation} reputation`);
   fight.result.rewards.push(`Hunter stat growth: +${statCount} (${gainedStats.join(', ')})`);
-  if (life.hunterWorld.arisePrompt?.monsterId === encounter.monsterId) fight.result.rewards.push('ARISE prompt unlocked: 3 chances to bind the boss shadow');
+  if (life.hunterWorld.arisePrompt?.monsterId === encounter.monsterId) fight.result.rewards.push('ARISE command unlocked: bind the boss shadow');
   if (itemDrops.length) fight.result.rewards.push(`Boss loot: ${itemDrops.map(itemDropText).join(', ')}`);
   if (dungeon.redGateTriggered) fight.result.rewards.push('Emergency alert: a Red Gate has appeared on the next Gate Board');
   life.hunterWorld.activeDungeon = dungeon;
@@ -10082,7 +10082,6 @@ export function attemptAriseShadow(life) {
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   const prompt = next.hunterWorld.arisePrompt;
   if (!prompt) return addLog(next, 'No defeated boss shadow is answering ARISE.', 'world');
-  if (next.hunterWorld.pendingLevelRewards.length) return addLog(next, 'Claim the pending System Level Reward before commanding ARISE.', 'world');
   if (prompt.status !== 'active' || prompt.attemptsLeft <= 0) return addLog(next, 'That ARISE echo has already resolved.', 'world');
 
   prompt.attemptsUsed += 1;
@@ -10096,7 +10095,7 @@ export function attemptAriseShadow(life) {
   prompt.status = 'success';
   prompt.shadowName = shadow.name;
   prompt.resultText = `${shadow.name} rises and joins the Shadow Domain army.`;
-  next.hunterWorld.arisePrompt = prompt;
+  next.hunterWorld.arisePrompt = null;
   clearStaleFinishedHunterDungeonFight(next);
   return addLog(next, `ARISE succeeded: ${shadow.name} joined your army.`, 'world');
 }

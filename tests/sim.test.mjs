@@ -859,7 +859,7 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
   assert.equal(next.stats.strength, beforeStrength);
 });
 
-test('ARISE waits until pending Hunter level rewards are claimed', () => {
+test('ARISE opens before pending Hunter level rewards after a boss clear', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 924 }),
     stats: {
@@ -888,25 +888,24 @@ test('ARISE waits until pending Hunter level rewards are claimed', () => {
   const cleared = takeFightTurn(life, 'slash');
 
   assert.equal(cleared.hunterWorld.pendingLevelRewards.length, 1);
-  assert.equal(cleared.hunterWorld.arisePrompt, null);
-  assert.ok(cleared.hunterWorld.pendingArisePrompt);
+  assert.equal(cleared.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
+  assert.equal(cleared.hunterWorld.arisePrompt.attemptsLeft, 3);
+  assert.equal(cleared.hunterWorld.pendingArisePrompt, null);
   assert.equal(cleared.hunterWorld.activeDungeon.bossDefeated, true);
   assert.equal(cleared.hunterWorld.gateOffers.length, 0);
 
   const dismissedReport = dismissHunterDungeonResult(cleared);
   assert.equal(dismissedReport.hunterWorld.activeDungeon, null);
   assert.equal(dismissedReport.hunterWorld.pendingLevelRewards.length, 1);
-  assert.equal(dismissedReport.hunterWorld.arisePrompt, null);
-  assert.ok(dismissedReport.hunterWorld.pendingArisePrompt);
+  assert.equal(dismissedReport.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
+  assert.equal(dismissedReport.hunterWorld.pendingArisePrompt, null);
   assert.ok(dismissedReport.hunterWorld.gateOffers.length > 0);
 
-  const rewardId = dismissedReport.hunterWorld.pendingLevelRewards[0].options[0].id;
-  const rewarded = claimHunterLevelReward(dismissedReport, rewardId);
+  const arisen = attemptAriseShadow(dismissedReport);
 
-  assert.equal(rewarded.hunterWorld.pendingLevelRewards.length, 0);
-  assert.equal(rewarded.hunterWorld.pendingArisePrompt, null);
-  assert.equal(rewarded.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
-  assert.equal(rewarded.hunterWorld.arisePrompt.attemptsLeft, 3);
+  assert.equal(arisen.hunterWorld.arisePrompt, null);
+  assert.equal(arisen.hunterWorld.pendingLevelRewards.length, 1);
+  assert.equal(arisen.hunterWorld.shadowArmy.length, 1);
 });
 
 test('Hunter level reward choices apply one queued bonus at a time', () => {
@@ -1095,8 +1094,7 @@ test('ARISE binds an eligible boss shadow on the first command', () => {
 
   assert.equal(next.hunterWorld.shadowArmy.length, 1);
   assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
-  assert.equal(next.hunterWorld.arisePrompt.status, 'success');
-  assert.equal(next.hunterWorld.arisePrompt.attemptsLeft, 0);
+  assert.equal(next.hunterWorld.arisePrompt, null);
 });
 
 test('ARISE clears stale finished dungeon fights that no longer have a report', () => {
@@ -1589,7 +1587,7 @@ test('ARISE adds a boss shadow ally directly to the Domain army', () => {
 
   assert.equal(next.hunterWorld.shadowArmy.length, 1);
   assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
-  assert.equal(next.hunterWorld.arisePrompt.status, 'success');
+  assert.equal(next.hunterWorld.arisePrompt, null);
   assert.ok(next.hunterWorld.shadowArmy[0].armyPower > 0);
   assert.ok(next.stats.control > life.stats.control);
 

@@ -137,7 +137,7 @@ test('Hunter System guidance exposes next actions and pending badges', async () 
   assert.match(cssSource, /\.pending-state-badges\s*{/);
 });
 
-test('Hunter fight reports render before level reward and ARISE popups', async () => {
+test('Hunter ARISE renders before level rewards and completed Gate reports', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const match = appSource.match(/function renderHunterFullScreenFlow\(\) \{[\s\S]*?\n\}/);
 
@@ -146,10 +146,10 @@ test('Hunter fight reports render before level reward and ARISE popups', async (
   assert.match(appSource, /function hunterMandatoryPopupKind/);
   assert.match(appSource, /function hasActiveHunterDungeonReport/);
   assert.doesNotMatch(body, /state\.activeFight\?\.source === 'hunterDungeon' \|\| state\.hunterWorld\?\.activeDungeon\?\.completed/);
-  assert.ok(body.indexOf('renderHunterQuestPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
-  assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
-  assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderArisePopup()'));
-  assert.ok(body.indexOf('renderHunterLevelRewardPopup()') < body.indexOf('renderArisePopup()'));
+  assert.ok(body.indexOf("state.activeFight?.source === 'hunterQuest'") < body.indexOf('renderArisePopup()'));
+  assert.ok(body.indexOf("state.activeFight?.source === 'hunterDungeon' && !state.activeFight.finished") < body.indexOf('renderArisePopup()'));
+  assert.ok(body.indexOf('renderArisePopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
+  assert.ok(body.indexOf('renderHunterLevelRewardPopup()') < body.indexOf('hasActiveHunterDungeonReport()'));
 });
 
 test('Hunter dungeon dismiss releases pending reward and ARISE popups', async () => {
@@ -202,7 +202,7 @@ test('move icon burst dismissal preserves action target clicks', async () => {
   assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('if (action) return;'));
   assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.stopPropagation();'));
   assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.preventDefault();'));
-  assert.match(appSource, /button\(`ARISE \(\$\{prompt\.attemptsLeft\}\/3\)`, 'hunter-arise-attempt', 'primary wide'\)/);
+  assert.match(appSource, /button\('ARISE', 'hunter-arise-attempt', 'primary wide'\)/);
   assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
 });
 

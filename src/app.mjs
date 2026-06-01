@@ -1038,8 +1038,8 @@ function renderFullScreenView() {
 }
 
 function hunterMandatoryPopupKind(hunter = state?.hunterWorld) {
-  if (hunter?.pendingLevelRewards?.length) return 'levelReward';
   if (hunter?.arisePrompt) return 'arise';
+  if (hunter?.pendingLevelRewards?.length) return 'levelReward';
   return '';
 }
 
@@ -1056,9 +1056,10 @@ function hasActiveHunterDungeonReport() {
 
 function renderHunterFullScreenFlow() {
   if (state.activeFight?.source === 'hunterQuest') return renderHunterQuestPopup();
-  if (hasActiveHunterDungeonReport()) return renderHunterDungeonPopup();
-  if (hunterMandatoryPopupKind() === 'levelReward') return renderHunterLevelRewardPopup();
+  if (state.activeFight?.source === 'hunterDungeon' && !state.activeFight.finished) return renderHunterDungeonPopup();
   if (hunterMandatoryPopupKind() === 'arise') return renderArisePopup();
+  if (hunterMandatoryPopupKind() === 'levelReward') return renderHunterLevelRewardPopup();
+  if (hasActiveHunterDungeonReport()) return renderHunterDungeonPopup();
   if (hunterQuestPopupOpen) return renderHunterQuestPopup();
   if (hunterDungeonPopupOpen) return renderHunterDungeonPopup();
   return '';
@@ -2674,20 +2675,18 @@ function hunterObjectiveSummary(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WOR
 function hunterGuidanceCue(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD) {
   const quest = hunter.dailyQuest;
   const dungeon = hunter.activeDungeon;
-  if (hunter.pendingLevelRewards?.length) {
-    return {
-      label: 'Claim System Level Reward',
-      text: hunter.pendingArisePrompt
-        ? 'Choose your level bonus first. The queued boss shadow will answer ARISE after the reward closes.'
-        : 'Choose your level bonus before continuing the System loop.',
-      tone: 'ready',
-    };
-  }
   if (hunter.arisePrompt) {
     return {
       label: 'Resolve ARISE',
-      text: 'A defeated boss shadow is waiting. Attempt ARISE or dismiss the echo before moving on.',
+      text: 'A defeated boss shadow is waiting. Command ARISE to add it to your army before moving on.',
       tone: 'danger',
+    };
+  }
+  if (hunter.pendingLevelRewards?.length) {
+    return {
+      label: 'Claim System Level Reward',
+      text: 'Choose your level bonus before continuing the System loop.',
+      tone: 'ready',
     };
   }
   if (state.activeFight?.source === 'hunterDungeon') {
@@ -2803,7 +2802,7 @@ function hunterPendingBadges(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD,
   const include = (...areas) => areas.includes(area) || area === 'status';
 
   if (include('level') && hunter.pendingLevelRewards?.length) badges.push({ label: 'Level reward pending', tone: 'ready' });
-  if (include('arise') && hunter.pendingArisePrompt) badges.push({ label: 'ARISE queued after level reward', tone: 'danger' });
+  if (include('arise') && hunter.pendingArisePrompt) badges.push({ label: 'ARISE queued', tone: 'danger' });
   if (include('arise') && hunter.arisePrompt) badges.push({ label: 'ARISE pending', tone: 'danger' });
   if (include('gate') && dungeon && !dungeon.completed) {
     badges.push({ label: dungeon.isRedGate ? 'Red Gate room active' : 'Dungeon room active', tone: dungeon.isRedGate ? 'danger' : 'active' });
@@ -3279,7 +3278,7 @@ function renderArisePopup() {
   const monster = HUNTER_MONSTERS[prompt.monsterId] ?? {};
   const chance = prompt.status === 'active' ? 'Unstable' : prompt.status === 'success' ? 'Bound' : 'Lost';
   const action = prompt.status === 'active'
-    ? button(`ARISE (${prompt.attemptsLeft}/3)`, 'hunter-arise-attempt', 'primary wide')
+    ? button('ARISE', 'hunter-arise-attempt', 'primary wide')
     : button(prompt.status === 'success' ? 'Return to Gate Board' : 'Close Echo', 'hunter-arise-dismiss', 'primary wide');
   return `
     <main class="screen-view hunter-screen">
@@ -3295,9 +3294,9 @@ function renderArisePopup() {
           <div>
             <p class="eyebrow">${escapeHtml(prompt.rank ?? monster.tier ?? 'E')}-Rank Boss Echo</p>
             <h3>${escapeHtml(prompt.sourceBoss ?? monster.name ?? 'Defeated Boss')}</h3>
-            <p>${escapeHtml(prompt.resultText || 'The boss echo is still fresh. You have three chances to command it into your Shadow Domain army.')}</p>
+            <p>${escapeHtml(prompt.resultText || 'The boss echo is fresh. Command ARISE to add it to your Shadow Domain army immediately.')}</p>
             ${renderSystemScanRows([
-              { label: 'Attempts', value: `${prompt.attemptsLeft}/3`, tone: prompt.attemptsLeft > 0 ? 'clear' : 'danger' },
+              { label: 'Command', value: prompt.status === 'active' ? 'Ready' : chance, tone: prompt.status === 'active' ? 'clear' : prompt.status === 'success' ? 'clear' : 'danger' },
               { label: 'State', value: chance, tone: prompt.status === 'success' ? 'clear' : prompt.status === 'failed' ? 'danger' : '' },
               { label: 'Army Result', value: prompt.status === 'success' ? `${prompt.shadowName ?? 'Shadow'} added` : 'On success, joins Domain army immediately', tone: prompt.status === 'success' ? 'clear' : '' },
             ])}
@@ -3629,7 +3628,7 @@ function renderHunterDungeonPanel() {
           <p>${escapeHtml(dungeon.resultText ?? (dungeon.outcome === 'retreated' ? 'You survived the retreat. Cleared-room rewards were kept.' : 'The Gate run has ended.'))}</p>
           ${dungeon.outcome === 'retreated' ? '<p class="muted">Penalties: +12 fatigue / -10 mood / -4 reputation</p>' : ''}
           ${dungeon.outcome === 'failed' ? '<p class="muted">Penalties: +16 fatigue / -12 mood / -6 reputation</p>' : ''}
-          ${state.hunterWorld?.pendingArisePrompt ? '<p class="muted">Next: claim the pending level reward, then ARISE will open for the defeated boss shadow.</p>' : '<p class="muted">Next: close this report to refresh the Gate Board.</p>'}
+          ${state.hunterWorld?.pendingArisePrompt ? '<p class="muted">Next: resolve the queued ARISE command when it appears.</p>' : '<p class="muted">Next: close this report to refresh the Gate Board.</p>'}
           ${renderSystemScanRows([
             { label: 'Outcome', value: dungeon.outcome ?? 'Ended', tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger' },
             { label: 'Boss', value: dungeon.bossDefeated ? 'Defeated' : 'Not cleared', tone: dungeon.bossDefeated ? 'clear' : 'danger' },
