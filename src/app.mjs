@@ -42,6 +42,7 @@ import {
   getPlayerArchetype,
   getShadowArmySummary,
   getShadowDomainMap,
+  getAutoGateReadiness,
   getAutoRecoveryStatus,
   getAutoTrainingStatus,
   getTrainingAllowance,
@@ -85,11 +86,13 @@ import {
   runHunterDailyQuest,
   scheduleCoachedFight,
   toggleAutoRecovery,
+  toggleAutoGateShadow,
   toggleAutoTraining,
   toggleFavoriteTraining,
   useSocialAction,
   spendHunterStatPoint,
   fightMonarchBoss,
+  clearGateWithAutoShadows,
   selectHunterGate,
   startHunterDungeonEncounter,
   advanceHunterDungeon,
@@ -128,6 +131,7 @@ const DEFAULT_HUNTER_WORLD = {
   dailyQuestsCompleted: 0,
   systemFatigue: 0,
   shadowArmy: [],
+  autoGateLoadout: [],
   inventory: [],
   equippedWeapon: null,
   gateOffers: [],
@@ -528,6 +532,17 @@ function shadowArmyStrength(hunterWorld) {
 }
 
 function normalizeHunterWorld(hunterWorld = {}) {
+  const shadowArmy = Array.isArray(hunterWorld?.shadowArmy)
+    ? hunterWorld.shadowArmy.map((shadow, index) => ({
+      ...shadow,
+      id: typeof shadow?.id === 'string' ? shadow.id : `shadow-${index + 1}`,
+      name: typeof shadow?.name === 'string' ? shadow.name : 'Extracted Shadow',
+      strength: shadowStrength(shadow),
+      role: shadow?.role ?? 'vanguard',
+      armyPower: Math.max(1, Math.floor(shadow?.armyPower ?? shadowStrength(shadow) * 10)),
+    }))
+    : [];
+  const shadowIds = new Set(shadowArmy.map((shadow) => shadow.id));
   return {
     ...DEFAULT_HUNTER_WORLD,
     ...hunterWorld,
@@ -543,15 +558,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     gatesCleared: Math.max(0, Math.floor(hunterWorld?.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld?.dailyQuestsCompleted ?? 0)),
     systemFatigue: Math.max(0, Math.min(100, Math.round(hunterWorld?.systemFatigue ?? 0))),
-    shadowArmy: Array.isArray(hunterWorld?.shadowArmy)
-      ? hunterWorld.shadowArmy.map((shadow, index) => ({
-        ...shadow,
-        id: typeof shadow?.id === 'string' ? shadow.id : `shadow-${index + 1}`,
-        name: typeof shadow?.name === 'string' ? shadow.name : 'Extracted Shadow',
-        strength: shadowStrength(shadow),
-        role: shadow?.role ?? 'vanguard',
-        armyPower: Math.max(1, Math.floor(shadow?.armyPower ?? shadowStrength(shadow) * 10)),
-      }))
+    shadowArmy,
+    autoGateLoadout: Array.isArray(hunterWorld?.autoGateLoadout)
+      ? [...new Set(hunterWorld.autoGateLoadout.filter((id) => typeof id === 'string' && shadowIds.has(id)))].slice(0, 10)
       : [],
     inventory: normalizeHunterInventory(hunterWorld?.inventory),
     equippedWeapon: typeof hunterWorld?.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
@@ -2947,6 +2956,10 @@ function renderHunterAssociationPanel() {
 function renderShadowArmyPanel() {
   const summary = getShadowArmySummary(state);
   const selectedShadow = summary.roster.find((shadow) => shadow.id === selectedShadowArmyId) ?? null;
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const autoGateIds = new Set(hunter.autoGateLoadout ?? []);
+  const autoGateShadows = summary.roster.filter((shadow) => autoGateIds.has(shadow.id));
+  const autoGatePower = autoGateShadows.reduce((sum, shadow) => sum + Math.max(1, Math.floor(shadow.armyPower ?? shadow.strength ?? 1)), 0);
   return `
     <article class="option-card system-window shadow-army-panel">
       <div>
@@ -2957,6 +2970,18 @@ function renderShadowArmyPanel() {
       </div>
       <span class="lock-pill">Ultimate passive</span>
     </article>
+    <article class="option-card system-window auto-gate-loadout">
+      <div>
+        <p class="eyebrow">Auto Gate Loadout</p>
+        <h2>${autoGateShadows.length}/10 Shadows / Power ${autoGatePower}</h2>
+        <p>Select up to 10 shadows here. AUTO GATE uses only this loadout to instantly clear Gate offers when the shadows are strong enough.</p>
+        ${renderSystemScanRows([
+    { label: 'Selected', value: `${autoGateShadows.length}/10`, tone: autoGateShadows.length ? 'active' : 'danger' },
+    { label: 'Loadout Power', value: autoGatePower, tone: autoGatePower ? 'clear' : 'danger' },
+    { label: 'Boss ARISE', value: 'Requires Ultimate ARISE perk', tone: 'active' },
+  ])}
+      </div>
+    </article>
     ${selectedShadow ? renderSelectedShadowPassiveInfo(selectedShadow) : ''}
     <div class="world-grid shadow-roster-grid">
       ${summary.roster.length ? summary.roster.map((shadow) => {
@@ -2965,8 +2990,9 @@ function renderShadowArmyPanel() {
     const rank = classToken(shadow.rank ?? 'E');
     const redGate = passive.redGate ? ' shadow-red-gate' : '';
     const selected = shadow.id === selectedShadowArmyId ? ' selected' : '';
+    const autoSelected = autoGateIds.has(shadow.id);
     return `
-        <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}${selected}" data-action="shadow-army-select-${encodeURIComponent(shadow.id)}" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(shadow.name)} passive">
+        <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}${selected}${autoSelected ? ' auto-gate-selected' : ''}" data-action="shadow-army-select-${encodeURIComponent(shadow.id)}" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(shadow.name)} passive">
           <div>
             <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow <span class="shadow-rank-badge">${escapeHtml(shadow.rank ?? 'E')}</span></p>
             <h3>${escapeHtml(shadow.name)}</h3>
@@ -2974,6 +3000,7 @@ function renderShadowArmyPanel() {
             <p class="shadow-passive-name">${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</p>
             <p class="shadow-passive-effect">${escapeHtml(shadow.passiveDescription ?? passive.description ?? 'This shadow lends a passive while bound to the army.')}</p>
           </div>
+          ${button(autoSelected ? 'Remove Auto Gate' : 'Add Auto Gate', `auto-gate-shadow-${encodeURIComponent(shadow.id)}`, autoSelected ? 'small-btn clear' : 'small-btn')}
         </article>
       `;
   }).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Unlock Ultimate ARISE to make eligible defeated bosses rise automatically.</p></div></article>'}
@@ -3544,8 +3571,11 @@ function renderHunterGateOffers() {
   const offers = state.hunterWorld?.gateOffers ?? [];
   return `
     <div class="gate-offer-grid">
-      ${offers.map((offer) => `
-        <article class="gate-offer option-card system-window ${offer.isRedGate ? 'red-gate-offer emergency' : ''} ${offer.danger ? 'danger-offer' : ''}">
+      ${offers.map((offer) => {
+    const readiness = getAutoGateReadiness(state, offer);
+    const readinessTone = readiness.canClear ? 'clear' : readiness.status === 'empty' ? 'danger' : 'danger';
+    return `
+        <article class="gate-offer option-card system-window auto-gate-${classToken(readiness.status)} ${offer.isRedGate ? 'red-gate-offer emergency' : ''} ${offer.danger ? 'danger-offer' : ''}">
           <div>
             <p class="eyebrow">${offer.isRedGate ? 'Emergency Red Gate' : `${escapeHtml(offer.rank)}-Rank Gate`}</p>
             <h2>${escapeHtml(offer.name)}</h2>
@@ -3559,11 +3589,15 @@ function renderHunterGateOffers() {
               { label: 'Modifier', value: offer.modifier?.label ?? 'Stable Mana', tone: offer.modifier?.danger === 'High' || offer.modifier?.danger === 'Extreme' || offer.modifier?.danger === 'Mythic' ? 'danger' : '' },
               { label: 'Loot Read', value: offer.rewardsPreview.loot ?? 'Standard', tone: 'clear' },
               { label: 'Boss Signature', value: offer.bossName, tone: offer.isRedGate || offer.danger ? 'danger' : '' },
+              { label: 'Auto Gate', value: readiness.reason, tone: readinessTone },
+              { label: 'Auto Power', value: `${readiness.loadoutPower}/${readiness.requiredPower}`, tone: readiness.canClear ? 'clear' : 'danger' },
             ])}
           </div>
           ${button('Enter Gate', `hunter-gate-select-${offer.id}`, offer.isRedGate ? 'danger' : 'primary')}
+          ${button('AUTO GATE', `hunter-auto-gate-${offer.id}`, readiness.canClear ? 'primary auto-gate-btn' : 'auto-gate-btn disabled')}
         </article>
-      `).join('')}
+      `;
+  }).join('')}
     </div>
   `;
 }
@@ -4333,6 +4367,10 @@ function handleAction(action, source = null) {
     render();
     return;
   }
+  if (action.startsWith('auto-gate-shadow-')) {
+    setState(toggleAutoGateShadow(state, decodeURIComponent(action.replace('auto-gate-shadow-', ''))));
+    return;
+  }
   if (action.startsWith('shadow-domain-select-')) {
     selectedShadowDomainId = action.replace('shadow-domain-select-', '');
     render();
@@ -4369,6 +4407,11 @@ function handleAction(action, source = null) {
   if (action.startsWith('hunter-gate-select-')) {
     hunterDungeonPopupOpen = true;
     setState(selectHunterGate(state, action.replace('hunter-gate-select-', '')));
+    return;
+  }
+  if (action.startsWith('hunter-auto-gate-')) {
+    hunterDungeonPopupOpen = true;
+    setState(clearGateWithAutoShadows(state, action.replace('hunter-auto-gate-', '')));
     return;
   }
   if (action === 'hunter-dungeon-start') {

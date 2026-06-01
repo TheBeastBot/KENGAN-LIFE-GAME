@@ -3317,6 +3317,31 @@ select:focus {
   align-items: center;
 }
 
+.auto-gate-btn {
+  border-color: rgba(116, 214, 146, 0.42);
+  box-shadow: inset 3px 0 0 #74d692;
+}
+
+.auto-gate-btn.disabled {
+  opacity: 0.62;
+  border-color: rgba(210, 68, 72, 0.38);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.auto-gate-ready {
+  border-color: rgba(116, 214, 146, 0.34);
+}
+
+.auto-gate-weak,
+.auto-gate-empty {
+  border-color: rgba(210, 68, 72, 0.36);
+}
+
+.auto-gate-loadout {
+  border-color: rgba(116, 214, 146, 0.3);
+  box-shadow: inset 4px 0 0 #74d692, var(--shadow);
+}
+
 .shadow-card {
   --shadow-accent: #b987ff;
   --shadow-glow: rgba(185, 135, 255, 0.18);
@@ -3335,10 +3360,20 @@ select:focus {
 }
 
 .shadow-card:hover,
-.shadow-card.selected {
+.shadow-card.selected,
+.shadow-card.auto-gate-selected {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--rank-accent) 78%, var(--gold));
   filter: brightness(1.08);
+}
+
+.shadow-card.auto-gate-selected {
+  box-shadow:
+    inset 4px 0 0 #74d692,
+    inset 0 4px 0 color-mix(in srgb, var(--rank-accent) 76%, transparent),
+    0 0 20px rgba(116, 214, 146, 0.34),
+    0 0 22px var(--shadow-glow),
+    var(--shadow);
 }
 
 .shadow-card::after {

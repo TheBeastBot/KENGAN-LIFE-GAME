@@ -42,6 +42,7 @@ import {
   getShadowPassive,
   getShadowArmySummary,
   getShadowDomainMap,
+  getAutoGateReadiness,
   getTrainingAllowance,
   getAutoTrainingStatus,
   getCoachedFightOptions,
@@ -79,6 +80,7 @@ import {
   spendMoneyAction,
   spendHunterStatPoint,
   fightMonarchBoss,
+  clearGateWithAutoShadows,
   startFight,
   startHunterDungeonEncounter,
   startHunterQuestFight,
@@ -89,6 +91,7 @@ import {
   runAutoRoutine,
   scheduleCoachedFight,
   toggleAutoRecovery,
+  toggleAutoGateShadow,
   toggleAutoTraining,
   toggleFavoriteTraining,
   trashTalkOpponent,
@@ -908,6 +911,161 @@ test('Ultimate ARISE passively binds a Gate boss shadow even when level rewards 
   assert.equal(dismissedReport.hunterWorld.pendingArisePrompt, undefined);
   assert.equal(dismissedReport.hunterWorld.shadowArmy.length, 1);
   assert.ok(dismissedReport.hunterWorld.gateOffers.length > 0);
+});
+
+test('Auto Gate loadout toggles selected shadows, caps at ten, and cleans invalid saves', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9251 });
+  let life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowArmy: Array.from({ length: 12 }, (_, index) => ({
+        id: `shadow-${index + 1}`,
+        monsterId: 'goblinCaptain',
+        name: `Shadow ${index + 1}`,
+        rank: 'E',
+        strength: 8,
+        armyPower: 120,
+      })),
+      autoGateLoadout: ['shadow-1', 'missing-shadow'],
+    },
+  };
+
+  life = generateHunterGateOffers(life);
+  assert.deepEqual(life.hunterWorld.autoGateLoadout, ['shadow-1']);
+
+  for (let index = 2; index <= 11; index += 1) life = toggleAutoGateShadow(life, `shadow-${index}`);
+  assert.equal(life.hunterWorld.autoGateLoadout.length, 10);
+  assert.equal(life.hunterWorld.autoGateLoadout.includes('shadow-11'), false);
+
+  life = toggleAutoGateShadow(life, 'shadow-1');
+  assert.equal(life.hunterWorld.autoGateLoadout.includes('shadow-1'), false);
+  assert.equal(life.hunterWorld.autoGateLoadout.length, 9);
+});
+
+test('weak Auto Gate loadout cannot consume a higher-rank Gate or grant rewards', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9252 });
+  let life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 42,
+      shadowArmy: [{ id: 'weak-d', monsterId: 'ironKnightBoss', name: 'Weak D Shadow', rank: 'D', strength: 5, armyPower: 75 }],
+      autoGateLoadout: ['weak-d'],
+    },
+  };
+  life = generateHunterGateOffers(life);
+  const sGate = life.hunterWorld.gateOffers.find((offer) => offer.rank === 'S') ?? life.hunterWorld.gateOffers.at(-1);
+  const beforeOffers = life.hunterWorld.gateOffers.map((offer) => offer.id);
+  const beforeXp = life.hunterWorld.xp;
+  const beforeMoney = life.resources.money;
+
+  const next = clearGateWithAutoShadows(life, sGate.id);
+
+  assert.equal(getAutoGateReadiness(life, sGate).canClear, false);
+  assert.deepEqual(next.hunterWorld.gateOffers.map((offer) => offer.id), beforeOffers);
+  assert.equal(next.hunterWorld.activeDungeon, null);
+  assert.equal(next.hunterWorld.xp, beforeXp);
+  assert.equal(next.resources.money, beforeMoney);
+  assert.equal(next.hunterWorld.gatesCleared, 0);
+});
+
+test('strong Auto Gate loadout instantly clears with full rewards and queues level rewards', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9253 });
+  let life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      xp: 120,
+      level: 1,
+      shadowArmy: [
+        { id: 's1', monsterId: 'dragonMonarchBoss', name: 'Dragon Shadow', rank: 'S', strength: 80, armyPower: 6000 },
+        { id: 's2', monsterId: 'demonKnightBoss', name: 'Demon Shadow', rank: 'A', strength: 50, armyPower: 3000 },
+      ],
+      autoGateLoadout: ['s1', 's2'],
+    },
+  };
+  life = generateHunterGateOffers(life);
+  const offer = life.hunterWorld.gateOffers[0];
+  const beforeMoney = life.resources.money;
+  const beforeStats = Object.values(life.hunterWorld.stats).reduce((sum, value) => sum + value, 0);
+
+  const next = clearGateWithAutoShadows(life, offer.id);
+  const expectedMoney = offer.rewardsPreview.roomMoney * (offer.encounters.length - 1) + offer.rewardsPreview.bossMoney;
+
+  assert.equal(getAutoGateReadiness(life, offer).canClear, true);
+  assert.equal(next.hunterWorld.activeDungeon.completed, true);
+  assert.equal(next.hunterWorld.activeDungeon.autoGate, true);
+  assert.equal(next.hunterWorld.activeDungeon.bossDefeated, true);
+  assert.equal(next.hunterWorld.gatesCleared, 1);
+  assert.equal(next.resources.money, beforeMoney + expectedMoney);
+  assert.equal(Object.values(next.hunterWorld.stats).reduce((sum, value) => sum + value, 0), beforeStats + offer.rewardsPreview.statRewards);
+  assert.ok(next.hunterWorld.level > 1);
+  assert.ok(next.hunterWorld.pendingLevelRewards.length > 0);
+  assert.match(next.hunterWorld.activeDungeon.resultText, /AUTO GATE cleared/);
+});
+
+test('Auto Gate boss ARISE follows the Ultimate ARISE perk requirement', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9254 });
+  const makeLife = (hasArise) => generateHunterGateOffers({
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowArmy: [{ id: 's1', monsterId: 'dragonMonarchBoss', name: 'Dragon Shadow', rank: 'S', strength: 80, armyPower: 6000 }],
+      autoGateLoadout: ['s1'],
+      unlockedSystemPerks: hasArise ? [{ id: 'arise', count: 1 }] : [],
+    },
+  });
+
+  const noArise = makeLife(false);
+  const noAriseCleared = clearGateWithAutoShadows(noArise, noArise.hunterWorld.gateOffers[0].id);
+  assert.equal(noAriseCleared.hunterWorld.shadowArmy.length, 1);
+  assert.match(noAriseCleared.hunterWorld.activeDungeon.resultText, /Ultimate ARISE did not extract/);
+
+  const withArise = makeLife(true);
+  const withAriseCleared = clearGateWithAutoShadows(withArise, withArise.hunterWorld.gateOffers[0].id);
+  assert.equal(withAriseCleared.hunterWorld.shadowArmy.length, 2);
+  assert.equal(withAriseCleared.hunterWorld.shadowArmy.at(-1).source, 'auto-gate');
+  assert.match(withAriseCleared.hunterWorld.activeDungeon.resultText, /rose as a shadow/);
+});
+
+test('Red Gate Auto Gate requires more power and grants Red Gate rewards when cleared', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9255 });
+  let life = generateHunterGateOffers({
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'A',
+      redGatePending: true,
+      shadowArmy: [{ id: 'red-clearer', monsterId: 'voidKingBoss', name: 'Void Shadow', rank: 'SS', strength: 100, armyPower: 9000 }],
+      autoGateLoadout: ['red-clearer'],
+      unlockedSystemPerks: [{ id: 'arise', count: 1 }],
+    },
+  });
+  const redOffer = life.hunterWorld.gateOffers.find((offer) => offer.isRedGate);
+  const normalRequirement = getAutoGateReadiness(life, { ...redOffer, isRedGate: false }).requiredPower;
+  const redReadiness = getAutoGateReadiness(life, redOffer);
+
+  assert.ok(redReadiness.requiredPower > normalRequirement);
+  assert.equal(redReadiness.canClear, true);
+
+  const cleared = clearGateWithAutoShadows(life, redOffer.id);
+  const bossReward = cleared.hunterWorld.activeDungeon.rewardsEarned.find((reward) => reward.type === 'boss');
+  assert.equal(cleared.hunterWorld.activeDungeon.isRedGate, true);
+  assert.equal(cleared.hunterWorld.activeDungeon.bossDefeated, true);
+  assert.ok(bossReward.items.some((item) => item.id === 'redGateShard'));
+  assert.equal(cleared.hunterWorld.shadowArmy.at(-1).source, 'auto-red-gate');
 });
 
 test('Hunter level reward choices apply one queued bonus at a time', () => {

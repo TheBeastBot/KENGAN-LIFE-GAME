@@ -59,6 +59,7 @@ const DEFAULT_HUNTER_WORLD = {
   dailyQuestsCompleted: 0,
   systemFatigue: 0,
   shadowArmy: [],
+  autoGateLoadout: [],
   inventory: [],
   equippedWeapon: null,
   gateOffers: [],
@@ -1489,6 +1490,11 @@ function applyArisePassive(life, monsterId, source = 'ARISE') {
 
 function normalizeHunterWorld(hunterWorld = {}) {
   const rank = HUNTER_RANKS.includes(hunterWorld.rank) ? hunterWorld.rank : DEFAULT_HUNTER_WORLD.rank;
+  const shadowArmy = normalizeShadowArmy(hunterWorld.shadowArmy);
+  const shadowIds = new Set(shadowArmy.map((shadow) => shadow.id));
+  const autoGateLoadout = Array.isArray(hunterWorld.autoGateLoadout)
+    ? [...new Set(hunterWorld.autoGateLoadout.filter((id) => typeof id === 'string' && shadowIds.has(id)))].slice(0, 10)
+    : [];
   return {
     ...defaultHunterWorld(),
     ...hunterWorld,
@@ -1502,7 +1508,8 @@ function normalizeHunterWorld(hunterWorld = {}) {
     gatesCleared: Math.max(0, Math.floor(hunterWorld.gatesCleared ?? 0)),
     dailyQuestsCompleted: Math.max(0, Math.floor(hunterWorld.dailyQuestsCompleted ?? 0)),
     systemFatigue: clamp(hunterWorld.systemFatigue ?? 0),
-    shadowArmy: normalizeShadowArmy(hunterWorld.shadowArmy),
+    shadowArmy,
+    autoGateLoadout,
     inventory: normalizeHunterInventory(hunterWorld.inventory),
     equippedWeapon: typeof hunterWorld.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
     gateOffers: Array.isArray(hunterWorld.gateOffers)
@@ -4725,6 +4732,93 @@ function createHunterGateBoard(life) {
     templateIds.push(offers.at(-1).templateId);
   }
   return offers;
+}
+
+function autoGateSelectedShadows(hunterWorld) {
+  const hunter = normalizeHunterWorld(hunterWorld);
+  const selected = new Set(hunter.autoGateLoadout);
+  return hunter.shadowArmy.filter((shadow) => selected.has(shadow.id)).slice(0, 10);
+}
+
+function autoGateShadowPower(shadow) {
+  return Math.max(1, Math.floor(shadow.armyPower ?? shadowStrength(shadow) * 14));
+}
+
+function autoGateRequiredPower(offer) {
+  const normalized = normalizeHunterGateOffer(offer);
+  if (!normalized) return 0;
+  const encounterPower = normalized.encounters.reduce((sum, encounter) => {
+    const monster = HUNTER_MONSTERS[encounter.monsterId];
+    const base = monster?.power ?? 50;
+    return sum + base * (encounter.isBoss ? 1.35 : 0.8);
+  }, 0);
+  const rankPressure = hunterRankPower(normalized.rank) * 30;
+  const redPressure = normalized.isRedGate ? 1.35 : 1;
+  const dangerPressure = normalized.danger ? 1.2 : 1;
+  return Math.max(1, Math.ceil((encounterPower + rankPressure) * redPressure * dangerPressure));
+}
+
+export function getAutoGateReadiness(life, offer) {
+  const hunter = normalizeHunterWorld(life?.hunterWorld);
+  const normalized = normalizeHunterGateOffer(offer);
+  const selectedShadows = autoGateSelectedShadows(hunter);
+  const loadoutPower = selectedShadows.reduce((sum, shadow) => sum + autoGateShadowPower(shadow), 0);
+  const requiredPower = autoGateRequiredPower(normalized);
+  const selectedCount = selectedShadows.length;
+  const canClear = Boolean(normalized) && selectedCount > 0 && selectedCount <= 10 && loadoutPower >= requiredPower;
+  const status = !normalized
+    ? 'missing'
+    : selectedCount <= 0
+      ? 'empty'
+      : canClear
+        ? 'ready'
+        : 'weak';
+  const reason = status === 'ready'
+    ? `${selectedCount} shadow${selectedCount === 1 ? '' : 's'} can clear this Gate.`
+    : status === 'empty'
+      ? 'Select at least one shadow in the Auto Gate Loadout.'
+      : status === 'weak'
+        ? `Loadout too weak: ${loadoutPower}/${requiredPower} power.`
+        : 'That Gate signal is no longer available.';
+  return {
+    status,
+    canClear,
+    selectedCount,
+    maxShadows: 10,
+    loadoutPower,
+    requiredPower,
+    selectedShadows,
+    reason,
+  };
+}
+
+function awardAutoGateEncounter(life, dungeon, encounter) {
+  const tierRewards = HUNTER_DUNGEON_TIERS[dungeon.rank];
+  const monster = HUNTER_MONSTERS[encounter?.monsterId] ?? HUNTER_MONSTERS.systemGoblinScout;
+  if (!encounter.isBoss) {
+    const xp = dungeonRewardAmount(tierRewards.room.xp, dungeon.isRedGate);
+    const money = dungeonRewardAmount(tierRewards.room.money, dungeon.isRedGate);
+    const reputation = dungeonRewardAmount(tierRewards.room.reputation, dungeon.isRedGate);
+    grantHunterXp(life, xp);
+    life.resources.money += money;
+    life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
+    const itemDrops = awardDungeonLoot(life, dungeon, encounter, monster);
+    dungeon.rewardsEarned.push({ type: 'room', monster: monster.name, xp, money, reputation, items: itemDrops, autoGate: true });
+    return { xp, money, reputation, itemDrops, shadow: null, stats: [] };
+  }
+
+  const xp = dungeonRewardAmount(tierRewards.boss.xp, dungeon.isRedGate);
+  const money = dungeonRewardAmount(tierRewards.boss.money, dungeon.isRedGate);
+  const reputation = dungeonRewardAmount(tierRewards.boss.reputation, dungeon.isRedGate);
+  const statCount = tierRewards.boss.stats + (dungeon.isRedGate ? 1 : 0);
+  grantHunterXp(life, xp);
+  life.resources.money += money;
+  life.resources.reputation = clamp(life.resources.reputation + reputation, 0, 999);
+  const gainedStats = randomHunterStatRewards(life, statCount, dungeon.id);
+  const itemDrops = awardDungeonLoot(life, dungeon, encounter, monster);
+  const shadow = applyArisePassive(life, encounter.monsterId, dungeon.isRedGate ? 'auto-red-gate' : 'auto-gate');
+  dungeon.rewardsEarned.push({ type: 'boss', monster: monster.name, xp, money, reputation, stats: gainedStats, items: itemDrops, autoGate: true, shadow: shadow?.name ?? null });
+  return { xp, money, reputation, itemDrops, shadow, stats: gainedStats };
 }
 
 function redGateChance(life) {
@@ -10340,6 +10434,84 @@ export function selectHunterGate(life, offerId) {
   };
   next.hunterWorld.gateOffers = [];
   return addLog(next, `Gate selected: ${offer.name}. ${offer.encounters.length} hostile rooms detected; the final signature is a boss.`, 'world');
+}
+
+export function toggleAutoGateShadow(life, shadowId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const shadow = next.hunterWorld.shadowArmy.find((item) => item.id === shadowId);
+  if (!shadow) return addLog(next, 'That shadow is no longer in the army.', 'world');
+  const selected = next.hunterWorld.autoGateLoadout.includes(shadow.id);
+  if (selected) {
+    next.hunterWorld.autoGateLoadout = next.hunterWorld.autoGateLoadout.filter((id) => id !== shadow.id);
+    return addLog(next, `${shadow.name} removed from the Auto Gate Loadout.`, 'world');
+  }
+  if (next.hunterWorld.autoGateLoadout.length >= 10) {
+    return addLog(next, 'Auto Gate Loadout is full. Remove a shadow before adding another.', 'world');
+  }
+  next.hunterWorld.autoGateLoadout = [...next.hunterWorld.autoGateLoadout, shadow.id];
+  return addLog(next, `${shadow.name} added to the Auto Gate Loadout.`, 'world');
+}
+
+export function clearGateWithAutoShadows(life, offerId) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.unlocked) return addLog(next, 'The Gate Board is still locked.', 'world');
+  if (next.hunterWorld.shadowMonarch.unlocked) return addLog(next, 'Monarch War has replaced normal Gates. Auto Gate cannot target these battles.', 'world');
+  if (next.hunterWorld.activeDungeon) return addLog(next, 'A dungeon run is already active.', 'world');
+  const offer = next.hunterWorld.gateOffers.find((gate) => gate.id === offerId);
+  if (!offer) return addLog(next, 'That Gate signal is no longer on the Board.', 'world');
+  const readiness = getAutoGateReadiness(next, offer);
+  if (!readiness.canClear) return addLog(next, `AUTO GATE blocked: ${readiness.reason}`, 'world');
+
+  const dungeon = {
+    ...offer,
+    id: `auto-dungeon-${offer.id}`,
+    encounterIndex: 0,
+    carriedHealth: null,
+    carriedStamina: null,
+    startedMonth: lifeMonth(next),
+    rewardsEarned: [],
+    completed: false,
+    retreated: false,
+    failed: false,
+    bossDefeated: false,
+    outcome: null,
+    awaitingAdvance: false,
+    autoGate: true,
+    autoGateLoadout: readiness.selectedShadows.map((shadow) => ({
+      id: shadow.id,
+      name: shadow.name,
+      rank: shadow.rank,
+      power: autoGateShadowPower(shadow),
+    })),
+    autoGatePower: readiness.loadoutPower,
+    autoGateRequiredPower: readiness.requiredPower,
+  };
+  const beforeShadowCount = next.hunterWorld.shadowArmy.length;
+  let totalXp = 0;
+  let totalMoney = 0;
+  let totalReputation = 0;
+  let bossShadow = null;
+  for (const [index, encounter] of dungeon.encounters.entries()) {
+    dungeon.encounterIndex = index;
+    const result = awardAutoGateEncounter(next, dungeon, encounter);
+    totalXp += result.xp;
+    totalMoney += result.money;
+    totalReputation += result.reputation;
+    if (result.shadow) bossShadow = result.shadow;
+  }
+  dungeon.encounterIndex = Math.max(0, dungeon.encounters.length - 1);
+  dungeon.completed = true;
+  dungeon.bossDefeated = true;
+  dungeon.outcome = 'cleared';
+  next.hunterWorld.gatesCleared += 1;
+  dungeon.redGateTriggered = deterministicRoll(next.rngSeed, dungeon.id, next.hunterWorld.gatesCleared, 'red-gate-trigger') < redGateChance(next);
+  next.hunterWorld.redGatePending = dungeon.redGateTriggered;
+  dungeon.resultText = `AUTO GATE cleared by ${readiness.selectedCount} shadow${readiness.selectedCount === 1 ? '' : 's'} (${readiness.loadoutPower}/${readiness.requiredPower} power). Rewards: +${totalXp} Hunter XP, +$${totalMoney}, +${totalReputation} reputation.${bossShadow ? ` ${bossShadow.sourceBoss} rose as a shadow.` : beforeShadowCount === next.hunterWorld.shadowArmy.length ? ' Ultimate ARISE did not extract the boss.' : ''}`;
+  next.hunterWorld.activeDungeon = dungeon;
+  next.hunterWorld.gateOffers = [];
+  return addLog(next, `${dungeon.resultText}${dungeon.redGateTriggered ? ' Emergency alert: a Red Gate has appeared on the next Gate Board.' : ''}`, 'world');
 }
 
 export function startHunterDungeonEncounter(life) {

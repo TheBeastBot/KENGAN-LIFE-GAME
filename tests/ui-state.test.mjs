@@ -302,8 +302,13 @@ test('Shadow Army cards render boss passives and rarity visuals', async () => {
   assert.match(appSource, /shadow-passive-name/);
   assert.match(appSource, /shadow-passive-effect/);
   assert.match(appSource, /shadow-rank-badge/);
+  assert.match(appSource, /Auto Gate Loadout/);
+  assert.match(appSource, /auto-gate-shadow-/);
+  assert.match(appSource, /auto-gate-selected/);
   assert.match(cssSource, /\.shadow-card\s*{/);
   assert.match(cssSource, /\.shadow-card:hover/);
+  assert.match(cssSource, /\.auto-gate-loadout/);
+  assert.match(cssSource, /\.shadow-card\.auto-gate-selected/);
   assert.match(cssSource, /\.shadow-passive-detail\s*{/);
   assert.match(cssSource, /\.shadow-rank-e/);
   assert.match(cssSource, /\.shadow-rank-s/);
@@ -314,4 +319,19 @@ test('Shadow Army cards render boss passives and rarity visuals', async () => {
   assert.match(cssSource, /\.shadow-passive-calamity/);
   assert.match(cssSource, /\.shadow-passive-world-eater/);
   assert.match(cssSource, /\.shadow-red-gate/);
+});
+
+test('Gate cards render Auto Gate action and readiness states', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /getAutoGateReadiness/);
+  assert.match(appSource, /AUTO GATE/);
+  assert.match(appSource, /hunter-auto-gate-/);
+  assert.match(appSource, /Auto Power/);
+  assert.match(appSource, /auto-gate-\$\{classToken\(readiness\.status\)\}/);
+  assert.match(cssSource, /\.auto-gate-btn/);
+  assert.match(cssSource, /\.auto-gate-ready/);
+  assert.match(cssSource, /\.auto-gate-weak/);
+  assert.match(cssSource, /\.auto-gate-empty/);
 });
