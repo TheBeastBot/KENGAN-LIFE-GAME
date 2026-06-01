@@ -199,11 +199,24 @@ test('move icon burst dismissal preserves action target clicks', async () => {
   assert.ok(match, 'pointerdown capture handler should exist');
   const body = match[0];
   assert.match(body, /const action = event\.target\?\..*closest\?\.\('\[data-action\]'\);/);
-  assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('if (action) return;'));
-  assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.stopPropagation();'));
-  assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.preventDefault();'));
+  assert.match(body, /if \(action\) \{\s*clearMoveIconBurstState\(\);\s*return;\s*\}/);
+  assert.ok(body.indexOf('clearMoveIconBurstState();') < body.indexOf('dismissMoveIconBurst();'));
+  assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('event.stopPropagation();'));
+  assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('event.preventDefault();'));
   assert.match(appSource, /button\('ARISE', 'hunter-arise-attempt', 'primary wide'\)/);
   assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
+});
+
+test('fight turn actions advance state before showing move burst', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const match = appSource.match(/if \(action\.startsWith\('fight-turn-'\)\) \{[\s\S]*?\n  \}/);
+
+  assert.ok(match, 'fight-turn action handler should exist');
+  const body = match[0];
+  assert.match(body, /const nextFightState = takeFightTurn\(state, moveId\);/);
+  assert.ok(body.indexOf('const nextFightState = takeFightTurn(state, moveId);') < body.indexOf('triggerMoveIconBurst('));
+  assert.ok(body.indexOf('triggerMoveIconBurst(') < body.indexOf('setState(nextFightState);'));
+  assert.match(body, /nextFightState\.activeFight\?\.exchanges\?\.\[0\]\?\.tacticLabel/);
 });
 
 test('global interaction polish covers core interactive UI and reduced motion', async () => {

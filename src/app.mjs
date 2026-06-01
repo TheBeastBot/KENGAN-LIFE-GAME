@@ -808,10 +808,10 @@ function scheduleFeedbackClear() {
   }, 1200);
 }
 
-function triggerMoveIconBurst(moveId) {
+function triggerMoveIconBurst(moveId, labelOverride = '') {
   const src = MOVE_ICON_ASSETS[moveId];
   if (!src) return;
-  const label = FIGHT_MOVES[moveId]?.label ?? moveId;
+  const label = labelOverride || FIGHT_MOVES[moveId]?.label || HUNTER_MOVES[moveId]?.label || moveId;
   moveIconBurst = { id: moveId, label, key: Date.now() };
   if (moveIconBurstTimer) window.clearTimeout(moveIconBurstTimer);
   moveIconBurstTimer = window.setTimeout(() => {
@@ -4558,8 +4558,12 @@ function handleAction(action, source = null) {
   if (action.startsWith('fight-turn-')) {
     const moveId = action.replace('fight-turn-', '');
     selectedFightCategory = null;
-    triggerMoveIconBurst(moveId);
-    setState(takeFightTurn(state, moveId));
+    const previousExchangeCount = state.activeFight?.exchanges?.length ?? 0;
+    const nextFightState = takeFightTurn(state, moveId);
+    const nextExchangeCount = nextFightState.activeFight?.exchanges?.length ?? 0;
+    const latestExchangeLabel = nextFightState.activeFight?.exchanges?.[0]?.tacticLabel;
+    if (nextExchangeCount > previousExchangeCount) triggerMoveIconBurst(moveId, latestExchangeLabel);
+    setState(nextFightState);
   }
   if (action === 'close-fight') {
     selectedFightCategory = null;
@@ -4643,8 +4647,11 @@ document.addEventListener('toggle', (event) => {
 document.addEventListener('pointerdown', (event) => {
   if (!moveIconBurst) return;
   const action = event.target?.closest?.('[data-action]');
+  if (action) {
+    clearMoveIconBurstState();
+    return;
+  }
   dismissMoveIconBurst();
-  if (action) return;
   event.stopPropagation();
   if (event.cancelable) event.preventDefault();
 }, { capture: true });
