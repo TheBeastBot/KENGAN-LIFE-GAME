@@ -822,13 +822,17 @@ function triggerMoveIconBurst(moveId) {
   }, MOVE_ICON_BURST_DURATION_MS);
 }
 
-function dismissMoveIconBurst() {
-  if (!moveIconBurst) return;
+function clearMoveIconBurstState() {
   moveIconBurst = null;
   if (moveIconBurstTimer) {
     window.clearTimeout(moveIconBurstTimer);
     moveIconBurstTimer = null;
   }
+}
+
+function dismissMoveIconBurst() {
+  if (!moveIconBurst) return;
+  clearMoveIconBurstState();
   queueMobileScroll('move-burst-dismiss');
   render();
   applyPendingMobileScroll();
@@ -1061,7 +1065,9 @@ function clearHunterPopupFlags() {
 }
 
 function applyHunterPopupHandoff(nextState) {
-  if (hasMandatoryHunterPopup(nextState?.hunterWorld)) clearHunterPopupFlags();
+  if (!hasMandatoryHunterPopup(nextState?.hunterWorld)) return;
+  clearHunterPopupFlags();
+  clearMoveIconBurstState();
 }
 
 function hasOpenModal() {
@@ -4618,7 +4624,9 @@ document.addEventListener('toggle', (event) => {
 
 document.addEventListener('pointerdown', (event) => {
   if (!moveIconBurst) return;
+  const action = event.target?.closest?.('[data-action]');
   dismissMoveIconBurst();
+  if (action) return;
   event.stopPropagation();
   if (event.cancelable) event.preventDefault();
 }, { capture: true });

@@ -168,12 +168,28 @@ test('Hunter reward and ARISE actions clear stale popup layers', async () => {
 
   assert.match(appSource, /function clearHunterPopupFlags/);
   assert.match(appSource, /function applyHunterPopupHandoff/);
+  assert.match(appSource, /function clearMoveIconBurstState/);
+  assert.match(appSource, /clearMoveIconBurstState\(\);/);
   assert.match(appSource, /const levelRewardState = claimHunterLevelReward\(state, action\.replace\('hunter-level-reward-', ''\)\);/);
   assert.match(appSource, /applyHunterPopupHandoff\(levelRewardState\);/);
   assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
   assert.match(appSource, /applyHunterPopupHandoff\(ariseAttemptState\);/);
   assert.match(appSource, /const dismissedAriseState = dismissArisePrompt\(state\);/);
   assert.match(appSource, /hunterDungeonPopupOpen = !hasMandatoryHunterPopup\(dismissedAriseState\.hunterWorld\)/);
+});
+
+test('move icon burst dismissal preserves action target clicks', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const match = appSource.match(/document\.addEventListener\('pointerdown', \(event\) => \{[\s\S]*?\n\}, \{ capture: true \}\);/);
+
+  assert.ok(match, 'pointerdown capture handler should exist');
+  const body = match[0];
+  assert.match(body, /const action = event\.target\?\..*closest\?\.\('\[data-action\]'\);/);
+  assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('if (action) return;'));
+  assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.stopPropagation();'));
+  assert.ok(body.indexOf('if (action) return;') < body.indexOf('event.preventDefault();'));
+  assert.match(appSource, /button\(`ARISE \(\$\{prompt\.attemptsLeft\}\/3\)`, 'hunter-arise-attempt', 'primary wide'\)/);
+  assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
 });
 
 test('global interaction polish covers core interactive UI and reduced motion', async () => {
