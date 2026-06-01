@@ -1064,18 +1064,6 @@ function activatePendingArisePrompt(hunterWorld) {
   hunterWorld.pendingArisePrompt = null;
 }
 
-function ariseSuccessChance(hunter, prompt) {
-  const monster = HUNTER_MONSTERS[prompt.monsterId] ?? null;
-  const rankIndex = Math.max(0, HUNTER_RANKS.indexOf(monster?.tier ?? prompt.rank ?? hunter.rank));
-  const hunterRankIndex = Math.max(0, HUNTER_RANKS.indexOf(hunter.rank));
-  const monarchBonus = `${monster?.threat ?? ''}`.includes('Monarch') ? 0.06 : 0;
-  return clampFloat(
-    0.18 + hunter.level * 0.006 + hunter.stats.sense * 0.006 + hunter.stats.intelligence * 0.005 + hunterRankIndex * 0.025 + rankIndex * 0.02 + monarchBonus,
-    0.1,
-    0.82
-  );
-}
-
 function createShadowFromBoss(life, monsterId, source = 'ARISE') {
   const monster = HUNTER_MONSTERS[monsterId] ?? null;
   const rank = monster?.tier ?? life.hunterWorld.rank;
@@ -10083,6 +10071,12 @@ export function equipHunterItem(life, itemId) {
   return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
 }
 
+function clearStaleFinishedHunterDungeonFight(next) {
+  if (next.activeFight?.source === 'hunterDungeon' && next.activeFight.finished && !next.hunterWorld?.activeDungeon) {
+    next.activeFight = null;
+  }
+}
+
 export function attemptAriseShadow(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
@@ -10091,31 +10085,20 @@ export function attemptAriseShadow(life) {
   if (next.hunterWorld.pendingLevelRewards.length) return addLog(next, 'Claim the pending System Level Reward before commanding ARISE.', 'world');
   if (prompt.status !== 'active' || prompt.attemptsLeft <= 0) return addLog(next, 'That ARISE echo has already resolved.', 'world');
 
-  const chance = ariseSuccessChance(next.hunterWorld, prompt);
-  const roll = deterministicRoll(next.rngSeed, prompt.monsterId, prompt.createdMonth, prompt.attemptsUsed, next.hunterWorld.shadowArmy.length, 'arise');
   prompt.attemptsUsed += 1;
-  prompt.attemptsLeft = Math.max(0, 3 - prompt.attemptsUsed);
-  if (roll < chance) {
-    const shadow = createShadowFromBoss(next, prompt.monsterId, 'ARISE');
-    next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
-    next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 6);
-    next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
-    next.hunterWorld.milestones.shadowsExtracted += 1;
-    next.stats.control = clampLifeStat(next, 'control', next.stats.control + 2);
-    prompt.status = 'success';
-    prompt.shadowName = shadow.name;
-    prompt.resultText = `${shadow.name} rises and joins the Shadow Domain army.`;
-    next.hunterWorld.arisePrompt = prompt;
-    return addLog(next, `ARISE succeeded: ${shadow.name} joined your army.`, 'world');
-  }
-
-  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 3);
-  prompt.status = prompt.attemptsLeft > 0 ? 'active' : 'failed';
-  prompt.resultText = prompt.status === 'failed'
-    ? `${prompt.sourceBoss} resisted every command. The echo is gone.`
-    : `${prompt.sourceBoss} resisted ARISE. ${prompt.attemptsLeft} attempt${prompt.attemptsLeft === 1 ? '' : 's'} remain.`;
+  prompt.attemptsLeft = 0;
+  const shadow = createShadowFromBoss(next, prompt.monsterId, 'ARISE');
+  next.hunterWorld.shadowArmy = [...next.hunterWorld.shadowArmy, shadow];
+  next.hunterWorld.systemFatigue = clamp(next.hunterWorld.systemFatigue + 6);
+  next.hunterWorld.milestones = normalizeHunterMilestones(next.hunterWorld.milestones);
+  next.hunterWorld.milestones.shadowsExtracted += 1;
+  next.stats.control = clampLifeStat(next, 'control', next.stats.control + 2);
+  prompt.status = 'success';
+  prompt.shadowName = shadow.name;
+  prompt.resultText = `${shadow.name} rises and joins the Shadow Domain army.`;
   next.hunterWorld.arisePrompt = prompt;
-  return addLog(next, `ARISE failed: ${prompt.resultText}`, 'world');
+  clearStaleFinishedHunterDungeonFight(next);
+  return addLog(next, `ARISE succeeded: ${shadow.name} joined your army.`, 'world');
 }
 
 export function dismissArisePrompt(life) {
@@ -10124,6 +10107,7 @@ export function dismissArisePrompt(life) {
   const prompt = next.hunterWorld.arisePrompt;
   if (!prompt) return next;
   next.hunterWorld.arisePrompt = null;
+  clearStaleFinishedHunterDungeonFight(next);
   const text = prompt.status === 'success'
     ? `${prompt.shadowName ?? prompt.sourceBoss} is now marching with your Shadow Domain army.`
     : `${prompt.sourceBoss} echo fades.`;

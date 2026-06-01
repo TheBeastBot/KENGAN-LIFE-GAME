@@ -1047,9 +1047,16 @@ function hasMandatoryHunterPopup(hunter = state?.hunterWorld) {
   return Boolean(hunterMandatoryPopupKind(hunter));
 }
 
+function hasActiveHunterDungeonReport() {
+  return Boolean(
+    state.activeFight?.source === 'hunterDungeon' && state.hunterWorld?.activeDungeon ||
+    state.hunterWorld?.activeDungeon?.completed
+  );
+}
+
 function renderHunterFullScreenFlow() {
   if (state.activeFight?.source === 'hunterQuest') return renderHunterQuestPopup();
-  if (state.activeFight?.source === 'hunterDungeon' || state.hunterWorld?.activeDungeon?.completed) return renderHunterDungeonPopup();
+  if (hasActiveHunterDungeonReport()) return renderHunterDungeonPopup();
   if (hunterMandatoryPopupKind() === 'levelReward') return renderHunterLevelRewardPopup();
   if (hunterMandatoryPopupKind() === 'arise') return renderArisePopup();
   if (hunterQuestPopupOpen) return renderHunterQuestPopup();
@@ -3273,7 +3280,7 @@ function renderArisePopup() {
   const chance = prompt.status === 'active' ? 'Unstable' : prompt.status === 'success' ? 'Bound' : 'Lost';
   const action = prompt.status === 'active'
     ? button(`ARISE (${prompt.attemptsLeft}/3)`, 'hunter-arise-attempt', 'primary wide')
-    : button('Close', 'hunter-arise-dismiss', 'primary wide');
+    : button(prompt.status === 'success' ? 'Return to Gate Board' : 'Close Echo', 'hunter-arise-dismiss', 'primary wide');
   return `
     <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup arise-popup system-popup" data-scroll-key="hunter-arise">

@@ -1067,9 +1067,9 @@ test('Shadow army summary includes roster strength, bonuses, and ARISE prompt st
   assert.ok(summary.bonuses.some((bonus) => bonus.includes('Domain army')));
 });
 
-test('ARISE can fail three times and then releases the boss echo', () => {
+test('ARISE binds an eligible boss shadow on the first command', () => {
   const base = createNewLife({ gender: 'Female', seed: 93051 });
-  let life = {
+  const life = {
     ...base,
     rngSeed: 3,
     hunterWorld: {
@@ -1091,13 +1091,46 @@ test('ARISE can fail three times and then releases the boss echo', () => {
     },
   };
 
-  life = attemptAriseShadow(life);
-  life = attemptAriseShadow(life);
   const next = attemptAriseShadow(life);
 
-  assert.equal(next.hunterWorld.shadowArmy.length, 0);
-  assert.equal(next.hunterWorld.arisePrompt.status, 'failed');
+  assert.equal(next.hunterWorld.shadowArmy.length, 1);
+  assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
+  assert.equal(next.hunterWorld.arisePrompt.status, 'success');
   assert.equal(next.hunterWorld.arisePrompt.attemptsLeft, 0);
+});
+
+test('ARISE clears stale finished dungeon fights that no longer have a report', () => {
+  const base = createNewLife({ gender: 'Male', seed: 4 });
+  const life = {
+    ...base,
+    activeFight: {
+      source: 'hunterDungeon',
+      finished: true,
+      result: { won: true, summary: 'You won by stoppage against Goblin Captain.' },
+    },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      activeDungeon: null,
+      arisePrompt: {
+        monsterId: 'goblinCaptain',
+        sourceBoss: 'Goblin Captain',
+        rank: 'E',
+        attemptsLeft: 3,
+        attemptsUsed: 0,
+        status: 'active',
+      },
+    },
+  };
+
+  const next = attemptAriseShadow(life);
+  const dismissed = dismissArisePrompt(next);
+
+  assert.equal(next.activeFight, null);
+  assert.equal(next.hunterWorld.shadowArmy.length, 1);
+  assert.equal(dismissed.activeFight, null);
+  assert.equal(dismissed.hunterWorld.arisePrompt, null);
 });
 
 test('Monarch Trace unlocks at S-rank with three shadows and progresses as an endgame arc', () => {

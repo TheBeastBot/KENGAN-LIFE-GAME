@@ -144,6 +144,8 @@ test('Hunter fight reports render before level reward and ARISE popups', async (
   assert.ok(match, 'renderHunterFullScreenFlow should exist');
   const body = match[0];
   assert.match(appSource, /function hunterMandatoryPopupKind/);
+  assert.match(appSource, /function hasActiveHunterDungeonReport/);
+  assert.doesNotMatch(body, /state\.activeFight\?\.source === 'hunterDungeon' \|\| state\.hunterWorld\?\.activeDungeon\?\.completed/);
   assert.ok(body.indexOf('renderHunterQuestPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
   assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
   assert.ok(body.indexOf('renderHunterDungeonPopup()') < body.indexOf('renderArisePopup()'));
