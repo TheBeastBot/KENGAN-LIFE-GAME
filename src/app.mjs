@@ -2968,7 +2968,7 @@ function renderShadowArmyPanel() {
     return `
         <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}${selected}" data-action="shadow-army-select-${encodeURIComponent(shadow.id)}" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(shadow.name)} passive">
           <div>
-            <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow</p>
+            <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow <span class="shadow-rank-badge">${escapeHtml(shadow.rank ?? 'E')}</span></p>
             <h3>${escapeHtml(shadow.name)}</h3>
             <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / ${escapeHtml(shadow.role ?? 'vanguard')} / Power ${escapeHtml(String(shadow.armyPower ?? shadow.strength))}</p>
             <p class="shadow-passive-name">${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</p>
@@ -2990,7 +2990,7 @@ function renderSelectedShadowPassiveInfo(shadow) {
     <article class="option-card system-window shadow-passive-detail shadow-passive-${classToken(shadow.passiveTone ?? passive.tone ?? 'echo')} shadow-rank-${classToken(shadow.rank ?? 'E')} ${passive.redGate ? 'shadow-red-gate' : ''}">
       <div>
         <p class="eyebrow">Selected Shadow Passive${redGateLabel}</p>
-        <h3>${escapeHtml(shadow.name)} - ${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</h3>
+        <h3>${escapeHtml(shadow.name)} <span class="shadow-rank-badge">${escapeHtml(shadow.rank ?? 'E')}</span> - ${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</h3>
         <p>${escapeHtml(shadow.passiveDescription ?? passive.description ?? 'This shadow lends a passive while bound to the army.')}</p>
         ${renderSystemScanRows([
     { label: 'Source Boss', value: source },

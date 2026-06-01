@@ -3320,12 +3320,16 @@ select:focus {
 .shadow-card {
   --shadow-accent: #b987ff;
   --shadow-glow: rgba(185, 135, 255, 0.18);
+  --rank-accent: #9ca3af;
+  --rank-glow: rgba(156, 163, 175, 0.2);
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  border-color: color-mix(in srgb, var(--shadow-accent) 46%, rgba(186, 196, 207, 0.12));
+  border-color: color-mix(in srgb, var(--rank-accent) 62%, rgba(186, 196, 207, 0.12));
   box-shadow:
-    inset 4px 0 0 var(--shadow-accent),
+    inset 4px 0 0 var(--rank-accent),
+    inset 0 4px 0 color-mix(in srgb, var(--rank-accent) 76%, transparent),
+    0 0 18px var(--rank-glow),
     0 0 22px var(--shadow-glow),
     var(--shadow);
 }
@@ -3333,7 +3337,7 @@ select:focus {
 .shadow-card:hover,
 .shadow-card.selected {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--shadow-accent) 72%, var(--gold));
+  border-color: color-mix(in srgb, var(--rank-accent) 78%, var(--gold));
   filter: brightness(1.08);
 }
 
@@ -3360,12 +3364,33 @@ select:focus {
   font-size: 0.88rem;
 }
 
+.shadow-rank-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  margin-left: 6px;
+  border: 1px solid color-mix(in srgb, var(--rank-accent, #9ca3af) 76%, transparent);
+  border-radius: 999px;
+  color: #090b0f;
+  background: var(--rank-accent, #9ca3af);
+  box-shadow: 0 0 14px var(--rank-glow, rgba(156, 163, 175, 0.2));
+  font-size: 0.75rem;
+  font-weight: 1000;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 .shadow-passive-detail {
+  --rank-accent: #9ca3af;
+  --rank-glow: rgba(156, 163, 175, 0.2);
   grid-template-columns: minmax(0, 1fr) minmax(80px, auto);
   align-items: start;
-  border-color: color-mix(in srgb, var(--shadow-accent, #b987ff) 58%, rgba(186, 196, 207, 0.12));
+  border-color: color-mix(in srgb, var(--rank-accent) 62%, rgba(186, 196, 207, 0.12));
   box-shadow:
-    inset 4px 0 0 var(--shadow-accent, #b987ff),
+    inset 4px 0 0 var(--rank-accent),
+    inset 0 4px 0 color-mix(in srgb, var(--rank-accent) 76%, transparent),
+    0 0 18px var(--rank-glow),
     0 0 28px var(--shadow-glow, rgba(185, 135, 255, 0.18)),
     var(--shadow);
 }
@@ -3386,17 +3411,26 @@ select:focus {
 .shadow-passive-calamity { --shadow-accent: #f0c15b; --shadow-glow: rgba(240, 193, 91, 0.28); }
 .shadow-passive-decree { --shadow-accent: #d8b4fe; --shadow-glow: rgba(216, 180, 254, 0.3); }
 
+.shadow-rank-e { --rank-accent: #9ca3af; --rank-glow: rgba(156, 163, 175, 0.22); }
+.shadow-rank-d { --rank-accent: #74d692; --rank-glow: rgba(116, 214, 146, 0.24); }
+.shadow-rank-c { --rank-accent: #78d9ff; --rank-glow: rgba(120, 217, 255, 0.26); }
+.shadow-rank-b { --rank-accent: #b987ff; --rank-glow: rgba(185, 135, 255, 0.28); }
+.shadow-rank-a { --rank-accent: #f0c15b; --rank-glow: rgba(240, 193, 91, 0.32); }
+.shadow-rank-s { --rank-accent: #ff4f68; --rank-glow: rgba(255, 79, 104, 0.36); }
+
 .shadow-rank-a,
 .shadow-rank-s,
 .shadow-red-gate {
-  border-color: color-mix(in srgb, var(--shadow-accent) 66%, var(--gold));
+  border-color: color-mix(in srgb, var(--rank-accent) 74%, var(--gold));
 }
 
 .shadow-rank-s,
 .shadow-red-gate {
   box-shadow:
-    inset 4px 0 0 var(--shadow-accent),
-    0 0 0 1px color-mix(in srgb, var(--shadow-accent) 34%, transparent),
+    inset 4px 0 0 var(--rank-accent),
+    inset 0 4px 0 color-mix(in srgb, var(--rank-accent) 76%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--rank-accent) 34%, transparent),
+    0 0 26px var(--rank-glow),
     0 0 34px var(--shadow-glow),
     var(--shadow);
 }
