@@ -296,9 +296,14 @@ test('Shadow Army cards render boss passives and rarity visuals', async () => {
 
   assert.match(appSource, /shadow-passive-\$\{tone\}/);
   assert.match(appSource, /shadow-rank-\$\{rank\}/);
+  assert.match(appSource, /data-action="shadow-army-select-/);
+  assert.match(appSource, /function renderSelectedShadowPassiveInfo/);
+  assert.match(appSource, /data-action="shadow-army-clear"/);
   assert.match(appSource, /shadow-passive-name/);
   assert.match(appSource, /shadow-passive-effect/);
   assert.match(cssSource, /\.shadow-card\s*{/);
+  assert.match(cssSource, /\.shadow-card:hover/);
+  assert.match(cssSource, /\.shadow-passive-detail\s*{/);
   assert.match(cssSource, /\.shadow-passive-calamity/);
   assert.match(cssSource, /\.shadow-red-gate/);
 });

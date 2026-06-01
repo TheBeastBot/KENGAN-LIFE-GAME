@@ -3322,11 +3322,19 @@ select:focus {
   --shadow-glow: rgba(185, 135, 255, 0.18);
   position: relative;
   overflow: hidden;
+  cursor: pointer;
   border-color: color-mix(in srgb, var(--shadow-accent) 46%, rgba(186, 196, 207, 0.12));
   box-shadow:
     inset 4px 0 0 var(--shadow-accent),
     0 0 22px var(--shadow-glow),
     var(--shadow);
+}
+
+.shadow-card:hover,
+.shadow-card.selected {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--shadow-accent) 72%, var(--gold));
+  filter: brightness(1.08);
 }
 
 .shadow-card::after {
@@ -3350,6 +3358,20 @@ select:focus {
 .shadow-passive-effect {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.shadow-passive-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(80px, auto);
+  align-items: start;
+  border-color: color-mix(in srgb, var(--shadow-accent, #b987ff) 58%, rgba(186, 196, 207, 0.12));
+  box-shadow:
+    inset 4px 0 0 var(--shadow-accent, #b987ff),
+    0 0 28px var(--shadow-glow, rgba(185, 135, 255, 0.18)),
+    var(--shadow);
+}
+
+.shadow-passive-detail .system-scan-grid {
+  margin-top: 12px;
 }
 
 .shadow-passive-feint { --shadow-accent: #78d9ff; --shadow-glow: rgba(120, 217, 255, 0.2); }

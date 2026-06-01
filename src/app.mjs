@@ -267,6 +267,7 @@ let selectedFirstName = '';
 let activeTab = 'life';
 let selectedFightCategory = null;
 let selectedShadowDomainId = null;
+let selectedShadowArmyId = null;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
@@ -2945,24 +2946,27 @@ function renderHunterAssociationPanel() {
 
 function renderShadowArmyPanel() {
   const summary = getShadowArmySummary(state);
+  const selectedShadow = summary.roster.find((shadow) => shadow.id === selectedShadowArmyId) ?? null;
   return `
     <article class="option-card system-window shadow-army-panel">
       <div>
         <p class="eyebrow">Shadow Army</p>
         <h2>${summary.count} Shadows / Army Power ${summary.armyPower}</h2>
         <p>Ultimate ARISE is a passive System skill. Once unlocked, eligible defeated bosses rise into this army automatically for Domain conquest.</p>
-        ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 2 && summary.count >= 3 ? 'clear' : '' })))}
+        ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 3 && summary.count >= 3 ? 'clear' : '' })))}
       </div>
       <span class="lock-pill">Ultimate passive</span>
     </article>
+    ${selectedShadow ? renderSelectedShadowPassiveInfo(selectedShadow) : ''}
     <div class="world-grid shadow-roster-grid">
       ${summary.roster.length ? summary.roster.map((shadow) => {
     const passive = shadow.passive ?? {};
     const tone = classToken(shadow.passiveTone ?? passive.tone ?? 'echo');
     const rank = classToken(shadow.rank ?? 'E');
     const redGate = passive.redGate ? ' shadow-red-gate' : '';
+    const selected = shadow.id === selectedShadowArmyId ? ' selected' : '';
     return `
-        <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}">
+        <article class="option-card system-window shadow-card shadow-passive-${tone} shadow-rank-${rank}${redGate}${selected}" data-action="shadow-army-select-${encodeURIComponent(shadow.id)}" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(shadow.name)} passive">
           <div>
             <p class="eyebrow">${escapeHtml(shadow.rank ?? 'E')}-Rank Shadow</p>
             <h3>${escapeHtml(shadow.name)}</h3>
@@ -2974,6 +2978,29 @@ function renderShadowArmyPanel() {
       `;
   }).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Unlock Ultimate ARISE to make eligible defeated bosses rise automatically.</p></div></article>'}
     </div>
+  `;
+}
+
+function renderSelectedShadowPassiveInfo(shadow) {
+  const passive = shadow.passive ?? {};
+  const effects = passive.effectText || shadow.passiveDescription || 'Passive effect active while this shadow remains in the army.';
+  const source = shadow.sourceBoss ?? 'Extracted boss echo';
+  const redGateLabel = passive.redGate ? ' / Red Gate upgraded' : '';
+  return `
+    <article class="option-card system-window shadow-passive-detail shadow-passive-${classToken(shadow.passiveTone ?? passive.tone ?? 'echo')} shadow-rank-${classToken(shadow.rank ?? 'E')} ${passive.redGate ? 'shadow-red-gate' : ''}">
+      <div>
+        <p class="eyebrow">Selected Shadow Passive${redGateLabel}</p>
+        <h3>${escapeHtml(shadow.name)} - ${escapeHtml(shadow.passiveLabel ?? passive.label ?? 'Boss Echo Passive')}</h3>
+        <p>${escapeHtml(shadow.passiveDescription ?? passive.description ?? 'This shadow lends a passive while bound to the army.')}</p>
+        ${renderSystemScanRows([
+    { label: 'Source Boss', value: source },
+    { label: 'Rank / Scale', value: `${shadow.rank ?? 'E'}-Rank / x${passive.scale ?? 1}` },
+    { label: 'Role / Power', value: `${shadow.role ?? 'vanguard'} / ${shadow.armyPower ?? shadow.strength}` },
+    { label: 'Active Effect', value: effects, tone: 'clear' },
+  ])}
+      </div>
+      <button class="small-btn" data-action="shadow-army-clear">Close</button>
+    </article>
   `;
 }
 
@@ -4288,6 +4315,16 @@ function handleAction(action, source = null) {
   }
   if (action === 'hunter-domains-open') {
     activeTab = 'hunter';
+    render();
+    return;
+  }
+  if (action.startsWith('shadow-army-select-')) {
+    selectedShadowArmyId = decodeURIComponent(action.replace('shadow-army-select-', ''));
+    render();
+    return;
+  }
+  if (action === 'shadow-army-clear') {
+    selectedShadowArmyId = null;
     render();
     return;
   }
