@@ -3410,6 +3410,12 @@ select:focus {
 .shadow-passive-hex { --shadow-accent: #c084fc; --shadow-glow: rgba(192, 132, 252, 0.24); }
 .shadow-passive-calamity { --shadow-accent: #f0c15b; --shadow-glow: rgba(240, 193, 91, 0.28); }
 .shadow-passive-decree { --shadow-accent: #d8b4fe; --shadow-glow: rgba(216, 180, 254, 0.3); }
+.shadow-passive-void { --shadow-accent: #38bdf8; --shadow-glow: rgba(56, 189, 248, 0.34); }
+.shadow-passive-eclipse { --shadow-accent: #facc15; --shadow-glow: rgba(250, 204, 21, 0.34); }
+.shadow-passive-devour { --shadow-accent: #fb7185; --shadow-glow: rgba(251, 113, 133, 0.38); }
+.shadow-passive-singularity { --shadow-accent: #a78bfa; --shadow-glow: rgba(167, 139, 250, 0.42); }
+.shadow-passive-extinction { --shadow-accent: #ef4444; --shadow-glow: rgba(239, 68, 68, 0.5); }
+.shadow-passive-world-eater { --shadow-accent: #f8fafc; --shadow-glow: rgba(248, 250, 252, 0.44); }
 
 .shadow-rank-e { --rank-accent: #9ca3af; --rank-glow: rgba(156, 163, 175, 0.22); }
 .shadow-rank-d { --rank-accent: #74d692; --rank-glow: rgba(116, 214, 146, 0.24); }
@@ -3417,14 +3423,23 @@ select:focus {
 .shadow-rank-b { --rank-accent: #b987ff; --rank-glow: rgba(185, 135, 255, 0.28); }
 .shadow-rank-a { --rank-accent: #f0c15b; --rank-glow: rgba(240, 193, 91, 0.32); }
 .shadow-rank-s { --rank-accent: #ff4f68; --rank-glow: rgba(255, 79, 104, 0.36); }
+.shadow-rank-ss { --rank-accent: #38bdf8; --rank-glow: rgba(56, 189, 248, 0.44); }
+.shadow-rank-sss { --rank-accent: #facc15; --rank-glow: rgba(250, 204, 21, 0.48); }
+.shadow-rank-calamity { --rank-accent: #ef4444; --rank-glow: rgba(239, 68, 68, 0.56); }
 
 .shadow-rank-a,
 .shadow-rank-s,
+.shadow-rank-ss,
+.shadow-rank-sss,
+.shadow-rank-calamity,
 .shadow-red-gate {
   border-color: color-mix(in srgb, var(--rank-accent) 74%, var(--gold));
 }
 
 .shadow-rank-s,
+.shadow-rank-ss,
+.shadow-rank-sss,
+.shadow-rank-calamity,
 .shadow-red-gate {
   box-shadow:
     inset 4px 0 0 var(--rank-accent),

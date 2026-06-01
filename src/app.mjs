@@ -3371,6 +3371,10 @@ function renderHunterMoves(mode = 'quest') {
     shadowPierce: 'finisher',
     manaRend: 'finisher',
     reapingArc: 'finisher',
+    voidStepExecution: 'finisher',
+    rulerBreak: 'finisher',
+    calamityCommand: 'shadow',
+    worldEaterDomain: 'shadow',
   };
   const renderMoveCard = (move) => {
     const moveTypeLabel = move.moveType === 'special' ? 'Special Move' : 'Basic Move';
@@ -3385,8 +3389,9 @@ function renderHunterMoves(mode = 'quest') {
       move.category === 'weapon' && perkCount('weaponSkillPlus10') ? `Weapon skill damage +${10 * perkCount('weaponSkillPlus10')}% (${perkCount('weaponSkillPlus10')}/5).` : '',
       move.id === 'abyssalLeech' ? 'Ultimate lifesteal move: restores health from damage dealt.' : '',
       move.uiTone === 'shadow-monarch' ? `Shadow Monarch evolved skill. Army strength ${shadowStrengthTotal}.` : '',
-      ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id) && perkCount('shadowDamagePlus8') && shadowCount ? `Shadow Pressure damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
-      ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id) && perkCount('rulersAuthority') && shadowCount ? "Ruler's Authority adds command damage in Hunter fights." : '',
+      ['abyssalLeech', 'monarchCommand', 'abyssalDomain', 'calamityCommand', 'worldEaterDomain'].includes(move.id) && perkCount('shadowDamagePlus8') && shadowCount ? `Shadow Pressure damage +${8 * perkCount('shadowDamagePlus8')}% (${perkCount('shadowDamagePlus8')}/5).` : '',
+      ['abyssalLeech', 'monarchCommand', 'abyssalDomain', 'calamityCommand', 'worldEaterDomain'].includes(move.id) && perkCount('rulersAuthority') && shadowCount ? "Ruler's Authority adds command damage in Hunter fights." : '',
+      move.requiresHunterRank === 'SS' ? 'SS-rank System skill.' : '',
       move.uiTone === 'shadow-monarch' && perkCount('monarchsInstinct') ? "Monarch's Instinct adds black-violet pressure." : '',
     ].filter(Boolean).join(' ');
     return `

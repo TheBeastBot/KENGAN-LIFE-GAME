@@ -307,7 +307,11 @@ test('Shadow Army cards render boss passives and rarity visuals', async () => {
   assert.match(cssSource, /\.shadow-passive-detail\s*{/);
   assert.match(cssSource, /\.shadow-rank-e/);
   assert.match(cssSource, /\.shadow-rank-s/);
+  assert.match(cssSource, /\.shadow-rank-ss/);
+  assert.match(cssSource, /\.shadow-rank-sss/);
+  assert.match(cssSource, /\.shadow-rank-calamity/);
   assert.match(cssSource, /--rank-accent/);
   assert.match(cssSource, /\.shadow-passive-calamity/);
+  assert.match(cssSource, /\.shadow-passive-world-eater/);
   assert.match(cssSource, /\.shadow-red-gate/);
 });

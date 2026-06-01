@@ -100,7 +100,7 @@ const DEFAULT_HUNTER_WORLD = {
   },
   systemEnding: null,
 };
-const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S'];
+const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Calamity'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
 const SECRET_MENTOR_PASSWORD = 'MENTOR21';
 const SYSTEM_PERK_VALUES = {
@@ -130,6 +130,10 @@ const SYSTEM_PERK_VALUES = {
   limitBreakProtocol: 1,
   executionWindow: 0.2,
   monarchsInstinct: 0.24,
+  voidStepExecution: 1,
+  rulerBreak: 1,
+  calamityCommand: 1,
+  worldEaterDomain: 1,
 };
 export const TRAINING_SESSION_LIMIT = 20;
 const HUNTER_RANK_REQUIREMENTS = {
@@ -138,6 +142,9 @@ const HUNTER_RANK_REQUIREMENTS = {
   B: { level: 18, gatesCleared: 16, power: 310 },
   A: { level: 28, gatesCleared: 30, power: 455 },
   S: { level: 42, gatesCleared: 50, power: 650 },
+  SS: { level: 70, gatesCleared: 90, power: 2200 },
+  SSS: { level: 100, gatesCleared: 150, power: 5200 },
+  Calamity: { level: 140, gatesCleared: 250, power: 11000, minShadowRank: 'SS' },
 };
 const HUNTER_DUNGEON_TIERS = {
   E: { fights: 2, room: { xp: 35, money: 250, reputation: 2 }, boss: { xp: 90, money: 1000, reputation: 6, stats: 1 } },
@@ -146,6 +153,9 @@ const HUNTER_DUNGEON_TIERS = {
   B: { fights: 4, room: { xp: 180, money: 3500, reputation: 12 }, boss: { xp: 500, money: 20000, reputation: 34, stats: 2 } },
   A: { fights: 4, room: { xp: 290, money: 8000, reputation: 20 }, boss: { xp: 800, money: 50000, reputation: 55, stats: 3 } },
   S: { fights: 5, room: { xp: 450, money: 18000, reputation: 32 }, boss: { xp: 1250, money: 120000, reputation: 90, stats: 4 } },
+  SS: { fights: 5, room: { xp: 900, money: 60000, reputation: 58 }, boss: { xp: 2600, money: 300000, reputation: 150, stats: 7 } },
+  SSS: { fights: 6, room: { xp: 1500, money: 140000, reputation: 90 }, boss: { xp: 4800, money: 700000, reputation: 240, stats: 11 } },
+  Calamity: { fights: 6, room: { xp: 2600, money: 300000, reputation: 140 }, boss: { xp: 9000, money: 1500000, reputation: 400, stats: 18 } },
 };
 const HUNTER_DUNGEON_TEMPLATES = {
   E: [
@@ -172,6 +182,18 @@ const HUNTER_DUNGEON_TEMPLATES = {
   S: [
     { id: 'dragon-grave', name: 'Dragon Grave', theme: 'Ancient caldera', normals: ['dragonSpawn', 'chaosKnight'], boss: 'dragonMonarchBoss' },
     { id: 'monarch-rift', name: 'Monarch Rift', theme: 'Shattered throne', normals: ['chaosKnight', 'dragonSpawn'], boss: 'monarchAvatarBoss' },
+  ],
+  SS: [
+    { id: 'void-crown-citadel', name: 'Void Crown Citadel', theme: 'Collapsed royal dimension', normals: ['voidSeraph', 'eclipseTitan'], boss: 'voidKingBoss' },
+    { id: 'abyss-star-bastion', name: 'Abyss Star Bastion', theme: 'Dead star fortress', normals: ['abyssSeraph', 'eclipseTitan'], boss: 'eclipseEmperorBoss' },
+  ],
+  SSS: [
+    { id: 'reality-shear-nexus', name: 'Reality Shear Nexus', theme: 'Split worldline', normals: ['riftColossus', 'nullArchon'], boss: 'realityDevourerBoss' },
+    { id: 'black-star-throne', name: 'Black Star Throne', theme: 'Gravity thronefield', normals: ['nullArchon', 'riftColossus'], boss: 'blackStarTyrantBoss' },
+  ],
+  Calamity: [
+    { id: 'calamity-zero-gate', name: 'Calamity Zero Gate', theme: 'World-ending breach', normals: ['calamityHerald', 'worldEaterLarva'], boss: 'calamityDragonBoss' },
+    { id: 'last-system-domain', name: 'Last System Domain', theme: 'Broken System core', normals: ['worldEaterLarva', 'calamityHerald'], boss: 'systemAbyssBoss' },
   ],
 };
 
@@ -323,6 +345,19 @@ export const HUNTER_MONSTERS = {
   chaosKnight: { name: 'Chaos Knight', style: 'Space Sever', threat: 'S-Rank Monster', tier: 'S', power: 515, temperament: 'patient counter-striker', strengths: ['rift cuts'], weakness: 'anchor rune', reward: 0, rep: 0, risk: 50, requirements: {} },
   dragonMonarchBoss: { name: 'Dragon Monarch Echo', style: 'Calamity Breath', threat: 'S-Rank Boss', tier: 'S', power: 620, temperament: 'reckless pressure', strengths: ['catastrophe'], weakness: 'heart scale', reward: 0, rep: 0, risk: 62, requirements: {} },
   monarchAvatarBoss: { name: 'Monarch Avatar', style: 'Ruin Decree', threat: 'S-Rank Boss', tier: 'S', power: 640, temperament: 'patient counter-striker', strengths: ['domain pressure'], weakness: 'shadow breach', reward: 0, rep: 0, risk: 62, requirements: {} },
+  voidSeraph: { name: 'Void Seraph', style: 'Void Halo Execution', threat: 'SS-Rank Monster', tier: 'SS', power: 1800, temperament: 'patient counter-striker', strengths: ['halo cuts', 'space fold', 'execution timing'], weakness: 'halo fracture', reward: 0, rep: 0, risk: 92, requirements: {} },
+  eclipseTitan: { name: 'Eclipse Titan', style: 'Eclipse Siege Body', threat: 'SS-Rank Monster', tier: 'SS', power: 1950, temperament: 'defensive grinder', strengths: ['stellar armor', 'gravity stomp', 'sunless guard'], weakness: 'core shadowline', reward: 0, rep: 0, risk: 96, requirements: {} },
+  abyssSeraph: { name: 'Abyss Seraph', style: 'Abyss Wing Judgment', threat: 'SS-Rank Monster', tier: 'SS', power: 2050, temperament: 'reckless pressure', strengths: ['wing blades', 'abyss pressure', 'soul flare'], weakness: 'wing root', reward: 0, rep: 0, risk: 98, requirements: {} },
+  voidKingBoss: { name: 'Void King', style: 'Null Crown Decree', threat: 'SS-Rank Boss', tier: 'SS', power: 2900, temperament: 'patient counter-striker', strengths: ['void crown', 'cooldown rupture', 'space command'], weakness: 'crown breach', reward: 0, rep: 0, risk: 118, requirements: {} },
+  eclipseEmperorBoss: { name: 'Eclipse Emperor', style: 'Black Sun Dominion', threat: 'SS-Rank Boss', tier: 'SS', power: 3150, temperament: 'defensive grinder', strengths: ['black sun armor', 'domain burn', 'eclipse command'], weakness: 'umbra core', reward: 0, rep: 0, risk: 124, requirements: {} },
+  riftColossus: { name: 'Rift Colossus', style: 'Reality Hammer', threat: 'SSS-Rank Monster', tier: 'SSS', power: 4200, temperament: 'reckless pressure', strengths: ['reality crush', 'worldline stomp', 'rift hide'], weakness: 'split anchor', reward: 0, rep: 0, risk: 155, requirements: {} },
+  nullArchon: { name: 'Null Archon', style: 'Absolute Null Array', threat: 'SSS-Rank Monster', tier: 'SSS', power: 4450, temperament: 'patient counter-striker', strengths: ['null spells', 'time drag', 'mana deletion'], weakness: 'array backlash', reward: 0, rep: 0, risk: 160, requirements: {} },
+  realityDevourerBoss: { name: 'Reality Devourer', style: 'Worldline Feast', threat: 'SSS-Rank Boss', tier: 'SSS', power: 6100, temperament: 'reckless pressure', strengths: ['space hunger', 'boss execution', 'stamina erasure'], weakness: 'fed core', reward: 0, rep: 0, risk: 190, requirements: {} },
+  blackStarTyrantBoss: { name: 'Black Star Tyrant', style: 'Singularity Throne', threat: 'SSS-Rank Boss', tier: 'SSS', power: 6500, temperament: 'defensive grinder', strengths: ['singularity armor', 'gravity prison', 'king pressure'], weakness: 'event horizon scar', reward: 0, rep: 0, risk: 198, requirements: {} },
+  calamityHerald: { name: 'Calamity Herald', style: 'Doom Bell Rush', threat: 'Calamity-Rank Monster', tier: 'Calamity', power: 8500, temperament: 'reckless pressure', strengths: ['doom bells', 'death march', 'disaster aura'], weakness: 'silent interval', reward: 0, rep: 0, risk: 240, requirements: {} },
+  worldEaterLarva: { name: 'World Eater Larva', style: 'Planet Bite', threat: 'Calamity-Rank Monster', tier: 'Calamity', power: 9000, temperament: 'defensive grinder', strengths: ['planet shell', 'mana famine', 'world hunger'], weakness: 'unformed crown', reward: 0, rep: 0, risk: 250, requirements: {} },
+  calamityDragonBoss: { name: 'Calamity Dragon', style: 'Extinction Breath', threat: 'Calamity-Rank Boss', tier: 'Calamity', power: 12500, temperament: 'reckless pressure', strengths: ['extinction breath', 'calamity command', 'dragon apocalypse'], weakness: 'last heart scale', reward: 0, rep: 0, risk: 320, requirements: {} },
+  systemAbyssBoss: { name: 'System Abyss', style: 'World Eater Domain', threat: 'Calamity-Rank Boss', tier: 'Calamity', power: 13500, temperament: 'patient counter-striker', strengths: ['system deletion', 'world eater domain', 'absolute command'], weakness: 'player authority', reward: 0, rep: 0, risk: 340, requirements: {} },
 };
 const RED_GATE_BOSS_IDS = {
   E: 'redGoblinCaptain',
@@ -331,6 +366,9 @@ const RED_GATE_BOSS_IDS = {
   B: 'redFrostWarden',
   A: 'redDemonKnight',
   S: 'redDragonMonarch',
+  SS: 'redVoidKing',
+  SSS: 'redRealityDevourer',
+  Calamity: 'redCalamityDragon',
 };
 const RED_GATE_BASE_BOSS_IDS = {};
 for (const [rank, bossId, baseBossId] of [
@@ -340,6 +378,9 @@ for (const [rank, bossId, baseBossId] of [
   ['B', 'redFrostWarden', 'frostWardenBoss'],
   ['A', 'redDemonKnight', 'demonKnightBoss'],
   ['S', 'redDragonMonarch', 'dragonMonarchBoss'],
+  ['SS', 'redVoidKing', 'voidKingBoss'],
+  ['SSS', 'redRealityDevourer', 'realityDevourerBoss'],
+  ['Calamity', 'redCalamityDragon', 'calamityDragonBoss'],
 ]) {
   const boss = HUNTER_MONSTERS[baseBossId];
   RED_GATE_BASE_BOSS_IDS[bossId] = baseBossId;
@@ -359,6 +400,9 @@ const SHADOW_RANK_PASSIVE_SCALE = {
   B: 1.9,
   A: 2.35,
   S: 3,
+  SS: 5,
+  SSS: 7.5,
+  Calamity: 11,
 };
 const RED_GATE_SHADOW_PASSIVE_MULTIPLIER = 1.25;
 const SHADOW_PASSIVE_CATALOG = {
@@ -446,6 +490,48 @@ const SHADOW_PASSIVE_CATALOG = {
     effects: { allDamageMultiplier: 0.025, commandDamage: 6, incomingReduction: 1 },
     description: 'All attacks gain ruin pressure, command damage, and protection.',
   },
+  voidKingBoss: {
+    id: 'void-crown',
+    label: 'Void Crown Echo',
+    tone: 'void',
+    effects: { specialDamageMultiplier: 0.04, cooldownPressure: 0.08, commandDamage: 8 },
+    description: 'Special skills gain void command damage and a chance to crack cooldowns.',
+  },
+  eclipseEmperorBoss: {
+    id: 'black-sun',
+    label: 'Black Sun Echo',
+    tone: 'eclipse',
+    effects: { incomingReduction: 5, allDamageMultiplier: 0.035, staminaDamage: 4 },
+    description: 'A black sun shell reduces damage while your hits burn monster stamina.',
+  },
+  realityDevourerBoss: {
+    id: 'reality-feast',
+    label: 'Reality Feast Echo',
+    tone: 'devour',
+    effects: { bossDamageMultiplier: 0.065, executeDamageMultiplier: 0.08, staminaDamage: 8 },
+    description: 'Bosses take reality-shearing damage and lose huge stamina under execution pressure.',
+  },
+  blackStarTyrantBoss: {
+    id: 'singularity-throne',
+    label: 'Singularity Throne Echo',
+    tone: 'singularity',
+    effects: { incomingReduction: 8, shadowDamageMultiplier: 0.075, commandDamage: 12 },
+    description: 'Shadow skills gain singularity pressure while gravity armor blunts return damage.',
+  },
+  calamityDragonBoss: {
+    id: 'extinction-breath',
+    label: 'Extinction Breath Echo',
+    tone: 'extinction',
+    effects: { shadowDamageMultiplier: 0.12, allDamageMultiplier: 0.06, commandDamage: 22, staminaDamage: 12 },
+    description: 'Every attack carries extinction pressure, with monstrous shadow command damage.',
+  },
+  systemAbyssBoss: {
+    id: 'world-eater',
+    label: 'World Eater Echo',
+    tone: 'world-eater',
+    effects: { allDamageMultiplier: 0.08, emergencyReduction: 0.18, commandDamage: 26, cooldownPressure: 0.12 },
+    description: 'The System Abyss lends army-wide damage, emergency protection, and cooldown pressure.',
+  },
 };
 
 const HUNTER_MONSTER_ATTACK_LABELS = {
@@ -476,12 +562,28 @@ const HUNTER_MONSTER_ATTACK_LABELS = {
   chaosKnight: ['Space Sever', 'Rift Impale'],
   dragonMonarchBoss: ['Calamity Breath', 'Wingstorm Cataclysm', 'Dragon Fear'],
   monarchAvatarBoss: ['Ruin Decree', 'Shadow Dominion', 'Existence Break'],
+  voidSeraph: ['Halo Sever', 'Void Wing Step', 'Crownless Judgment'],
+  eclipseTitan: ['Eclipse Stomp', 'Black Sun Guard', 'Titan Core Crush'],
+  abyssSeraph: ['Abyss Wing Rend', 'Soul Flare Dive', 'Judgment Spiral'],
+  voidKingBoss: ['Null Crown Order', 'Void Step Execution', 'Space Command Break'],
+  eclipseEmperorBoss: ['Black Sun Dominion', 'Eclipse Prison', 'Emperor Collapse'],
+  riftColossus: ['Reality Hammer', 'Worldline Shoulder', 'Rift Hide Crash'],
+  nullArchon: ['Absolute Null Array', 'Mana Deletion', 'Time Drag Spear'],
+  realityDevourerBoss: ['Worldline Feast', 'Reality Bite', 'Stamina Erasure'],
+  blackStarTyrantBoss: ['Singularity Throne', 'Gravity Prison', 'Black Star Edict'],
+  calamityHerald: ['Doom Bell Rush', 'Disaster Step', 'Death March'],
+  worldEaterLarva: ['Planet Bite', 'Mana Famine', 'World Hunger'],
+  calamityDragonBoss: ['Extinction Breath', 'Calamity Command', 'Dragon Apocalypse'],
+  systemAbyssBoss: ['World Eater Domain', 'System Deletion', 'Absolute Authority'],
   redGoblinCaptain: ['Crimson Blade Flurry', 'Red Gate Bomb', 'Blood Command'],
   redIronKnight: ['Crimson Execution', 'Red Shield Rupture', 'Blood-Joint Thrust'],
   redBloodOgre: ['Crimson Bone Maul', 'Blood Chain Hook', 'Red Gate Quake'],
   redFrostWarden: ['Crimson Ice Sentence', 'Bloodfrost Prison', 'Red Absolute Zero'],
   redDemonKnight: ['Crimson Flame Blade', 'Red Hellfire Rend', 'Blood Execution'],
   redDragonMonarch: ['Crimson Calamity Breath', 'Red Wingstorm', 'Blood Dragon Fear'],
+  redVoidKing: ['Crimson Null Crown', 'Red Void Execution', 'Blood Space Command'],
+  redRealityDevourer: ['Crimson Worldline Feast', 'Red Reality Bite', 'Blood Stamina Erasure'],
+  redCalamityDragon: ['Crimson Extinction Breath', 'Red Calamity Command', 'Blood Dragon Apocalypse'],
 };
 
 function monsterMove(id, label, index, isBoss) {
@@ -648,6 +750,58 @@ export const HUNTER_MOVES = {
     guardBias: 8,
     requiresShadowMonarch: true,
     text: 'Abyssal Domain spreads under your feet as black-violet System light answers.',
+  },
+  voidStepExecution: {
+    label: 'Void Step Execution',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN,
+    category: 'finisher',
+    hint: 'SS System skill. Step through void space and execute the target from the wrong angle.',
+    staminaCost: 42,
+    damageBias: 2.35,
+    guardBias: -8,
+    requiresPerk: 'voidStepExecution',
+    requiresHunterRank: 'SS',
+    text: 'Void Step Execution erases the distance and returns with the execution line already drawn.',
+  },
+  rulerBreak: {
+    label: 'Ruler Break',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN + 1,
+    category: 'ultimate',
+    hint: 'SS System skill. Anti-boss strike that shatters guard and royal pressure.',
+    staminaCost: 48,
+    damageBias: 2.55,
+    guardBias: -4,
+    requiresPerk: 'rulerBreak',
+    requiresHunterRank: 'SS',
+    text: 'Ruler Break compresses the System window into one command and breaks the monster authority open.',
+  },
+  calamityCommand: {
+    label: 'Calamity Command',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN + 2,
+    category: 'ultimate',
+    hint: 'SS System skill. Your Shadow Army hits as a single disaster order.',
+    staminaCost: 56,
+    damageBias: 2.75,
+    guardBias: 2,
+    requiresPerk: 'calamityCommand',
+    requiresHunterRank: 'SS',
+    text: 'Calamity Command makes every bound shadow answer at once.',
+  },
+  worldEaterDomain: {
+    label: 'World Eater Domain',
+    moveType: 'special',
+    cooldown: HUNTER_SPECIAL_COOLDOWN + 4,
+    category: 'ultimate',
+    hint: 'SS ultimate System skill. Massive damage and protection from a world-ending Domain.',
+    staminaCost: 68,
+    damageBias: 3.1,
+    guardBias: 12,
+    requiresPerk: 'worldEaterDomain',
+    requiresHunterRank: 'SS',
+    text: 'World Eater Domain opens under the battlefield and bites the Gate from below.',
   },
 };
 
@@ -821,6 +975,10 @@ export const HUNTER_LEVEL_REWARD_OPTIONS = {
   blackFlash: { id: 'blackFlash', type: 'perk', perk: 'blackFlash', tier: 'special', maxStacks: 1, label: 'Black Flash: basic moves can spike critical damage', description: 'Damaging Basic Moves have a low chance to become a black System strike for much higher damage and unique log text.' },
   limitBreakProtocol: { id: 'limitBreakProtocol', type: 'perk', perk: 'limitBreakProtocol', tier: 'special', maxStacks: 1, label: 'Limit Break Protocol: one low-health emergency boost', description: 'Once per Hunter fight, dropping to 25% health or lower grants emergency stamina, score, and damage. The log shows when it fires.' },
   executionWindow: { id: 'executionWindow', type: 'perk', perk: 'executionWindow', tier: 'special', maxStacks: 1, label: 'Execution Window: Execute spikes after an outread', description: 'Execute deals extra damage right after the monster misses or you heavily outread it. The log shows when the window opens.' },
+  voidStepExecution: { id: 'voidStepExecution', type: 'perk', perk: 'voidStepExecution', tier: 'ultimate', maxStacks: 1, requiresHunterRank: 'SS', label: 'Void Step Execution: unlock SS execution skill', description: 'SS-rank reward. Unlocks Void Step Execution, a high-damage special that cuts through impossible boss angles.' },
+  rulerBreak: { id: 'rulerBreak', type: 'perk', perk: 'rulerBreak', tier: 'ultimate', maxStacks: 1, requiresHunterRank: 'SS', label: 'Ruler Break: unlock SS anti-boss skill', description: 'SS-rank reward. Unlocks Ruler Break, a heavy anti-boss System strike that breaks authority and guard.' },
+  calamityCommand: { id: 'calamityCommand', type: 'perk', perk: 'calamityCommand', tier: 'ultimate', maxStacks: 1, requiresHunterRank: 'SS', label: 'Calamity Command: unlock army disaster skill', description: 'SS-rank reward. Unlocks Calamity Command, a Shadow Army burst skill that scales with bound shadows.' },
+  worldEaterDomain: { id: 'worldEaterDomain', type: 'perk', perk: 'worldEaterDomain', tier: 'ultimate', maxStacks: 1, requiresHunterRank: 'SS', label: 'World Eater Domain: unlock endgame Domain skill', description: 'SS-rank reward. Unlocks World Eater Domain, a huge-cost ultimate with massive damage and protection.' },
   arise: { id: 'arise', type: 'perk', perk: 'arise', tier: 'ultimate', maxStacks: 1, label: 'ARISE: defeated bosses rise as shadows', description: 'Ultimate passive. Eligible defeated bosses automatically join your Shadow Domain army when the fight result is applied.' },
   abyssalLeech: { id: 'abyssalLeech', type: 'perk', perk: 'abyssalLeech', tier: 'ultimate', maxStacks: 1, label: 'Abyssal Leech: unlock lifesteal System move', description: 'Unlocks Abyssal Leech, a Special Move that damages the monster and restores Hunter health based on damage dealt.' },
   monarchsInstinct: { id: 'monarchsInstinct', type: 'perk', perk: 'monarchsInstinct', tier: 'ultimate', maxStacks: 1, label: "Monarch's Instinct: evolved skills gain black-violet pressure", description: 'After Shadow Monarch transformation, evolved skills gain bonus damage, reduction, cooldown pressure, and black-violet fight log text.' },
@@ -1054,6 +1212,18 @@ function hunterRankPower(rank) {
   return index >= 0 ? index + 1 : 1;
 }
 
+function hunterRankAtLeast(rank, requiredRank) {
+  if (!requiredRank) return true;
+  const rankIndex = HUNTER_RANKS.indexOf(rank);
+  const requiredIndex = HUNTER_RANKS.indexOf(requiredRank);
+  return rankIndex >= 0 && requiredIndex >= 0 && rankIndex >= requiredIndex;
+}
+
+function hunterHasShadowAtRank(hunterWorld, requiredRank) {
+  if (!requiredRank) return true;
+  return normalizeShadowArmy(hunterWorld?.shadowArmy).some((shadow) => hunterRankAtLeast(shadow.rank, requiredRank));
+}
+
 function shadowStrength(shadow = {}) {
   const monster = HUNTER_MONSTERS[shadow.monsterId] ?? HUNTER_MONSTERS[shadow.sourceMonsterId] ?? null;
   const storedPower = Number.isFinite(shadow.power) ? Math.max(1, Math.round(shadow.power / 18)) : 0;
@@ -1148,10 +1318,14 @@ function shadowPassiveEffectText(effects = {}) {
   if (effects.shadowDamageMultiplier) parts.push(`+${Math.round(effects.shadowDamageMultiplier * 100)}% shadow skill damage`);
   if (effects.weaponDamageMultiplier) parts.push(`+${Math.round(effects.weaponDamageMultiplier * 100)}% weapon skill damage`);
   if (effects.allDamageMultiplier) parts.push(`+${Math.round(effects.allDamageMultiplier * 100)}% all damage`);
+  if (effects.bossDamageMultiplier) parts.push(`+${Math.round(effects.bossDamageMultiplier * 100)}% boss damage`);
+  if (effects.executeDamageMultiplier) parts.push(`+${Math.round(effects.executeDamageMultiplier * 100)}% execution damage`);
   if (effects.specialFlatDamage) parts.push(`+${effects.specialFlatDamage} special damage`);
   if (effects.commandDamage) parts.push(`+${effects.commandDamage} command damage`);
   if (effects.incomingReduction) parts.push(`-${effects.incomingReduction} incoming damage`);
+  if (effects.emergencyReduction) parts.push(`${Math.round(effects.emergencyReduction * 100)}% emergency damage shield`);
   if (effects.staminaDamage) parts.push(`+${effects.staminaDamage} stamina damage`);
+  if (effects.cooldownPressure) parts.push(`${Math.round(effects.cooldownPressure * 100)}% cooldown pressure`);
   if (effects.critChance) parts.push(`+${Math.round(effects.critChance * 100)}% crit/read chance`);
   if (effects.analysisCritChance) parts.push(`+${Math.round(effects.analysisCritChance * 100)}% analysis crit/read chance`);
   return parts.join(' / ');
@@ -1191,10 +1365,14 @@ function activeShadowPassiveEffects(hunterWorld, context = {}) {
     shadowDamageMultiplier: 0,
     weaponDamageMultiplier: 0,
     allDamageMultiplier: 0,
+    bossDamageMultiplier: 0,
+    executeDamageMultiplier: 0,
     specialFlatDamage: 0,
     commandDamage: 0,
     incomingReduction: 0,
+    emergencyReduction: 0,
     staminaDamage: 0,
+    cooldownPressure: 0,
     critChance: 0,
     analysisCritChance: 0,
   };
@@ -1213,7 +1391,9 @@ function activeShadowPassiveEffects(hunterWorld, context = {}) {
     + (move.moveType === 'basic' ? totals.basicDamageMultiplier : 0)
     + (move.moveType === 'special' ? totals.specialDamageMultiplier : 0)
     + (move.category === 'weapon' ? totals.weaponDamageMultiplier : 0)
-    + (context.shadowLinkedSkill ? totals.shadowDamageMultiplier : 0);
+    + (context.shadowLinkedSkill ? totals.shadowDamageMultiplier : 0)
+    + (context.bossMonster ? totals.bossDamageMultiplier : 0)
+    + (move.id === 'execute' ? totals.executeDamageMultiplier : 0);
   const flatDamage = (move.moveType === 'special' ? totals.specialFlatDamage : 0)
     + (context.shadowLinkedSkill || move.moveType === 'special' ? totals.commandDamage : 0);
   const critChance = totals.critChance + (context.analysisFollowUpActive ? totals.analysisCritChance : 0);
@@ -4143,6 +4323,15 @@ export function getHunterAssociationReview(life) {
     { id: 'gates', label: 'Gates Cleared', current: hunter.gatesCleared, required: requirement.gatesCleared, met: hunter.gatesCleared >= requirement.gatesCleared },
     { id: 'power', label: 'Hunter Power', current: power, required: requirement.power, met: power >= requirement.power },
   ] : [];
+  if (requirement?.minShadowRank) {
+    requirements.push({
+      id: 'shadow-rank',
+      label: `${requirement.minShadowRank}+ Shadow`,
+      current: hunter.shadowArmy.some((shadow) => hunterRankAtLeast(shadow.rank, requirement.minShadowRank)) ? 1 : 0,
+      required: 1,
+      met: hunterHasShadowAtRank(hunter, requirement.minShadowRank),
+    });
+  }
   return {
     currentRank: hunter.rank,
     nextRank,
@@ -4189,7 +4378,7 @@ export function getShadowArmySummary(life) {
 export function getHunterMilestones(life) {
   const hunter = normalizeHunterWorld(life?.hunterWorld);
   const shadowSummary = getShadowArmySummary({ ...life, hunterWorld: hunter });
-  const monarchReady = hunter.rank === 'S' && hunter.level >= 40 && hunter.gatesCleared >= 50 && hunter.shadowArmy.length >= 3;
+  const monarchReady = hunterRankAtLeast(hunter.rank, 'S') && hunter.level >= 40 && hunter.gatesCleared >= 50 && hunter.shadowArmy.length >= 3;
   return [
     {
       id: 'daily-discipline',
@@ -4212,7 +4401,7 @@ export function getHunterMilestones(life) {
       title: 'S-Rank Hunter',
       current: HUNTER_RANKS.indexOf(hunter.rank),
       target: HUNTER_RANKS.indexOf('S'),
-      complete: hunter.rank === 'S',
+      complete: hunterRankAtLeast(hunter.rank, 'S'),
       subtitle: `${hunter.rank}-rank Association file`,
     },
     {
@@ -4333,6 +4522,7 @@ function systemPerkValue(life, perk, fallback = 0) {
 function createHunterLevelRewardChoice(life, level) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const availableOptions = Object.values(HUNTER_LEVEL_REWARD_OPTIONS)
+    .filter((option) => !option.requiresHunterRank || hunterRankAtLeast(hunter.rank, option.requiresHunterRank))
     .filter((option) => option.type !== 'perk' || (hunter.unlockedSystemPerks.find((item) => item.id === option.perk)?.count ?? 0) < (option.maxStacks ?? 1));
   const optionIds = availableOptions
     .map((option) => ({
@@ -4401,6 +4591,9 @@ function normalGateRanksForHunter(hunter) {
     B: ['C', 'B'],
     A: ['B', 'A'],
     S: ['A', 'S'],
+    SS: ['S', 'SS'],
+    SSS: ['SS', 'SSS'],
+    Calamity: ['SSS', 'Calamity'],
   }[hunter.rank] ?? ['E'];
 }
 
@@ -4411,6 +4604,9 @@ function dangerGateRankForHunter(hunter) {
     C: { level: 15, rank: 'B' },
     B: { level: 24, rank: 'A' },
     A: { level: 36, rank: 'S' },
+    S: { level: 62, rank: 'SS' },
+    SS: { level: 90, rank: 'SSS' },
+    SSS: { level: 125, rank: 'Calamity' },
   };
   const danger = unlocks[hunter.rank];
   return danger && hunter.level >= danger.level ? danger.rank : null;
@@ -4429,7 +4625,7 @@ function dungeonLootDrops(life, dungeon, encounter, monster) {
     if (dungeon.isRedGate) add('redGateShard');
     const weaponRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-weapon');
     if (weaponRoll < (dungeon.isRedGate ? 0.42 : 0.2)) {
-      add(dungeon.rank === 'A' || dungeon.rank === 'S' ? 'reaperScythe' : dungeon.rank === 'C' || dungeon.rank === 'B' ? 'manaLongsword' : 'knightDagger');
+      add(hunterRankAtLeast(dungeon.rank, 'A') ? 'reaperScythe' : hunterRankAtLeast(dungeon.rank, 'C') ? 'manaLongsword' : 'knightDagger');
     }
     const specialRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-special');
     if (specialRoll < (dungeon.isRedGate ? 0.36 : 0.16)) add(specialRoll < 0.06 ? 'awakeningRune' : 'monarchVial');
@@ -6332,6 +6528,9 @@ export function getOpponentStats(opponent) {
   if (style.includes('ghost') || style.includes('phantom') || style.includes('assassin') || style.includes('needle')) add({ speed: 0.24, reflexes: 0.24, technique: 0.18, fightIq: 0.12 });
   if (style.includes('redirection') || style.includes('soft lock')) add({ technique: 0.42, fightIq: 0.36, control: 0.28, flexibility: 0.18, aggression: -0.16, strength: -0.08 });
   if (style.includes('demon') || style.includes('release') || style.includes('monster')) add({ strength: 0.28, durability: 0.22, aggression: 0.28, willpower: 0.18, speed: 0.12 });
+  if (style.includes('void') || style.includes('null') || style.includes('rift')) add({ speed: 0.24, reflexes: 0.24, fightIq: 0.2, technique: 0.18, control: 0.12 });
+  if (style.includes('eclipse') || style.includes('titan') || style.includes('singularity')) add({ durability: 0.34, willpower: 0.28, control: 0.2, strength: 0.18 });
+  if (style.includes('calamity') || style.includes('extinction') || style.includes('world eater') || style.includes('apocalypse')) add({ strength: 0.42, aggression: 0.38, durability: 0.32, willpower: 0.3, control: 0.2 });
   if (style.includes('conditioning') || style.includes('iron body')) add({ durability: 0.34, willpower: 0.2, control: 0.12, strength: 0.12 });
   if (style.includes('hybrid') || style.includes('apex')) add({ technique: 0.14, fightIq: 0.14, reflexes: 0.12, speed: 0.1, strength: 0.1 });
 
@@ -6350,6 +6549,9 @@ const SYSTEM_MONSTER_POWER_MULTIPLIERS = {
   B: 3.2,
   A: 3.65,
   S: 4.15,
+  SS: 9.5,
+  SSS: 14,
+  Calamity: 20,
 };
 
 function resolvedOpponentPower(opponent) {
@@ -6367,6 +6569,9 @@ function systemMonsterHealthMultiplier(opponent) {
     B: 2.25,
     A: 2.55,
     S: 2.9,
+    SS: 25,
+    SSS: 45,
+    Calamity: 78,
   }[opponent.tier] ?? 1.6;
   const bossMultiplier = opponent.threat?.includes('Boss') ? 1.35 : 1;
   const redMultiplier = opponent.threat?.includes('Red Gate') ? 1.2 : 1;
@@ -6567,6 +6772,7 @@ export function getUnlockedHunterMoves(life) {
   return Object.entries(HUNTER_MOVES)
     .filter(([, move]) => !move.requiresPerk || hasSystemPerk({ hunterWorld: hunter }, move.requiresPerk))
     .filter(([, move]) => !move.requiresShadowMonarch || hunter.shadowMonarch.unlocked)
+    .filter(([, move]) => !move.requiresHunterRank || hunterRankAtLeast(hunter.rank, move.requiresHunterRank))
     .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunterHasItem(hunter, move.requiresWeapon))
     .map(([id, move]) => ({
       id,
@@ -6584,6 +6790,7 @@ function hunterMoveDisabledReason(life, move) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   if (move.requiresPerk && !hasSystemPerk(life, move.requiresPerk)) return 'Requires the matching ultimate System perk.';
   if (move.requiresShadowMonarch && !hunter.shadowMonarch.unlocked) return 'Requires Shadow Monarch transformation.';
+  if (move.requiresHunterRank && !hunterRankAtLeast(hunter.rank, move.requiresHunterRank)) return `Requires ${move.requiresHunterRank}-rank Hunter status.`;
   if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunterHasItem(hunter, move.requiresWeapon)) return 'Requires the matching System weapon.';
   const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
   if (move.moveType === 'special' && cooldown > 0) return `${move.label} cooldown: ${cooldown} exchange${cooldown === 1 ? '' : 's'} remaining.`;
@@ -8810,6 +9017,26 @@ function hunterMoveProfile(move, life) {
       damageBonus: shadowPower * 0.55 + hunter.stats.strength * 3 + hunter.stats.intelligence * 4,
       incomingReduction: 14 + hunter.stats.vitality * 2 + shadowStrengthTotal,
     },
+    voidStepExecution: {
+      stat: stats.speed * 1.18 + stats.reflexes * 1.05 + stats.fightIq * 0.8 + hunter.level * 10,
+      damageBonus: hunter.stats.agility * 7 + hunter.stats.sense * 6 + shadowStrengthTotal * 5,
+      incomingReduction: 4 + hunter.stats.sense,
+    },
+    rulerBreak: {
+      stat: stats.strength * 1.15 + stats.control * 0.95 + stats.willpower * 0.7 + hunter.level * 11,
+      damageBonus: hunter.stats.strength * 8 + hunter.stats.intelligence * 5 + shadowStrengthTotal * 7,
+      incomingReduction: 8 + hunter.stats.vitality,
+    },
+    calamityCommand: {
+      stat: stats.control * 1.25 + stats.fightIq * 1.0 + shadowPower * 1.25 + hunter.level * 12,
+      damageBonus: shadowPower * 0.9 + hunter.stats.intelligence * 8 + hunter.stats.sense * 5,
+      incomingReduction: 12 + shadowCount * 5,
+    },
+    worldEaterDomain: {
+      stat: stats.willpower * 1.25 + stats.control * 1.05 + shadowPower * 1.55 + hunter.level * 14,
+      damageBonus: shadowPower * 1.18 + hunter.stats.strength * 7 + hunter.stats.intelligence * 9 + shadowStrengthTotal * 8,
+      incomingReduction: 24 + hunter.stats.vitality * 3 + shadowStrengthTotal * 2,
+    },
   };
   const profile = profiles[move.id] ?? profiles.slash;
   if (!hunter.shadowMonarch.unlocked || !SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id]) return profile;
@@ -8839,11 +9066,11 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const isBasicMove = move.moveType === 'basic';
   const isAttackMove = move.id !== 'conserve' && move.id !== 'manaGuard';
   const bossMonster = Boolean(opponent?.threat?.includes('Boss') || opponent?.threat?.includes('Monarch'));
-  const shadowLinkedSkill = ['abyssalLeech', 'monarchCommand', 'abyssalDomain'].includes(move.id)
+  const shadowLinkedSkill = ['abyssalLeech', 'monarchCommand', 'abyssalDomain', 'calamityCommand', 'worldEaterDomain'].includes(move.id)
     || Boolean(SHADOW_MONARCH_SKILL_EVOLUTIONS[move.id])
     || Boolean(move.requiresShadowMonarch);
   const analysisFollowUpActive = Boolean(fight.systemAnalysis) && move.id !== 'analyzeWeakness';
-  const shadowPassive = activeShadowPassiveEffects(next.hunterWorld, { move, shadowLinkedSkill, analysisFollowUpActive });
+  const shadowPassive = activeShadowPassiveEffects(next.hunterWorld, { move, shadowLinkedSkill, analysisFollowUpActive, bossMonster });
   const footworkActive = hasSystemPerk(next, 'perfectFootwork') && perkState.perfectFootworkWindow;
   if (footworkActive) perkState.perfectFootworkWindow = false;
   const limitBreakActive = hasSystemPerk(next, 'limitBreakProtocol')
@@ -8914,6 +9141,10 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0) + (footworkActive ? systemPerkValue(next, 'perfectFootwork') : 0), 0.03, footworkActive ? 0.62 : 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   let enemyDamage = dodged ? 0 : baseEnemyDamage;
+  const emergencyShadowShield = !dodged && shadowPassive.emergencyReduction > 0 && healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) <= 35
+    ? Math.max(0, Math.round(enemyDamage * Math.min(0.75, shadowPassive.emergencyReduction)))
+    : 0;
+  if (emergencyShadowShield) enemyDamage = Math.max(0, enemyDamage - emergencyShadowShield);
   const blackFlash = hasSystemPerk(next, 'blackFlash') && isBasicMove && move.id !== 'conserve'
     && deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'black-flash') < systemPerkValue(next, 'blackFlash');
   if (blackFlash) playerDamage = Math.round(playerDamage * 1.85 + 12);
@@ -8921,6 +9152,12 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   tickHunterMoveCooldowns(fight);
   const appliedCooldown = move.moveType === 'special' ? hunterSpecialCooldown(next, move) : 0;
   if (move.moveType === 'special') fight.moveCooldowns[move.id] = appliedCooldown;
+  const shadowCooldownCut = appliedCooldown && shadowPassive.cooldownPressure
+    ? Math.min(3, Math.floor(shadowPassive.cooldownPressure * 10))
+    : 0;
+  if (shadowCooldownCut && fight.moveCooldowns[move.id]) {
+    fight.moveCooldowns[move.id] = Math.max(1, fight.moveCooldowns[move.id] - shadowCooldownCut);
+  }
   if (monarchInstinctActive && move.moveType === 'special' && fight.moveCooldowns[move.id]) {
     fight.moveCooldowns[move.id] = Math.max(1, fight.moveCooldowns[move.id] - 1);
   }
@@ -8976,7 +9213,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     shadowPassiveMultiplier > 1
     || shadowPassiveFlatDamage
     || shadowPassive.incomingReduction
+    || emergencyShadowShield
     || shadowPassive.staminaDamage
+    || shadowCooldownCut
     || shadowPassive.critChance
   )
     ? ` ${shadowPassive.strongest.shadow.name}'s ${shadowPassive.strongest.passive.label} lent power: ${shadowPassive.strongest.passive.effectText}.`
@@ -9005,6 +9244,8 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     bloodScentMultiplier > 1 ? ' Blood Scent amplified the wounded-target hit.' : '',
     coreSightMultiplier > 1 ? ' Core Sight exposed the boss core.' : '',
     shadowPassiveLine,
+    emergencyShadowShield ? ` Shadow emergency shield prevented ${emergencyShadowShield} damage.` : '',
+    shadowCooldownCut ? ` Shadow cooldown pressure cut ${shadowCooldownCut} exchange${shadowCooldownCut === 1 ? '' : 's'}.` : '',
     blackFlash ? ' Black Flash: a black System spark erupts on impact.' : '',
     limitBreakActive ? ' Limit Break Protocol restored emergency stamina.' : '',
     executionWindowActive ? ' Execution Window opened after the monster was outread.' : '',

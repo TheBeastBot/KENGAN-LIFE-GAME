@@ -1473,6 +1473,34 @@ test('hunter association can promote ranks after enough gates and power', () => 
   assert.ok(next.resources.reputation > life.resources.reputation);
 });
 
+test('Hunter Association extends progression through SS, SSS, and Calamity ranks', () => {
+  const base = createNewLife({ gender: 'Female', seed: 944 });
+  const highStats = Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 18000]));
+  let life = {
+    ...base,
+    stats: highStats,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 150,
+      gatesCleared: 260,
+      stats: { strength: 900, agility: 900, vitality: 900, sense: 900, intelligence: 900 },
+      shadowArmy: [{ id: 'ss-shadow', monsterId: 'voidKingBoss', name: 'Void King Shadow', rank: 'SS', strength: 500, armyPower: 200000 }],
+    },
+  };
+
+  assert.equal(getHunterAssociationReview(life).nextRank, 'SS');
+  life = visitHunterAssociation(life);
+  assert.equal(life.hunterWorld.rank, 'SS');
+  life = visitHunterAssociation(life);
+  assert.equal(life.hunterWorld.rank, 'SSS');
+  life = visitHunterAssociation(life);
+  assert.equal(life.hunterWorld.rank, 'Calamity');
+  assert.equal(getHunterAssociationReview(life).maxRank, true);
+});
+
 test('system shop potions heal resources and reduce System fatigue', () => {
   const life = {
     ...createNewLife({ gender: 'Male', seed: 941 }),
@@ -1581,6 +1609,107 @@ test('boss-matched shadow passives are assigned, scaled by rank, and upgraded fo
   assert.equal(redDragon.baseId, dragon.baseId);
   assert.ok(redDragon.scale > dragon.scale);
   assert.equal(redDragon.redGate, true);
+});
+
+test('SS and Calamity Gates create extreme boss health and damage bands', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9501 });
+  const questFor = (monsterId) => ({
+    id: `quest-${monsterId}`,
+    templateId: `quest-${monsterId}`,
+    tier: 'late',
+    title: `Fight ${monsterId}`,
+    stageIndex: 0,
+    stages: [{ id: 'stage', type: 'combat', title: 'Boss', monsterId }],
+    startedMonth: 0,
+    completed: false,
+    failed: false,
+    outcome: null,
+    monsterFightId: null,
+    rewardsPreview: [],
+    stageResults: [],
+  });
+  const fighter = {
+    ...base,
+    stats: Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 1200])),
+    resources: { ...base.resources, health: 100, energy: 100 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'Calamity',
+      level: 150,
+      stats: { strength: 300, agility: 300, vitality: 300, sense: 300, intelligence: 300 },
+    },
+  };
+
+  const ssFight = startHunterQuestFight({ ...fighter, hunterWorld: { ...fighter.hunterWorld, dailyQuest: questFor('voidKingBoss') } });
+  const calamityFight = startHunterQuestFight({ ...fighter, hunterWorld: { ...fighter.hunterWorld, dailyQuest: questFor('calamityDragonBoss') } });
+
+  assert.ok(ssFight.activeFight.meters.maxOpponentHealth >= 30000);
+  assert.ok(calamityFight.activeFight.meters.maxOpponentHealth >= 95000);
+
+  const durableS = startHunterQuestFight({ ...fighter, hunterWorld: { ...fighter.hunterWorld, dailyQuest: questFor('dragonMonarchBoss') } });
+  durableS.activeFight.meters.maxPlayerHealth = 999999;
+  durableS.activeFight.meters.playerHealth = 999999;
+  calamityFight.activeFight.meters.maxPlayerHealth = 999999;
+  calamityFight.activeFight.meters.playerHealth = 999999;
+  const sExchange = takeFightTurn(durableS, 'manaGuard').activeFight.exchanges[0];
+  const calamityExchange = takeFightTurn(calamityFight, 'manaGuard').activeFight.exchanges[0];
+  assert.ok(calamityExchange.baseEnemyDamage > sExchange.baseEnemyDamage * 2);
+});
+
+test('SS-rank System skills are level reward perks and stay locked before SS rank', () => {
+  const base = createNewLife({ gender: 'Female', seed: 9502 });
+  const quest = {
+    id: 'ss-skill-test',
+    templateId: 'ss-skill-test',
+    tier: 'late',
+    title: 'SS Skill Test',
+    stageIndex: 0,
+    stages: [{ id: 'stage', type: 'combat', title: 'Boss', monsterId: 'systemGoblinScout' }],
+    startedMonth: 0,
+    completed: false,
+    failed: false,
+    outcome: null,
+    monsterFightId: null,
+    rewardsPreview: [],
+    stageResults: [],
+  };
+  const withPerks = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      unlockedSystemPerks: [{ id: 'voidStepExecution', count: 1 }, { id: 'worldEaterDomain', count: 1 }],
+      dailyQuest: structuredClone(quest),
+    },
+  };
+  const preSsMoves = getUnlockedHunterMoves(startHunterQuestFight(withPerks)).map((move) => move.id);
+  const ssMoves = getUnlockedHunterMoves(startHunterQuestFight({
+    ...withPerks,
+    hunterWorld: { ...withPerks.hunterWorld, rank: 'SS', dailyQuest: structuredClone(quest) },
+  })).map((move) => move.id);
+
+  assert.equal(HUNTER_LEVEL_REWARD_OPTIONS.voidStepExecution.requiresHunterRank, 'SS');
+  assert.equal(HUNTER_LEVEL_REWARD_OPTIONS.worldEaterDomain.requiresHunterRank, 'SS');
+  assert.ok(!preSsMoves.includes('voidStepExecution'));
+  assert.ok(ssMoves.includes('voidStepExecution'));
+  assert.ok(ssMoves.includes('worldEaterDomain'));
+});
+
+test('SSS and Calamity shadows receive unique overpowered passives', () => {
+  const ssPassive = getShadowPassive({ monsterId: 'voidKingBoss', rank: 'SS' });
+  const sssPassive = getShadowPassive({ monsterId: 'realityDevourerBoss', rank: 'SSS' });
+  const calamityPassive = getShadowPassive({ monsterId: 'calamityDragonBoss', rank: 'Calamity' });
+
+  assert.match(ssPassive.label, /Void Crown/);
+  assert.match(sssPassive.label, /Reality Feast/);
+  assert.match(calamityPassive.label, /Extinction Breath/);
+  assert.ok(sssPassive.scale > ssPassive.scale);
+  assert.ok(calamityPassive.scale > sssPassive.scale);
+  assert.ok(calamityPassive.effects.commandDamage > sssPassive.effects.staminaDamage);
 });
 
 test('existing Shadow Army saves derive boss passives in the summary', () => {
