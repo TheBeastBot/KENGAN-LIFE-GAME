@@ -10,6 +10,7 @@ import {
   craftHunterItem,
   battleShadowDomain,
   chooseSystemEnding,
+  equipBestAutoGateShadows,
   ENEMY_FIGHT_MOVES,
   FIGHT_TACTICS,
   FIGHT_MOVES,
@@ -632,10 +633,13 @@ test('Arch Lich dungeon exchanges use spell attacks instead of human fighting mo
   const initial = createNewLife({ gender: 'Male', seed: 9211 });
   let life = {
     ...initial,
+    stats: Object.fromEntries(Object.keys(initial.stats).map((stat) => [stat, 260])),
+    resources: { ...initial.resources, health: 1000, energy: 1000 },
     hunterWorld: {
       ...initial.hunterWorld,
       unlocked: true,
       playerAwakened: true,
+      stats: { strength: 24, agility: 24, vitality: 24, sense: 24, intelligence: 24 },
       activeDungeon: {
         id: 'dungeon-lich-test',
         name: 'Black Mana Vault',
@@ -943,6 +947,51 @@ test('Auto Gate loadout toggles selected shadows, caps at ten, and cleans invali
   life = toggleAutoGateShadow(life, 'shadow-1');
   assert.equal(life.hunterWorld.autoGateLoadout.includes('shadow-1'), false);
   assert.equal(life.hunterWorld.autoGateLoadout.length, 9);
+});
+
+test('Auto Gate Equip Best replaces the loadout with the strongest ten shadows', () => {
+  const base = createNewLife({ gender: 'Female', seed: 92510 });
+  const shadowArmy = Array.from({ length: 12 }, (_, index) => ({
+    id: `shadow-${index + 1}`,
+    monsterId: 'goblinCaptain',
+    name: `Shadow ${index + 1}`,
+    rank: 'E',
+    strength: index + 1,
+    armyPower: (index + 1) * 100,
+  }));
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowArmy,
+      autoGateLoadout: ['shadow-1', 'shadow-2'],
+    },
+  };
+
+  const equipped = equipBestAutoGateShadows(life);
+
+  assert.deepEqual(equipped.hunterWorld.autoGateLoadout, [
+    'shadow-12',
+    'shadow-11',
+    'shadow-10',
+    'shadow-9',
+    'shadow-8',
+    'shadow-7',
+    'shadow-6',
+    'shadow-5',
+    'shadow-4',
+    'shadow-3',
+  ]);
+  assert.match(equipped.log[0].text, /Auto Gate Equip Best/);
+
+  const empty = equipBestAutoGateShadows({
+    ...base,
+    hunterWorld: { ...base.hunterWorld, unlocked: true, playerAwakened: true, shadowArmy: [], autoGateLoadout: ['missing'] },
+  });
+  assert.deepEqual(empty.hunterWorld.autoGateLoadout, []);
+  assert.match(empty.log[0].text, /no shadows/i);
 });
 
 test('weak Auto Gate loadout cannot consume a higher-rank Gate or grant rewards', () => {
@@ -1564,7 +1613,63 @@ test('durability health scaling is restrained while Hunter Vitality has stronger
   };
 
   assert.ok(maxLifeHealth(durable) <= 720);
-  assert.ok(maxLifeHealth(vitalHunter) - maxLifeHealth(awakened) >= 170);
+  assert.ok(maxLifeHealth(vitalHunter) - maxLifeHealth(awakened) >= 310);
+});
+
+test('E through S-rank System bosses hit harder than same-rank normal monsters', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9333 });
+  const questFor = (monsterId) => ({
+    id: `quest-${monsterId}`,
+    templateId: `quest-${monsterId}`,
+    tier: 'late',
+    title: `Fight ${monsterId}`,
+    stageIndex: 0,
+    stages: [{ id: 'stage', type: 'combat', title: 'Monster', monsterId }],
+    startedMonth: 0,
+    completed: false,
+    failed: false,
+    outcome: null,
+    monsterFightId: null,
+    rewardsPreview: [],
+    stageResults: [],
+  });
+  const fighter = {
+    ...base,
+    stats: Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 420])),
+    resources: { ...base.resources, health: 1000, energy: 1000 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      rank: 'S',
+      level: 70,
+      stats: { strength: 70, agility: 70, vitality: 70, sense: 70, intelligence: 70 },
+    },
+  };
+
+  const normalFight = startHunterQuestFight({ ...fighter, hunterWorld: { ...fighter.hunterWorld, dailyQuest: questFor('dragonSpawn') } });
+  const bossFight = startHunterQuestFight({ ...fighter, hunterWorld: { ...fighter.hunterWorld, dailyQuest: questFor('dragonMonarchBoss') } });
+  normalFight.activeFight.meters.maxPlayerHealth = 999999;
+  normalFight.activeFight.meters.playerHealth = 999999;
+  bossFight.activeFight.meters.maxPlayerHealth = 999999;
+  bossFight.activeFight.meters.playerHealth = 999999;
+
+  const normalExchange = takeFightTurn(normalFight, 'slash').activeFight.exchanges[0];
+  const bossExchange = takeFightTurn(bossFight, 'slash').activeFight.exchanges[0];
+
+  assert.ok(bossExchange.baseEnemyDamage > normalExchange.baseEnemyDamage * 1.1);
+});
+
+test('new System boss damage multiplier does not target SS, SSS, or Calamity ranks', () => {
+  const simSource = readFileSync(new URL('../src/sim.mjs', import.meta.url), 'utf8');
+  const tableMatch = simSource.match(/const SYSTEM_BOSS_DAMAGE_MULTIPLIERS = \{([\s\S]*?)\};/);
+
+  assert.ok(tableMatch);
+  assert.match(tableMatch[1], /E:/);
+  assert.match(tableMatch[1], /S:/);
+  assert.doesNotMatch(tableMatch[1], /SS:/);
+  assert.doesNotMatch(tableMatch[1], /SSS:/);
+  assert.doesNotMatch(tableMatch[1], /Calamity:/);
 });
 
 test('high-rank System bosses have dungeon-scale health and dangerous monster damage', () => {
@@ -1737,6 +1842,8 @@ test('Ultimate ARISE passively adds an eligible quest boss shadow to the Domain 
   };
 
   life = startHunterQuestFight(life);
+  life.activeFight.meters.maxPlayerHealth = 999999;
+  life.activeFight.meters.playerHealth = 999999;
   life.activeFight.meters.opponentHealth = 1;
   const next = takeFightTurn(life, 'slash');
 
@@ -6569,8 +6676,8 @@ test('new Hunter fight perks trigger unique combat effects', () => {
       exchanges: [],
       moveCooldowns: {},
       meters: {
-        playerHealth: 80,
-        maxPlayerHealth: 100,
+        playerHealth: 5000,
+        maxPlayerHealth: 5000,
         opponentHealth: 120,
         maxOpponentHealth: 120,
         playerStamina: 90,

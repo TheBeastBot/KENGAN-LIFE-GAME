@@ -303,6 +303,8 @@ test('Shadow Army cards render boss passives and rarity visuals', async () => {
   assert.match(appSource, /shadow-passive-effect/);
   assert.match(appSource, /shadow-rank-badge/);
   assert.match(appSource, /Auto Gate Loadout/);
+  assert.match(appSource, /auto-gate-equip-best/);
+  assert.match(appSource, /equipBestAutoGateShadows/);
   assert.match(appSource, /auto-gate-shadow-/);
   assert.match(appSource, /auto-gate-selected/);
   assert.match(cssSource, /\.shadow-card\s*{/);

@@ -86,6 +86,7 @@ import {
   runHunterDailyQuest,
   scheduleCoachedFight,
   toggleAutoRecovery,
+  equipBestAutoGateShadows,
   toggleAutoGateShadow,
   toggleAutoTraining,
   toggleFavoriteTraining,
@@ -2981,6 +2982,7 @@ function renderShadowArmyPanel() {
     { label: 'Boss ARISE', value: 'Requires Ultimate ARISE perk', tone: 'active' },
   ])}
       </div>
+      ${button('Equip Best', 'auto-gate-equip-best', summary.roster.length ? 'primary' : 'disabled')}
     </article>
     ${selectedShadow ? renderSelectedShadowPassiveInfo(selectedShadow) : ''}
     <div class="world-grid shadow-roster-grid">
@@ -4369,6 +4371,10 @@ function handleAction(action, source = null) {
   }
   if (action.startsWith('auto-gate-shadow-')) {
     setState(toggleAutoGateShadow(state, decodeURIComponent(action.replace('auto-gate-shadow-', ''))));
+    return;
+  }
+  if (action === 'auto-gate-equip-best') {
+    setState(equipBestAutoGateShadows(state));
     return;
   }
   if (action.startsWith('shadow-domain-select-')) {

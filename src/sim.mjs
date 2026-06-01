@@ -103,6 +103,7 @@ const DEFAULT_HUNTER_WORLD = {
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Calamity'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
+const HUNTER_VITALITY_HEALTH_BONUS = 30;
 const SECRET_MENTOR_PASSWORD = 'MENTOR21';
 const SYSTEM_PERK_VALUES = {
   executeCooldownMinus1: 1,
@@ -4470,7 +4471,7 @@ export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
-  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * 16 : 0);
+  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0);
 }
 
 function staminaFromStats(stats = {}) {
@@ -4742,6 +4743,22 @@ function autoGateSelectedShadows(hunterWorld) {
 
 function autoGateShadowPower(shadow) {
   return Math.max(1, Math.floor(shadow.armyPower ?? shadowStrength(shadow) * 14));
+}
+
+export function equipBestAutoGateShadows(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  if (!next.hunterWorld.shadowArmy.length) {
+    next.hunterWorld.autoGateLoadout = [];
+    return addLog(next, 'Auto Gate Equip Best failed: no shadows are bound to the army yet.', 'world');
+  }
+  const bestShadows = next.hunterWorld.shadowArmy
+    .slice()
+    .sort((a, b) => autoGateShadowPower(b) - autoGateShadowPower(a) || String(a.id).localeCompare(String(b.id)))
+    .slice(0, 10);
+  next.hunterWorld.autoGateLoadout = bestShadows.map((shadow) => shadow.id);
+  const totalPower = bestShadows.reduce((sum, shadow) => sum + autoGateShadowPower(shadow), 0);
+  return addLog(next, `Auto Gate Equip Best: ${bestShadows.length}/10 strongest shadows equipped (${totalPower} power).`, 'world');
 }
 
 function autoGateRequiredPower(offer) {
@@ -6648,9 +6665,23 @@ const SYSTEM_MONSTER_POWER_MULTIPLIERS = {
   Calamity: 20,
 };
 
+const SYSTEM_BOSS_DAMAGE_MULTIPLIERS = {
+  E: 1.22,
+  D: 1.24,
+  C: 1.26,
+  B: 1.28,
+  A: 1.3,
+  S: 1.32,
+};
+
 function resolvedOpponentPower(opponent) {
   if (!opponent?.systemMonster) return opponent.power;
   return Math.round(opponent.power * (SYSTEM_MONSTER_POWER_MULTIPLIERS[opponent.tier] ?? 1));
+}
+
+function systemBossDamageMultiplier(opponent) {
+  if (!opponent?.systemMonster || !opponent.threat?.includes('Boss')) return 1;
+  return SYSTEM_BOSS_DAMAGE_MULTIPLIERS[opponent.tier] ?? 1;
 }
 
 function systemMonsterHealthMultiplier(opponent) {
@@ -9231,7 +9262,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const critical = criticalRoll < criticalChance;
   let playerDamage = move.id === 'conserve' ? 0 : critical ? Math.round(basePlayerDamage * 1.55 + 5) : basePlayerDamage;
   const monsterDamage = incomingDamage(next, opponent, opponentTactic, { damageBias: 1, guardBias: move.guardBias }, fight, -swing);
-  const baseEnemyDamage = Math.max(1, Math.round(monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction - shadowPassive.incomingReduction));
+  const baseEnemyDamage = Math.max(1, Math.round((monsterDamage * (enemyMove.damageMultiplier ?? 1) + opponentStats.aggression / 70 - profile.incomingReduction - shadowPassive.incomingReduction) * systemBossDamageMultiplier(opponent)));
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0) + (footworkActive ? systemPerkValue(next, 'perfectFootwork') : 0), 0.03, footworkActive ? 0.62 : 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   let enemyDamage = dodged ? 0 : baseEnemyDamage;
