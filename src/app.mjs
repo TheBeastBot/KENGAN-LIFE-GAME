@@ -89,8 +89,6 @@ import {
   toggleFavoriteTraining,
   useSocialAction,
   spendHunterStatPoint,
-  attemptAriseShadow,
-  dismissArisePrompt,
   fightMonarchBoss,
   selectHunterGate,
   startHunterDungeonEncounter,
@@ -136,8 +134,6 @@ const DEFAULT_HUNTER_WORLD = {
   activeDungeon: null,
   redGatePending: false,
   lastGateMonth: null,
-  arisePrompt: null,
-  pendingArisePrompt: null,
   dailyQuest: null,
   pendingLevelRewards: [],
   unlockedSystemPerks: [],
@@ -564,8 +560,6 @@ function normalizeHunterWorld(hunterWorld = {}) {
     lastGateMonth: hunterWorld?.lastGateMonth ?? null,
     rejectedUntilMonth: hunterWorld?.rejectedUntilMonth ?? null,
     lastBossCleared: hunterWorld?.lastBossCleared ?? null,
-    arisePrompt: hunterWorld?.arisePrompt ?? null,
-    pendingArisePrompt: hunterWorld?.pendingArisePrompt ?? null,
     dailyQuest: hunterWorld?.dailyQuest ?? null,
     pendingLevelRewards: Array.isArray(hunterWorld?.pendingLevelRewards) ? hunterWorld.pendingLevelRewards : [],
     unlockedSystemPerks: normalizeSystemPerks(hunterWorld?.unlockedSystemPerks),
@@ -1038,7 +1032,6 @@ function renderFullScreenView() {
 }
 
 function hunterMandatoryPopupKind(hunter = state?.hunterWorld) {
-  if (hunter?.arisePrompt) return 'arise';
   if (hunter?.pendingLevelRewards?.length) return 'levelReward';
   return '';
 }
@@ -1057,7 +1050,6 @@ function hasActiveHunterDungeonReport() {
 function renderHunterFullScreenFlow() {
   if (state.activeFight?.source === 'hunterQuest') return renderHunterQuestPopup();
   if (state.activeFight?.source === 'hunterDungeon' && !state.activeFight.finished) return renderHunterDungeonPopup();
-  if (hunterMandatoryPopupKind() === 'arise') return renderArisePopup();
   if (hunterMandatoryPopupKind() === 'levelReward') return renderHunterLevelRewardPopup();
   if (hasActiveHunterDungeonReport()) return renderHunterDungeonPopup();
   if (hunterQuestPopupOpen) return renderHunterQuestPopup();
@@ -2675,13 +2667,6 @@ function hunterObjectiveSummary(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WOR
 function hunterGuidanceCue(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD) {
   const quest = hunter.dailyQuest;
   const dungeon = hunter.activeDungeon;
-  if (hunter.arisePrompt) {
-    return {
-      label: 'Resolve ARISE',
-      text: 'A defeated boss shadow is waiting. Command ARISE to add it to your army before moving on.',
-      tone: 'danger',
-    };
-  }
   if (hunter.pendingLevelRewards?.length) {
     return {
       label: 'Claim System Level Reward',
@@ -2802,8 +2787,6 @@ function hunterPendingBadges(hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD,
   const include = (...areas) => areas.includes(area) || area === 'status';
 
   if (include('level') && hunter.pendingLevelRewards?.length) badges.push({ label: 'Level reward pending', tone: 'ready' });
-  if (include('arise') && hunter.pendingArisePrompt) badges.push({ label: 'ARISE queued', tone: 'danger' });
-  if (include('arise') && hunter.arisePrompt) badges.push({ label: 'ARISE pending', tone: 'danger' });
   if (include('gate') && dungeon && !dungeon.completed) {
     badges.push({ label: dungeon.isRedGate ? 'Red Gate room active' : 'Dungeon room active', tone: dungeon.isRedGate ? 'danger' : 'active' });
   }
@@ -2967,10 +2950,10 @@ function renderShadowArmyPanel() {
       <div>
         <p class="eyebrow">Shadow Army</p>
         <h2>${summary.count} Shadows / Army Power ${summary.armyPower}</h2>
-        <p>Defeated bosses trigger ARISE with three chances. Successful commands join this army immediately for Domain conquest.</p>
+        <p>Ultimate ARISE is a passive System skill. Once unlocked, eligible defeated bosses rise into this army automatically for Domain conquest.</p>
         ${renderSystemScanRows(summary.bonuses.map((bonus, index) => ({ label: `Bonus ${index + 1}`, value: bonus, tone: index === 2 && summary.count >= 3 ? 'clear' : '' })))}
       </div>
-      <span class="lock-pill">ARISE only</span>
+      <span class="lock-pill">Ultimate passive</span>
     </article>
     <div class="world-grid shadow-roster-grid">
       ${summary.roster.length ? summary.roster.map((shadow) => `
@@ -2981,7 +2964,7 @@ function renderShadowArmyPanel() {
             <p>${escapeHtml(shadow.sourceBoss ?? 'Extracted boss echo')} / ${escapeHtml(shadow.role ?? 'vanguard')} / Power ${escapeHtml(String(shadow.armyPower ?? shadow.strength))}</p>
           </div>
         </article>
-      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Boss shadows will appear here after a successful ARISE.</p></div></article>'}
+      `).join('') : '<article class="option-card system-window"><div><h3>No shadows bound yet</h3><p>Unlock Ultimate ARISE to make eligible defeated bosses rise automatically.</p></div></article>'}
     </div>
   `;
 }
@@ -3267,42 +3250,6 @@ function renderHunterQuestPopup() {
           <button class="small-btn" data-action="hunter-quest-close">Close</button>
         </div>
         ${state.activeFight?.source === 'hunterQuest' ? renderHunterMonsterFight() : renderHunterQuestPanel()}
-      </section>
-    </main>
-  `;
-}
-
-function renderArisePopup() {
-  const prompt = state.hunterWorld?.arisePrompt;
-  if (!prompt) return '';
-  const monster = HUNTER_MONSTERS[prompt.monsterId] ?? {};
-  const chance = prompt.status === 'active' ? 'Unstable' : prompt.status === 'success' ? 'Bound' : 'Lost';
-  const action = prompt.status === 'active'
-    ? button('ARISE', 'hunter-arise-attempt', 'primary wide')
-    : button(prompt.status === 'success' ? 'Return to Gate Board' : 'Close Echo', 'hunter-arise-dismiss', 'primary wide');
-  return `
-    <main class="screen-view hunter-screen">
-      <section class="screen-panel hunter-quest-popup arise-popup system-popup" data-scroll-key="hunter-arise">
-        <div class="hunter-popup-header">
-          <div>
-            <p class="eyebrow">Shadow Command</p>
-            <h2>ARISE</h2>
-          </div>
-          <button class="small-btn" data-action="hunter-arise-dismiss">${prompt.status === 'active' ? 'Skip' : 'Close'}</button>
-        </div>
-        <article class="option-card system-window arise-card ${prompt.status}">
-          <div>
-            <p class="eyebrow">${escapeHtml(prompt.rank ?? monster.tier ?? 'E')}-Rank Boss Echo</p>
-            <h3>${escapeHtml(prompt.sourceBoss ?? monster.name ?? 'Defeated Boss')}</h3>
-            <p>${escapeHtml(prompt.resultText || 'The boss echo is fresh. Command ARISE to add it to your Shadow Domain army immediately.')}</p>
-            ${renderSystemScanRows([
-              { label: 'Command', value: prompt.status === 'active' ? 'Ready' : chance, tone: prompt.status === 'active' ? 'clear' : prompt.status === 'success' ? 'clear' : 'danger' },
-              { label: 'State', value: chance, tone: prompt.status === 'success' ? 'clear' : prompt.status === 'failed' ? 'danger' : '' },
-              { label: 'Army Result', value: prompt.status === 'success' ? `${prompt.shadowName ?? 'Shadow'} added` : 'On success, joins Domain army immediately', tone: prompt.status === 'success' ? 'clear' : '' },
-            ])}
-          </div>
-          ${action}
-        </article>
       </section>
     </main>
   `;
@@ -3612,7 +3559,6 @@ function renderHunterDungeonFightReport(fight) {
 
 function hunterDungeonReportActionLabel(hunter = state.hunterWorld) {
   if (hunter?.pendingLevelRewards?.length) return 'Continue to Level Reward';
-  if (hunter?.arisePrompt || hunter?.pendingArisePrompt) return 'Continue to ARISE';
   return 'Return to Gate Board';
 }
 
@@ -3628,7 +3574,7 @@ function renderHunterDungeonPanel() {
           <p>${escapeHtml(dungeon.resultText ?? (dungeon.outcome === 'retreated' ? 'You survived the retreat. Cleared-room rewards were kept.' : 'The Gate run has ended.'))}</p>
           ${dungeon.outcome === 'retreated' ? '<p class="muted">Penalties: +12 fatigue / -10 mood / -4 reputation</p>' : ''}
           ${dungeon.outcome === 'failed' ? '<p class="muted">Penalties: +16 fatigue / -12 mood / -6 reputation</p>' : ''}
-          ${state.hunterWorld?.pendingArisePrompt ? '<p class="muted">Next: resolve the queued ARISE command when it appears.</p>' : '<p class="muted">Next: close this report to refresh the Gate Board.</p>'}
+          <p class="muted">Next: close this report to refresh the Gate Board.</p>
           ${renderSystemScanRows([
             { label: 'Outcome', value: dungeon.outcome ?? 'Ended', tone: dungeon.outcome === 'cleared' ? 'clear' : 'danger' },
             { label: 'Boss', value: dungeon.bossDefeated ? 'Defeated' : 'Not cleared', tone: dungeon.bossDefeated ? 'clear' : 'danger' },
@@ -3645,7 +3591,7 @@ function renderHunterDungeonPanel() {
         <h2>${escapeHtml(dungeon.name)}</h2>
         <p>${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'The boss chamber is ahead.' : 'A hostile signature blocks the next room.'} Health and mana do not refill between encounters.</p>
         <p class="muted">Cleared rooms: ${dungeon.rewardsEarned.filter((reward) => reward.type === 'room').length} / Final boss: ${escapeHtml(dungeon.bossName)}</p>
-        <p class="muted">Next: ${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'clear the boss for the jackpot and possible ARISE prompt.' : 'clear this room to bank its reward and unlock the next chamber.'}</p>
+        <p class="muted">Next: ${dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'clear the boss for the jackpot. Ultimate ARISE auto-binds shadows if unlocked.' : 'clear this room to bank its reward and unlock the next chamber.'}</p>
         ${renderSystemScanRows([
           { label: 'Condition Carry', value: 'HP and mana persist', tone: 'danger' },
           { label: 'Next Chamber', value: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'Boss signal' : 'Monster signal', tone: dungeon.encounters[dungeon.encounterIndex]?.isBoss ? 'danger' : 'active' },
@@ -3908,7 +3854,7 @@ function renderHunter() {
           action: 'hunter-monarch',
           locked: !hunter.monarchTrace?.unlocked && !monarchMilestone?.ready,
           tone: 'monarch',
-          badges: hunterPendingBadges(hunter, 'level').concat(hunterPendingBadges(hunter, 'arise')),
+          badges: hunterPendingBadges(hunter, 'level'),
         })}
       </div>`,
       })}
@@ -4276,7 +4222,7 @@ function handleAction(action, source = null) {
   }
   if (action.startsWith('hunter-level-reward-')) {
     const levelRewardState = claimHunterLevelReward(state, action.replace('hunter-level-reward-', ''));
-    applyHunterPopupHandoff(levelRewardState);
+    if (hasMandatoryHunterPopup(levelRewardState.hunterWorld)) applyHunterPopupHandoff(levelRewardState);
     setState(levelRewardState);
     return;
   }
@@ -4355,9 +4301,7 @@ function handleAction(action, source = null) {
     if (state.hunterWorld?.activeDungeon?.completed) {
       const dismissedDungeonState = dismissHunterDungeonResult(state);
       const hasPendingHunterPopupAfterDungeon = Boolean(
-        dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length ||
-        dismissedDungeonState.hunterWorld?.arisePrompt ||
-        dismissedDungeonState.hunterWorld?.pendingArisePrompt
+        dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length
       );
       if (hasPendingHunterPopupAfterDungeon) clearHunterPopupFlags();
       hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
@@ -4392,9 +4336,7 @@ function handleAction(action, source = null) {
   if (action === 'hunter-dungeon-dismiss') {
     const dismissedDungeonState = dismissHunterDungeonResult(state);
     const hasPendingHunterPopupAfterDungeon = Boolean(
-      dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length ||
-      dismissedDungeonState.hunterWorld?.arisePrompt ||
-      dismissedDungeonState.hunterWorld?.pendingArisePrompt
+      dismissedDungeonState.hunterWorld?.pendingLevelRewards?.length
     );
     if (hasPendingHunterPopupAfterDungeon) clearHunterPopupFlags();
     hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
@@ -4457,19 +4399,6 @@ function handleAction(action, source = null) {
   }
   if (action.startsWith('hunter-craft-')) {
     setState(craftHunterItem(state, action.replace('hunter-craft-', '')));
-    return;
-  }
-  if (action === 'hunter-arise-attempt') {
-    const ariseAttemptState = attemptAriseShadow(state);
-    applyHunterPopupHandoff(ariseAttemptState);
-    setState(ariseAttemptState);
-    return;
-  }
-  if (action === 'hunter-arise-dismiss') {
-    const dismissedAriseState = dismissArisePrompt(state);
-    clearHunterPopupFlags();
-    hunterDungeonPopupOpen = !hasMandatoryHunterPopup(dismissedAriseState.hunterWorld) && Boolean(dismissedAriseState.hunterWorld?.unlocked && !dismissedAriseState.hunterWorld?.shadowMonarch?.unlocked);
-    setState(dismissedAriseState);
     return;
   }
   if (action.startsWith('trash-')) {

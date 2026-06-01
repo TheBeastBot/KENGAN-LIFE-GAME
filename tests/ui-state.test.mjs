@@ -129,15 +129,15 @@ test('Hunter System guidance exposes next actions and pending badges', async () 
   assert.match(appSource, /function hunterGuidanceCue/);
   assert.match(appSource, /system-guidance-strip/);
   assert.match(appSource, /Claim System Level Reward/);
-  assert.match(appSource, /Resolve ARISE/);
-  assert.match(appSource, /pendingArisePrompt/);
+  assert.doesNotMatch(appSource, /Resolve ARISE/);
+  assert.doesNotMatch(appSource, /pendingArisePrompt/);
   assert.match(appSource, /hunterPendingBadges/);
   assert.match(appSource, /pending-state-badges/);
   assert.match(cssSource, /\.system-guidance-strip\s*{/);
   assert.match(cssSource, /\.pending-state-badges\s*{/);
 });
 
-test('Hunter ARISE renders before level rewards and completed Gate reports', async () => {
+test('Hunter full-screen flow has no ARISE popup priority', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const match = appSource.match(/function renderHunterFullScreenFlow\(\) \{[\s\S]*?\n\}/);
 
@@ -145,22 +145,23 @@ test('Hunter ARISE renders before level rewards and completed Gate reports', asy
   const body = match[0];
   assert.match(appSource, /function hunterMandatoryPopupKind/);
   assert.match(appSource, /function hasActiveHunterDungeonReport/);
+  assert.doesNotMatch(appSource, /function renderArisePopup/);
   assert.doesNotMatch(body, /state\.activeFight\?\.source === 'hunterDungeon' \|\| state\.hunterWorld\?\.activeDungeon\?\.completed/);
-  assert.ok(body.indexOf("state.activeFight?.source === 'hunterQuest'") < body.indexOf('renderArisePopup()'));
-  assert.ok(body.indexOf("state.activeFight?.source === 'hunterDungeon' && !state.activeFight.finished") < body.indexOf('renderArisePopup()'));
-  assert.ok(body.indexOf('renderArisePopup()') < body.indexOf('renderHunterLevelRewardPopup()'));
+  assert.doesNotMatch(body, /renderArisePopup/);
+  assert.ok(body.indexOf("state.activeFight?.source === 'hunterQuest'") < body.indexOf('renderHunterLevelRewardPopup()'));
+  assert.ok(body.indexOf("state.activeFight?.source === 'hunterDungeon' && !state.activeFight.finished") < body.indexOf('renderHunterLevelRewardPopup()'));
   assert.ok(body.indexOf('renderHunterLevelRewardPopup()') < body.indexOf('hasActiveHunterDungeonReport()'));
 });
 
-test('Hunter dungeon dismiss releases pending reward and ARISE popups', async () => {
+test('Hunter dungeon dismiss only gates pending level rewards', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 
   assert.match(appSource, /Continue to Level Reward/);
-  assert.match(appSource, /Continue to ARISE/);
+  assert.doesNotMatch(appSource, /Continue to ARISE/);
   assert.match(appSource, /const dismissedDungeonState = dismissHunterDungeonResult\(state\);/);
   assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingLevelRewards\?\.length/);
-  assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.arisePrompt/);
-  assert.match(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingArisePrompt/);
+  assert.doesNotMatch(appSource, /dismissedDungeonState\.hunterWorld\?\.arisePrompt/);
+  assert.doesNotMatch(appSource, /dismissedDungeonState\.hunterWorld\?\.pendingArisePrompt/);
   assert.match(appSource, /hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;/);
   assert.match(appSource, /clearHunterPopupFlags\(\);/);
 });
@@ -177,7 +178,7 @@ test('Hunter dungeon close dismisses completed boss reports instead of trapping 
   assert.ok(body.indexOf('dismissHunterDungeonResult(state)') < body.indexOf('setState(dismissedDungeonState);'));
 });
 
-test('Hunter reward and ARISE actions clear stale popup layers', async () => {
+test('Hunter reward actions clear stale popup layers without ARISE actions', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 
   assert.match(appSource, /function clearHunterPopupFlags/);
@@ -185,11 +186,11 @@ test('Hunter reward and ARISE actions clear stale popup layers', async () => {
   assert.match(appSource, /function clearMoveIconBurstState/);
   assert.match(appSource, /clearMoveIconBurstState\(\);/);
   assert.match(appSource, /const levelRewardState = claimHunterLevelReward\(state, action\.replace\('hunter-level-reward-', ''\)\);/);
-  assert.match(appSource, /applyHunterPopupHandoff\(levelRewardState\);/);
-  assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
-  assert.match(appSource, /applyHunterPopupHandoff\(ariseAttemptState\);/);
-  assert.match(appSource, /const dismissedAriseState = dismissArisePrompt\(state\);/);
-  assert.match(appSource, /hunterDungeonPopupOpen = !hasMandatoryHunterPopup\(dismissedAriseState\.hunterWorld\)/);
+  assert.match(appSource, /if \(hasMandatoryHunterPopup\(levelRewardState\.hunterWorld\)\) applyHunterPopupHandoff\(levelRewardState\);/);
+  assert.doesNotMatch(appSource, /hunter-arise-attempt/);
+  assert.doesNotMatch(appSource, /hunter-arise-dismiss/);
+  assert.doesNotMatch(appSource, /attemptAriseShadow/);
+  assert.doesNotMatch(appSource, /dismissArisePrompt/);
 });
 
 test('move icon burst dismissal preserves action target clicks', async () => {
@@ -203,8 +204,8 @@ test('move icon burst dismissal preserves action target clicks', async () => {
   assert.ok(body.indexOf('clearMoveIconBurstState();') < body.indexOf('dismissMoveIconBurst();'));
   assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('event.stopPropagation();'));
   assert.ok(body.indexOf('dismissMoveIconBurst();') < body.indexOf('event.preventDefault();'));
-  assert.match(appSource, /button\('ARISE', 'hunter-arise-attempt', 'primary wide'\)/);
-  assert.match(appSource, /const ariseAttemptState = attemptAriseShadow\(state\);/);
+  assert.doesNotMatch(appSource, /hunter-arise-attempt/);
+  assert.doesNotMatch(appSource, /attemptAriseShadow/);
 });
 
 test('fight turn actions advance state before showing move burst', async () => {

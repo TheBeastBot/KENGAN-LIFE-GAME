@@ -77,8 +77,6 @@ import {
   selectHunterGate,
   spendMoneyAction,
   spendHunterStatPoint,
-  attemptAriseShadow,
-  dismissArisePrompt,
   fightMonarchBoss,
   startFight,
   startHunterDungeonEncounter,
@@ -792,7 +790,7 @@ test('low-mana Hunter boss fights still allow Slash as a desperation finish', ()
   assert.match(cleared.activeFight.exchanges[0].text, /Desperation Slash/i);
 });
 
-test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and ARISE prompt', () => {
+test('clearing a dungeon boss grants jackpot and does not create legacy ARISE prompt state', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 923 }),
     stats: {
@@ -824,8 +822,10 @@ test('clearing a dungeon boss grants jackpot, Hunter growth, a Gate clear, and A
   assert.equal(cleared.hunterWorld.gatesCleared, 1);
   assert.equal(cleared.resources.money, beforeBossMoney + 1000);
   assert.equal(Object.values(cleared.hunterWorld.stats).reduce((sum, value) => sum + value, 0), beforeStats + 1);
-  assert.equal(cleared.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
-  assert.equal(cleared.hunterWorld.arisePrompt.attemptsLeft, 3);
+  assert.equal(cleared.hunterWorld.arisePrompt, undefined);
+  assert.equal(cleared.hunterWorld.pendingArisePrompt, undefined);
+  assert.equal(cleared.hunterWorld.shadowArmy.length, 0);
+  assert.ok(cleared.activeFight.result.rewards.some((reward) => reward.includes('Ultimate ARISE not unlocked')));
   assert.ok(cleared.hunterWorld.xp >= 90);
 });
 
@@ -859,7 +859,7 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
   assert.equal(next.stats.strength, beforeStrength);
 });
 
-test('ARISE opens before pending Hunter level rewards after a boss clear', () => {
+test('Ultimate ARISE passively binds a Gate boss shadow even when level rewards are pending', () => {
   let life = {
     ...createNewLife({ gender: 'Male', seed: 924 }),
     stats: {
@@ -873,7 +873,12 @@ test('ARISE opens before pending Hunter level rewards after a boss clear', () =>
       reflexes: 450,
       control: 450,
     },
-    hunterWorld: { ...createNewLife({ gender: 'Male', seed: 924 }).hunterWorld, unlocked: true, playerAwakened: true },
+    hunterWorld: {
+      ...createNewLife({ gender: 'Male', seed: 924 }).hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      unlockedSystemPerks: [{ id: 'arise', count: 1 }],
+    },
   };
   life = generateHunterGateOffers(life);
   life = selectHunterGate(life, life.hunterWorld.gateOffers[0].id);
@@ -888,24 +893,20 @@ test('ARISE opens before pending Hunter level rewards after a boss clear', () =>
   const cleared = takeFightTurn(life, 'slash');
 
   assert.equal(cleared.hunterWorld.pendingLevelRewards.length, 1);
-  assert.equal(cleared.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
-  assert.equal(cleared.hunterWorld.arisePrompt.attemptsLeft, 3);
-  assert.equal(cleared.hunterWorld.pendingArisePrompt, null);
+  assert.equal(cleared.hunterWorld.arisePrompt, undefined);
+  assert.equal(cleared.hunterWorld.pendingArisePrompt, undefined);
+  assert.equal(cleared.hunterWorld.shadowArmy.length, 1);
+  assert.equal(cleared.hunterWorld.shadowArmy[0].monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
   assert.equal(cleared.hunterWorld.activeDungeon.bossDefeated, true);
   assert.equal(cleared.hunterWorld.gateOffers.length, 0);
 
   const dismissedReport = dismissHunterDungeonResult(cleared);
   assert.equal(dismissedReport.hunterWorld.activeDungeon, null);
   assert.equal(dismissedReport.hunterWorld.pendingLevelRewards.length, 1);
-  assert.equal(dismissedReport.hunterWorld.arisePrompt.monsterId, cleared.hunterWorld.activeDungeon.encounters.at(-1).monsterId);
-  assert.equal(dismissedReport.hunterWorld.pendingArisePrompt, null);
+  assert.equal(dismissedReport.hunterWorld.arisePrompt, undefined);
+  assert.equal(dismissedReport.hunterWorld.pendingArisePrompt, undefined);
+  assert.equal(dismissedReport.hunterWorld.shadowArmy.length, 1);
   assert.ok(dismissedReport.hunterWorld.gateOffers.length > 0);
-
-  const arisen = attemptAriseShadow(dismissedReport);
-
-  assert.equal(arisen.hunterWorld.arisePrompt, null);
-  assert.equal(arisen.hunterWorld.pendingLevelRewards.length, 1);
-  assert.equal(arisen.hunterWorld.shadowArmy.length, 1);
 });
 
 test('Hunter level reward choices apply one queued bonus at a time', () => {
@@ -950,6 +951,13 @@ test('Hunter level reward choices apply one queued bonus at a time', () => {
   const perked = claimHunterLevelReward(perkLife, 'executeCooldown');
 
   assert.deepEqual(perked.hunterWorld.unlockedSystemPerks, [{ id: 'executeCooldownMinus1', count: 1 }]);
+});
+
+test('ARISE is an Ultimate System perk reward option', () => {
+  assert.equal(HUNTER_LEVEL_REWARD_OPTIONS.arise.type, 'perk');
+  assert.equal(HUNTER_LEVEL_REWARD_OPTIONS.arise.perk, 'arise');
+  assert.equal(HUNTER_LEVEL_REWARD_OPTIONS.arise.tier, 'ultimate');
+  assert.match(HUNTER_LEVEL_REWARD_OPTIONS.arise.description, /passive/i);
 });
 
 test('Hunter Association review exposes next-rank requirements and promotion rewards', () => {
@@ -1034,7 +1042,7 @@ test('Hunter crafting consumes dungeon materials and upgrades System gear', () =
   assert.ok(crafted.log[0].text.includes('Crafting complete'));
 });
 
-test('Shadow army summary includes roster strength, bonuses, and ARISE prompt state', () => {
+test('Shadow army summary includes roster strength and passive ARISE bonuses', () => {
   const base = createNewLife({ gender: 'Female', seed: 9305 });
   const life = {
     ...base,
@@ -1044,14 +1052,8 @@ test('Shadow army summary includes roster strength, bonuses, and ARISE prompt st
       playerAwakened: true,
       rank: 'C',
       level: 20,
-      arisePrompt: {
-        monsterId: 'bloodOgreBoss',
-        sourceBoss: 'Blood Ogre',
-        rank: 'C',
-        attemptsLeft: 3,
-        attemptsUsed: 0,
-        status: 'active',
-      },
+      arisePrompt: { monsterId: 'bloodOgreBoss', status: 'active' },
+      pendingArisePrompt: { monsterId: 'ironKnightBoss', status: 'active' },
       shadowArmy: [
         { id: 'shadow-1', monsterId: 'ironKnightBoss', name: 'Iron Knight Shadow', rank: 'D', strength: 4 },
       ],
@@ -1060,75 +1062,31 @@ test('Shadow army summary includes roster strength, bonuses, and ARISE prompt st
 
   const summary = getShadowArmySummary(life);
 
-  assert.equal(summary.arisePrompt.monsterId, 'bloodOgreBoss');
+  assert.equal(summary.arisePrompt, undefined);
   assert.equal(summary.count, 1);
   assert.ok(summary.totalStrength >= 4);
   assert.ok(summary.bonuses.some((bonus) => bonus.includes('Domain army')));
 });
 
-test('ARISE binds an eligible boss shadow on the first command', () => {
+test('legacy ARISE prompt fields are dropped from normalized Hunter summaries', () => {
   const base = createNewLife({ gender: 'Female', seed: 93051 });
   const life = {
     ...base,
-    rngSeed: 3,
     hunterWorld: {
       ...base.hunterWorld,
       unlocked: true,
       playerAwakened: true,
-      rank: 'E',
-      level: 1,
-      stats: { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 },
-      arisePrompt: {
-        monsterId: 'bloodOgreBoss',
-        sourceBoss: 'Blood Ogre',
-        rank: 'C',
-        attemptsLeft: 3,
-        attemptsUsed: 0,
-        status: 'active',
-      },
-      shadowArmy: [],
+      arisePrompt: { monsterId: 'bloodOgreBoss', status: 'active' },
+      pendingArisePrompt: { monsterId: 'goblinCaptain', status: 'active' },
     },
   };
 
-  const next = attemptAriseShadow(life);
+  const review = getHunterAssociationReview(life);
+  const summary = getShadowArmySummary(life);
 
-  assert.equal(next.hunterWorld.shadowArmy.length, 1);
-  assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
-  assert.equal(next.hunterWorld.arisePrompt, null);
-});
-
-test('ARISE clears stale finished dungeon fights that no longer have a report', () => {
-  const base = createNewLife({ gender: 'Male', seed: 4 });
-  const life = {
-    ...base,
-    activeFight: {
-      source: 'hunterDungeon',
-      finished: true,
-      result: { won: true, summary: 'You won by stoppage against Goblin Captain.' },
-    },
-    hunterWorld: {
-      ...base.hunterWorld,
-      unlocked: true,
-      playerAwakened: true,
-      activeDungeon: null,
-      arisePrompt: {
-        monsterId: 'goblinCaptain',
-        sourceBoss: 'Goblin Captain',
-        rank: 'E',
-        attemptsLeft: 3,
-        attemptsUsed: 0,
-        status: 'active',
-      },
-    },
-  };
-
-  const next = attemptAriseShadow(life);
-  const dismissed = dismissArisePrompt(next);
-
-  assert.equal(next.activeFight, null);
-  assert.equal(next.hunterWorld.shadowArmy.length, 1);
-  assert.equal(dismissed.activeFight, null);
-  assert.equal(dismissed.hunterWorld.arisePrompt, null);
+  assert.ok(review);
+  assert.equal(summary.arisePrompt, undefined);
+  assert.equal(summary.pendingArisePrompt, undefined);
 });
 
 test('Monarch Trace unlocks at S-rank with three shadows and progresses as an endgame arc', () => {
@@ -1561,8 +1519,8 @@ test('system shop weapons persist, equip, and unlock weapon System abilities', (
   assert.ok(getUnlockedHunterMoves(fighting).some((move) => move.id === 'shadowPierce'));
 });
 
-test('ARISE adds a boss shadow ally directly to the Domain army', () => {
-  const life = {
+test('Ultimate ARISE passively adds an eligible quest boss shadow to the Domain army', () => {
+  let life = {
     ...createNewLife({ gender: 'Female', seed: 95 }),
     rngSeed: 2,
     hunterWorld: {
@@ -1572,27 +1530,34 @@ test('ARISE adds a boss shadow ally directly to the Domain army', () => {
       rank: 'S',
       level: 60,
       stats: { strength: 20, agility: 20, vitality: 20, sense: 20, intelligence: 20 },
-      arisePrompt: {
-        monsterId: 'bloodOgreBoss',
-        sourceBoss: 'Blood Ogre',
-        rank: 'C',
-        attemptsLeft: 3,
-        attemptsUsed: 0,
-        status: 'active',
+      unlockedSystemPerks: [{ id: 'arise', count: 1 }],
+      dailyQuest: {
+        id: 'boss-quest',
+        templateId: 'boss-quest',
+        tier: 'late',
+        title: 'Boss Extraction Test',
+        stageIndex: 0,
+        stages: [{ id: 'boss-stage', type: 'combat', title: 'Defeat the Blood Ogre', monsterId: 'bloodOgreBoss' }],
+        startedMonth: 0,
+        completed: false,
+        failed: false,
+        outcome: null,
+        monsterFightId: null,
+        rewardsPreview: [],
+        stageResults: [],
       },
     },
   };
 
-  const next = attemptAriseShadow(life);
+  life = startHunterQuestFight(life);
+  life.activeFight.meters.opponentHealth = 1;
+  const next = takeFightTurn(life, 'slash');
 
   assert.equal(next.hunterWorld.shadowArmy.length, 1);
   assert.equal(next.hunterWorld.shadowArmy[0].sourceBoss, 'Blood Ogre');
-  assert.equal(next.hunterWorld.arisePrompt, null);
+  assert.equal(next.hunterWorld.arisePrompt, undefined);
   assert.ok(next.hunterWorld.shadowArmy[0].armyPower > 0);
-  assert.ok(next.stats.control > life.stats.control);
-
-  const dismissed = dismissArisePrompt(next);
-  assert.equal(dismissed.hunterWorld.arisePrompt, null);
+  assert.ok(next.activeFight.result.rewards.some((reward) => reward.includes('ARISE passive')));
 });
 
 test('blank custom first name falls back to a generated first name', () => {
