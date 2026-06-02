@@ -92,6 +92,7 @@ import {
   toggleFavoriteTraining,
   useSocialAction,
   spendHunterStatPoint,
+  spendHunterStatPoints,
   fightMonarchBoss,
   clearGateWithAutoShadows,
   selectHunterGate,
@@ -273,6 +274,7 @@ let activeTab = 'life';
 let selectedFightCategory = null;
 let selectedShadowDomainId = null;
 let selectedShadowArmyId = null;
+let hunterStatSpendAmount = 1;
 let hunterQuestPopupOpen = false;
 let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
@@ -2893,9 +2895,19 @@ function renderHunterActivity({ icon, title, subtitle, meta, action, locked = fa
 function renderHunterStatButtons() {
   const hunter = state.hunterWorld ?? DEFAULT_HUNTER_WORLD;
   if (!hunter.statPoints) return '<p class="muted">No System stat points available.</p>';
+  const selectedAmount = Math.min(Math.max(1, Math.floor(hunterStatSpendAmount || 1)), hunter.statPoints);
+  const amountOptions = [
+    { label: '1', value: 1 },
+    { label: '5', value: Math.min(5, hunter.statPoints) },
+    { label: '10', value: Math.min(10, hunter.statPoints) },
+    { label: 'All', value: hunter.statPoints },
+  ].filter((option, index, options) => options.findIndex((item) => item.value === option.value) === index);
   return `
+    <div class="compact-action-grid hunter-stat-amount-grid">
+      ${amountOptions.map((option) => button(option.label, `hunter-stat-amount-${option.value}`, option.value === selectedAmount ? 'small-btn clear' : 'small-btn')).join('')}
+    </div>
     <div class="compact-action-grid">
-      ${Object.keys(DEFAULT_HUNTER_WORLD.stats).map((stat) => button(hunterStatLabel(stat), `hunter-stat-${stat}`)).join('')}
+      ${Object.keys(DEFAULT_HUNTER_WORLD.stats).map((stat) => button(`${hunterStatLabel(stat)} +${selectedAmount}`, `hunter-stat-bulk-${stat}`)).join('')}
     </div>
   `;
 }
@@ -4444,6 +4456,15 @@ function handleAction(action, source = null) {
     if (hasPendingHunterPopupAfterDungeon) clearHunterPopupFlags();
     hunterDungeonPopupOpen = !hasPendingHunterPopupAfterDungeon;
     setState(dismissedDungeonState);
+    return;
+  }
+  if (action.startsWith('hunter-stat-amount-')) {
+    hunterStatSpendAmount = Math.max(1, Math.floor(Number(action.replace('hunter-stat-amount-', '')) || 1));
+    render();
+    return;
+  }
+  if (action.startsWith('hunter-stat-bulk-')) {
+    setState(spendHunterStatPoints(state, action.replace('hunter-stat-bulk-', ''), hunterStatSpendAmount));
     return;
   }
   if (action.startsWith('hunter-stat-')) {

@@ -137,6 +137,16 @@ test('Hunter System guidance exposes next actions and pending badges', async () 
   assert.match(cssSource, /\.pending-state-badges\s*{/);
 });
 
+test('Hunter stat panel exposes bulk stat point allocation controls', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /hunterStatSpendAmount/);
+  assert.match(appSource, /hunter-stat-amount-/);
+  assert.match(appSource, /hunter-stat-bulk-/);
+  assert.match(appSource, /spendHunterStatPoints/);
+  assert.match(appSource, /hunter-stat-amount-grid/);
+});
+
 test('Hunter full-screen flow has no ARISE popup priority', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const match = appSource.match(/function renderHunterFullScreenFlow\(\) \{[\s\S]*?\n\}/);

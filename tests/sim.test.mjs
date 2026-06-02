@@ -80,6 +80,7 @@ import {
   selectHunterGate,
   spendMoneyAction,
   spendHunterStatPoint,
+  spendHunterStatPoints,
   fightMonarchBoss,
   clearGateWithAutoShadows,
   startFight,
@@ -865,6 +866,31 @@ test('hunter xp levels grant five Hunter stat points and spending them does not 
   assert.equal(next.hunterWorld.statPoints, life.hunterWorld.statPoints - 1);
   assert.equal(next.hunterWorld.stats.strength, beforeHunterStrength + 1);
   assert.equal(next.stats.strength, beforeStrength);
+});
+
+test('Hunter stat points can be spent in bulk and clamp to available points', () => {
+  const base = createNewLife({ gender: 'Male', seed: 9301 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      statPoints: 7,
+      stats: { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 },
+    },
+  };
+
+  const five = spendHunterStatPoints(life, 'vitality', 5);
+  assert.equal(five.hunterWorld.statPoints, 2);
+  assert.equal(five.hunterWorld.stats.vitality, 5);
+  assert.equal(five.stats.vitality, undefined);
+  assert.match(five.log[0].text, /increased by 5/);
+
+  const allRemaining = spendHunterStatPoints(five, 'sense', 10);
+  assert.equal(allRemaining.hunterWorld.statPoints, 0);
+  assert.equal(allRemaining.hunterWorld.stats.sense, 2);
+  assert.match(allRemaining.log[0].text, /increased by 2/);
 });
 
 test('Ultimate ARISE passively binds a Gate boss shadow even when level rewards are pending', () => {

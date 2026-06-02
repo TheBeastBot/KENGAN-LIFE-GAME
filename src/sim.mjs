@@ -10624,14 +10624,20 @@ export function dismissHunterDungeonResult(life) {
 }
 
 export function spendHunterStatPoint(life, stat) {
+  return spendHunterStatPoints(life, stat, 1);
+}
+
+export function spendHunterStatPoints(life, stat, amount = 1) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const spendAmount = Math.max(1, Math.floor(Number(amount) || 1));
   if (!next.hunterWorld.unlocked || next.hunterWorld.statPoints <= 0 || !(stat in DEFAULT_HUNTER_STATS)) {
     return addLog(next, 'No Hunter stat point can be spent there.', 'world');
   }
-  next.hunterWorld.statPoints -= 1;
-  next.hunterWorld.stats = { ...next.hunterWorld.stats, [stat]: (next.hunterWorld.stats[stat] ?? 0) + 1 };
-  return addLog(next, `System stat point spent: Hunter ${stat} increased.`, 'world');
+  const pointsSpent = Math.min(next.hunterWorld.statPoints, spendAmount);
+  next.hunterWorld.statPoints -= pointsSpent;
+  next.hunterWorld.stats = { ...next.hunterWorld.stats, [stat]: (next.hunterWorld.stats[stat] ?? 0) + pointsSpent };
+  return addLog(next, `System stat point${pointsSpent === 1 ? '' : 's'} spent: Hunter ${stat} increased by ${pointsSpent}.`, 'world');
 }
 
 export function getHunterCraftingRecipes(life) {
