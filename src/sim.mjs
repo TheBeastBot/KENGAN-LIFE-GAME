@@ -6666,12 +6666,15 @@ const SYSTEM_MONSTER_POWER_MULTIPLIERS = {
 };
 
 const SYSTEM_BOSS_DAMAGE_MULTIPLIERS = {
-  E: 1.22,
-  D: 1.24,
-  C: 1.26,
-  B: 1.28,
-  A: 1.3,
-  S: 1.32,
+  E: 1.42,
+  D: 1.46,
+  C: 1.5,
+  B: 1.54,
+  A: 1.58,
+  S: 1.62,
+  SS: 0.9,
+  SSS: 0.88,
+  Calamity: 0.86,
 };
 
 function resolvedOpponentPower(opponent) {

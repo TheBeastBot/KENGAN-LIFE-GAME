@@ -1657,19 +1657,19 @@ test('E through S-rank System bosses hit harder than same-rank normal monsters',
   const normalExchange = takeFightTurn(normalFight, 'slash').activeFight.exchanges[0];
   const bossExchange = takeFightTurn(bossFight, 'slash').activeFight.exchanges[0];
 
-  assert.ok(bossExchange.baseEnemyDamage > normalExchange.baseEnemyDamage * 1.1);
+  assert.ok(bossExchange.baseEnemyDamage > normalExchange.baseEnemyDamage * 1.25);
 });
 
-test('new System boss damage multiplier does not target SS, SSS, or Calamity ranks', () => {
+test('SS, SSS, and Calamity System boss damage uses modest reduction multipliers', () => {
   const simSource = readFileSync(new URL('../src/sim.mjs', import.meta.url), 'utf8');
   const tableMatch = simSource.match(/const SYSTEM_BOSS_DAMAGE_MULTIPLIERS = \{([\s\S]*?)\};/);
 
   assert.ok(tableMatch);
   assert.match(tableMatch[1], /E:/);
   assert.match(tableMatch[1], /S:/);
-  assert.doesNotMatch(tableMatch[1], /SS:/);
-  assert.doesNotMatch(tableMatch[1], /SSS:/);
-  assert.doesNotMatch(tableMatch[1], /Calamity:/);
+  assert.match(tableMatch[1], /SS:\s*0\.9/);
+  assert.match(tableMatch[1], /SSS:\s*0\.88/);
+  assert.match(tableMatch[1], /Calamity:\s*0\.86/);
 });
 
 test('high-rank System bosses have dungeon-scale health and dangerous monster damage', () => {
