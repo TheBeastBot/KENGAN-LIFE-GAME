@@ -59,6 +59,8 @@ import {
   redeemHunterPassword,
   redeemMentorPassword,
   redeemMonarchBodyPassword,
+  redeemWorldResetPassword,
+  resetWorld,
   rerollClan,
   resolveEventChoice,
   advanceHunterDailyQuest,
@@ -136,6 +138,7 @@ const DEFAULT_HUNTER_WORLD = {
   autoGateLoadout: [],
   inventory: [],
   equippedWeapon: null,
+  equippedArmor: null,
   gateOffers: [],
   activeDungeon: null,
   redGatePending: false,
@@ -174,6 +177,9 @@ const DEFAULT_HUNTER_WORLD = {
     lastBattle: null,
   },
   systemEnding: null,
+  worldResets: 0,
+  secretSystemSkills: [],
+  secretSkillCooldowns: {},
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -468,6 +474,11 @@ function normalizeSystemPerks(perks = []) {
   return [...stacks.entries()].map(([id, count]) => ({ id, count }));
 }
 
+function normalizeSecretSystemSkills(skills = []) {
+  const allowed = new Set(['ultimateBody', 'shadowSacrifice', 'massCleansing', 'ultimateErasure']);
+  return Array.isArray(skills) ? [...new Set(skills.filter((id) => allowed.has(id)))] : [];
+}
+
 function normalizeHunterMilestones(milestones = {}) {
   return {
     promotions: Array.isArray(milestones?.promotions) ? milestones.promotions : [],
@@ -567,6 +578,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
       : [],
     inventory: normalizeHunterInventory(hunterWorld?.inventory),
     equippedWeapon: typeof hunterWorld?.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
+    equippedArmor: HUNTER_ITEM_CATALOG[hunterWorld?.equippedArmor]?.type === 'armor' ? hunterWorld.equippedArmor : null,
     gateOffers: Array.isArray(hunterWorld?.gateOffers) ? hunterWorld.gateOffers.slice(0, 3) : [],
     activeDungeon: hunterWorld?.activeDungeon ?? null,
     redGatePending: Boolean(hunterWorld?.redGatePending),
@@ -584,6 +596,12 @@ function normalizeHunterWorld(hunterWorld = {}) {
     shadowMonarch: normalizeShadowMonarch(hunterWorld?.shadowMonarch),
     monarchWar: normalizeMonarchWar(hunterWorld?.monarchWar),
     systemEnding: hunterWorld?.systemEnding ?? null,
+    worldResets: Math.max(0, Math.floor(hunterWorld?.worldResets ?? 0)),
+    secretSystemSkills: normalizeSecretSystemSkills(hunterWorld?.secretSystemSkills),
+    secretSkillCooldowns: {
+      massCleansingUsed: Boolean(hunterWorld?.secretSkillCooldowns?.massCleansingUsed),
+      ultimateErasureUsed: Boolean(hunterWorld?.secretSkillCooldowns?.ultimateErasureUsed),
+    },
   };
 }
 
@@ -1267,6 +1285,8 @@ function renderActiveTab() {
 }
 
 function renderLife() {
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const canResetWorld = hunter.shadowMonarch?.unlocked && hunter.monarchWar?.finalChoiceUnlocked;
   return `
     <section class="stack">
       ${renderCollapsibleSection({
@@ -1332,6 +1352,17 @@ function renderLife() {
           <button class="primary" data-action="redeem-monarch-body-password">Redeem</button>
         </div>
       </article>
+      <article class="clan-password-card hunter-password-card">
+        <div>
+          <p class="eyebrow">World Reset Override</p>
+          <h2>Debug Gate</h2>
+          <p class="muted">Enter a valid hidden override to force a World Reset test file.</p>
+        </div>
+        <div class="password-row">
+          <input id="world-reset-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter password" />
+          <button class="primary" data-action="redeem-world-reset-password">Redeem</button>
+        </div>
+      </article>
       ${renderCollapsibleSection({
         id: 'life-mentor',
         title: 'Mentor',
@@ -1347,6 +1378,7 @@ function renderLife() {
       })}
       <button class="danger" data-action="end-life">End Life</button>
       <button class="danger" data-action="reset">Reset Life</button>
+      ${canResetWorld ? '<button class="danger" data-action="world-reset">RESET THE WORLD</button>' : ''}
     </section>
   `;
 }
@@ -3715,25 +3747,26 @@ function renderSystemShopPopup() {
   const items = Object.values(SYSTEM_SHOP_ITEMS);
   const itemCard = (item) => {
     const owned = hunterItemQuantity(hunter, item.id) > 0;
-    const equipped = hunter.equippedWeapon === item.id;
+    const equipped = hunter.equippedWeapon === item.id || hunter.equippedArmor === item.id;
     const canAfford = state.resources.money >= item.cost;
-    const actionLabel = item.type === 'weapon' && owned
+    const isEquipment = ['weapon', 'armor'].includes(item.type);
+    const actionLabel = isEquipment && owned
       ? equipped ? 'Equipped' : 'Equip'
       : `Buy $${item.cost}`;
-    const action = item.type === 'weapon' && owned && equipped ? 'hunter-shop-open' : `hunter-shop-buy-${item.id}`;
+    const action = isEquipment && owned && equipped ? 'hunter-shop-open' : `hunter-shop-buy-${item.id}`;
     const disabled = !owned && !canAfford ? 'disabled' : '';
     const move = item.moveId ? HUNTER_MOVES[item.moveId] : null;
     return `
       <article class="option-card system-window shop-item ${item.type} ${equipped ? 'equipped' : ''}">
         <div>
-          <p class="eyebrow">${item.type === 'weapon' ? 'System Weapon' : 'System Potion'}</p>
+          <p class="eyebrow">${item.type === 'weapon' ? 'System Weapon' : item.type === 'armor' ? 'System Armor' : 'System Potion'}</p>
           <h3>${escapeHtml(item.label)}</h3>
           <p>${escapeHtml(item.description)}</p>
-          <p class="muted">${item.type === 'weapon' ? 'Weapons equip from Items after purchase.' : 'Consumables are stored and used from Items.'}</p>
+          <p class="muted">${isEquipment ? 'Equipment can be changed from Items after purchase.' : 'Consumables are stored and used from Items.'}</p>
           ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
           ${owned ? `<span class="badge ${equipped ? 'green' : ''}">${equipped ? 'Equipped' : `Owned x${hunterItemQuantity(hunter, item.id)}`}</span>` : ''}
         </div>
-        <button class="${item.type === 'weapon' ? 'primary' : ''}" data-action="${action}" ${disabled}>${actionLabel}</button>
+        <button class="${isEquipment ? 'primary' : ''}" data-action="${action}" ${disabled}>${actionLabel}</button>
       </article>
     `;
   };
@@ -3743,7 +3776,7 @@ function renderSystemShopPopup() {
         <div class="hunter-popup-header">
           <div>
             <p class="eyebrow">System Shop</p>
-            <h2>Potions & Weapons</h2>
+            <h2>Potions, Weapons & Armor</h2>
             <p class="muted">$${state.resources.money} available / Fatigue ${hunter.systemFatigue}%</p>
           </div>
           <button class="small-btn" data-action="hunter-shop-close">Close</button>
@@ -3751,7 +3784,8 @@ function renderSystemShopPopup() {
         <div class="system-chip-row">
           ${systemChip('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
           ${systemChip('Stamina', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
-          ${systemChip('Equipped', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Weapon', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Armor', hunter.equippedArmor ? HUNTER_ITEM_CATALOG[hunter.equippedArmor]?.label ?? labelize(hunter.equippedArmor) : 'None', hunter.equippedArmor ? 'ready' : '')}
           ${systemChip('Items', normalizeHunterInventory(hunter.inventory).reduce((sum, item) => sum + item.quantity, 0))}
         </div>
         <div class="activity-list shop-grid">
@@ -3766,9 +3800,14 @@ function itemTypeLabel(item) {
   return {
     consumable: 'Consumable',
     weapon: 'Weapon',
+    armor: 'Armor',
     material: 'Material',
     special: 'Special Item',
   }[item.type] ?? labelize(item.type);
+}
+
+function rarityLabel(rarity = 'common') {
+  return labelize(rarity);
 }
 
 function renderHunterItemsPopup() {
@@ -3778,9 +3817,10 @@ function renderHunterItemsPopup() {
     .map((stack) => ({ ...stack, item: HUNTER_ITEM_CATALOG[stack.id] }))
     .filter((stack) => stack.item);
   const itemCard = ({ id, quantity, item }) => {
-    const equipped = hunter.equippedWeapon === id;
+    const equipped = hunter.equippedWeapon === id || hunter.equippedArmor === id;
     const move = item.moveId ? HUNTER_MOVES[item.moveId] : null;
-    const action = item.type === 'weapon'
+    const armor = item.armor;
+    const action = ['weapon', 'armor'].includes(item.type)
       ? `<button class="primary" data-action="hunter-item-equip-${id}" ${equipped ? 'disabled' : ''}>${equipped ? 'Equipped' : 'Equip'}</button>`
       : ['consumable', 'special'].includes(item.type)
         ? `<button class="primary" data-action="hunter-item-use-${id}">Use</button>`
@@ -3788,16 +3828,24 @@ function renderHunterItemsPopup() {
     return `
       <article class="option-card system-window hunter-item-card ${item.type} rarity-${item.rarity ?? 'common'}">
         <div>
-          <p class="eyebrow">${escapeHtml(itemTypeLabel(item))} / ${escapeHtml(item.rarity ?? 'common')}</p>
+          <p class="eyebrow">${escapeHtml(itemTypeLabel(item))} / <span class="item-rarity-badge">${escapeHtml(rarityLabel(item.rarity))}</span></p>
           <h3>${escapeHtml(item.label)} <span class="muted">x${quantity}</span></h3>
           <p>${escapeHtml(item.description)}</p>
           ${move ? `<p class="muted">Unlocks: ${escapeHtml(move.label)} - ${escapeHtml(move.hint)}</p>` : ''}
+          ${armor ? `<p class="muted">Armor: +${armor.health ?? 0} health / +${armor.stamina ?? 0} stamina / -${Math.round((armor.damageReduction ?? 0) * 100)}% damage / +${Math.round((armor.damageBonus ?? 0) * 100)}% attack</p>` : ''}
           ${item.type === 'material' ? '<p class="muted">Used in System crafting, shadow sigils, and Monarch war prep.</p>' : ''}
         </div>
         ${action}
       </article>
     `;
   };
+  const groups = [
+    ['consumable', 'Consumables'],
+    ['weapon', 'Weapons'],
+    ['armor', 'Armor'],
+    ['material', 'Materials'],
+    ['special', 'Special'],
+  ].map(([type, label]) => ({ type, label, items: inventory.filter((stack) => stack.item.type === type) }));
   return `
     <main class="screen-view hunter-screen">
       <section class="screen-panel hunter-quest-popup system-popup" data-scroll-key="hunter-items">
@@ -3812,11 +3860,20 @@ function renderHunterItemsPopup() {
         <div class="system-chip-row">
           ${systemChip('Stacks', inventory.length)}
           ${systemChip('Total Items', inventory.reduce((sum, stack) => sum + stack.quantity, 0))}
-          ${systemChip('Equipped', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Weapon', hunter.equippedWeapon ? HUNTER_ITEM_CATALOG[hunter.equippedWeapon]?.label ?? labelize(hunter.equippedWeapon) : 'None', hunter.equippedWeapon ? 'ready' : '')}
+          ${systemChip('Armor', hunter.equippedArmor ? HUNTER_ITEM_CATALOG[hunter.equippedArmor]?.label ?? labelize(hunter.equippedArmor) : 'None', hunter.equippedArmor ? 'ready' : '')}
         </div>
-        <div class="activity-list hunter-item-grid">
-          ${inventory.length ? inventory.map(itemCard).join('') : '<article class="option-card system-window empty-items"><div><h3>No Hunter items yet</h3><p>Buy supplies from the System Shop or clear Gates to find dungeon loot.</p></div></article>'}
-        </div>
+        ${inventory.length ? groups.map((group) => `
+          <section class="hunter-item-section item-section-${group.type}">
+            <div class="hunter-item-section-header">
+              <h3>${escapeHtml(group.label)}</h3>
+              <span class="system-chip compact"><small>Stacks</small><strong>${group.items.length}</strong></span>
+            </div>
+            <div class="activity-list hunter-item-grid">
+              ${group.items.length ? group.items.map(itemCard).join('') : '<article class="option-card system-window empty-items"><div><h3>Empty</h3><p>No items in this category yet.</p></div></article>'}
+            </div>
+          </section>
+        `).join('') : '<article class="option-card system-window empty-items"><div><h3>No Hunter items yet</h3><p>Buy supplies from the System Shop or clear Gates to find dungeon loot.</p></div></article>'}
       </section>
     </main>
   `;
@@ -4248,6 +4305,12 @@ function handleAction(action, source = null) {
     setState(redeemMonarchBodyPassword(state, input?.value ?? ''));
     return;
   }
+  if (action === 'redeem-world-reset-password') {
+    const input = document.querySelector('#world-reset-password-input');
+    setState(redeemWorldResetPassword(state, input?.value ?? ''));
+    activeTab = 'life';
+    return;
+  }
   if (action === 'choice-school') setState(spendLifeChoice(state, 'school'));
   if (action === 'choice-street') setState(spendLifeChoice(state, 'street'));
   if (action === 'choice-job') setState(spendLifeChoice(state, 'job'));
@@ -4262,6 +4325,11 @@ function handleAction(action, source = null) {
     hunterItemsPopupOpen = false;
     navMenuOpen = false;
     render();
+  }
+  if (action === 'world-reset') {
+    setState(resetWorld(state));
+    activeTab = 'life';
+    return;
   }
   if (action === 'end-life') setState(endLife(state));
   if (action.startsWith('auto-train-')) {

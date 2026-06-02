@@ -61,6 +61,8 @@ import {
   redeemClanPassword,
   redeemHunterPassword,
   redeemMonarchBodyPassword,
+  redeemWorldResetPassword,
+  resetWorld,
   rerollClan,
   recover,
   recoverCoachedFighter,
@@ -309,7 +311,7 @@ test('hunter quest fights expose System moves instead of normal fighter moves', 
 
   const hunterMoves = getUnlockedHunterMoves(life);
 
-  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch).map(([id]) => id));
+  assert.deepEqual(hunterMoves.map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch && !move.requiresSecretSkill).map(([id]) => id));
   assert.equal(hunterMoves.some((move) => move.id === 'shadowAssist'), false);
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
@@ -321,7 +323,7 @@ test('Hunter move catalog labels every System skill as Basic or Special', () => 
   for (const moveId of basicMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'basic');
   for (const moveId of specialMoves) assert.equal(HUNTER_MOVES[moveId].moveType, 'special');
   assert.deepEqual(
-    Object.entries(HUNTER_MOVES).filter(([, move]) => move.moveType !== 'basic' && move.moveType !== 'special'),
+    Object.entries(HUNTER_MOVES).filter(([, move]) => !['basic', 'special', 'secret'].includes(move.moveType)),
     []
   );
 });
@@ -626,7 +628,7 @@ test('selecting a Gate creates a multi-room dungeon with a final boss System fig
   assert.equal(life.hunterWorld.activeDungeon.encounters.at(-1).isBoss, true);
   assert.equal(life.activeFight.source, 'hunterDungeon');
   assert.equal(life.activeFight.dungeonId, life.hunterWorld.activeDungeon.id);
-  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch).map(([id]) => id));
+  assert.deepEqual(getUnlockedHunterMoves(life).map((move) => move.id), Object.entries(HUNTER_MOVES).filter(([, move]) => !move.requiresWeapon && !move.requiresPerk && !move.requiresShadowMonarch && !move.requiresSecretSkill).map(([id]) => id));
   assert.deepEqual(getUnlockedFightMoves(life, 'pressure'), []);
 });
 
@@ -6557,6 +6559,187 @@ test('Monarch War defeats all Monarchs and unlocks final System choices', () => 
   assert.equal(defender.hunterWorld.unlocked, true);
   assert.equal(closed.hunterWorld.systemEnding.choice, 'closePortals');
   assert.equal(closed.hunterWorld.unlocked, false);
+});
+
+test('World Reset preserves clan mentor and base stats while granting secret skills', () => {
+  const base = createNewLife({ gender: 'Female', firstName: 'Mira', seed: 17001 });
+  const life = {
+    ...base,
+    stats: Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 777])),
+    mentor: MENTORS.find((mentor) => mentor.id === 'systemSage'),
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      level: 88,
+      statPoints: 999,
+      stats: { strength: 9, agility: 9, vitality: 9, sense: 9, intelligence: 9 },
+      gatesCleared: 222,
+      inventory: [{ id: 'monarchVial', quantity: 3 }],
+      shadowArmy: [{ id: 'shadow-one', monsterId: 'dragonMonarchBoss', name: 'Dragon Shadow', rank: 'S', strength: 10, armyPower: 10 }],
+      shadowMonarch: { unlocked: true, evolvedSkills: true, transformedMonth: 1 },
+      monarchWar: { unlocked: true, defeated: ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction'], finalChoiceUnlocked: true },
+    },
+  };
+
+  const reset = resetWorld(life);
+  const resetAgain = resetWorld({
+    ...reset,
+    hunterWorld: {
+      ...reset.hunterWorld,
+      shadowMonarch: { unlocked: true, evolvedSkills: true },
+      monarchWar: { unlocked: true, defeated: ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction'], finalChoiceUnlocked: true },
+    },
+  });
+
+  assert.equal(reset.clan.name, life.clan.name);
+  assert.equal(reset.mentor.id, life.mentor.id);
+  assert.deepEqual(reset.stats, life.stats);
+  assert.equal(reset.hunterWorld.level, 1);
+  assert.equal(reset.hunterWorld.gatesCleared, 0);
+  assert.deepEqual(reset.hunterWorld.stats, { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 });
+  assert.deepEqual(reset.hunterWorld.inventory, []);
+  assert.equal(reset.hunterWorld.worldResets, 1);
+  assert.deepEqual(reset.hunterWorld.secretSystemSkills, ['ultimateBody']);
+  assert.deepEqual(resetAgain.hunterWorld.secretSystemSkills, ['ultimateBody', 'shadowSacrifice']);
+});
+
+test('World Reset debug password is hidden from app text and creates a max-stat reset file', () => {
+  const base = createNewLife({ gender: 'Male', seed: 17002 });
+  const failed = redeemWorldResetPassword(base, 'wrong');
+  const debug = redeemWorldResetPassword(base, ' worldreset21 ');
+  const appSource = readFileSync(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(failed.log[0].text, /failed/i);
+  assert.equal(appSource.includes('WORLDRESET21'), false);
+  assert.equal(debug.hunterWorld.worldResets, 1);
+  assert.deepEqual(debug.hunterWorld.secretSystemSkills, ['ultimateBody']);
+  assert.ok(Object.values(debug.stats).every((value) => value === 2200));
+});
+
+test('World Reset level stat gain scales by five per reset', () => {
+  const base = createNewLife({ gender: 'Male', seed: 17003 });
+  const gainLife = (worldResets) => startHunterDungeonEncounter({
+    ...base,
+    stats: Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 300])),
+    resources: { ...base.resources, health: 1000, energy: 1000 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      worldResets,
+      xp: 134,
+      level: 1,
+      activeDungeon: {
+        id: `level-gain-${worldResets}`,
+        name: 'Level Gain Gate',
+        rank: 'E',
+        encounters: [{ monsterId: 'goblinCaptain', isBoss: true }],
+        encounterIndex: 0,
+        rewardsEarned: [],
+        completed: false,
+        bossDefeated: false,
+        outcome: null,
+      },
+    },
+  });
+
+  const reset0Fight = gainLife(0);
+  reset0Fight.activeFight.meters.opponentHealth = 1;
+  const reset2Fight = gainLife(2);
+  reset2Fight.activeFight.meters.opponentHealth = 1;
+  const reset0 = takeFightTurn(reset0Fight, 'slash');
+  const reset2 = takeFightTurn(reset2Fight, 'slash');
+
+  assert.ok(reset0.hunterWorld.statPoints >= 5);
+  assert.ok(reset2.hunterWorld.statPoints >= 15);
+});
+
+test('Secret System skills cap damage sacrifice shadows cleanse gates and erase enemies', () => {
+  const base = createNewLife({ gender: 'Female', seed: 17004 });
+  const hunterBase = {
+    ...base,
+    stats: Object.fromEntries(Object.keys(base.stats).map((stat) => [stat, 100])),
+    resources: { ...base.resources, health: 1000, energy: 1000 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      secretSystemSkills: ['ultimateBody', 'shadowSacrifice', 'massCleansing', 'ultimateErasure'],
+      shadowArmy: Array.from({ length: 10 }, (_, index) => ({ id: `shadow-${index}`, monsterId: 'dragonMonarchBoss', name: `Shadow ${index}`, rank: 'S', strength: 100 + index, armyPower: 1000 + index })),
+    },
+  };
+  const fightLife = {
+    ...hunterBase,
+    activeFight: {
+      source: 'hunterQuest',
+      opponentId: 'calamityDragonBoss',
+      round: 1,
+      exchanges: [],
+      moveCooldowns: {},
+      meters: { playerHealth: 100, maxPlayerHealth: 100, opponentHealth: 9999, maxOpponentHealth: 9999, playerStamina: 100, maxPlayerStamina: 100, opponentStamina: 100, maxOpponentStamina: 100, guard: 0, momentum: 0, injuryRisk: 0 },
+    },
+  };
+  const capped = takeFightTurn(fightLife, 'slash');
+  assert.ok(capped.activeFight.exchanges[0].enemyDamage <= 20);
+
+  const sacrificeLife = {
+    ...fightLife,
+    hunterWorld: { ...fightLife.hunterWorld, secretSystemSkills: ['shadowSacrifice'] },
+    activeFight: { ...fightLife.activeFight, meters: { ...fightLife.activeFight.meters, playerHealth: 1, maxPlayerHealth: 100 } },
+  };
+  const sacrificed = takeFightTurn(sacrificeLife, 'slash');
+  assert.equal(sacrificed.hunterWorld.shadowArmy.length, 0);
+  assert.equal(sacrificed.activeFight.meters.playerHealth, 1);
+
+  const gateLife = generateHunterGateOffers({
+    ...hunterBase,
+    hunterWorld: { ...hunterBase.hunterWorld, rank: 'S', level: 70 },
+  });
+  const selected = selectHunterGate(gateLife, gateLife.hunterWorld.gateOffers[0].id);
+  const cleansed = takeFightTurn({ ...selected, activeFight: { source: 'hunterDungeon', finished: false, moveCooldowns: {}, meters: { playerStamina: 100 } } }, 'massCleansing');
+  assert.equal(cleansed.hunterWorld.activeDungeon.completed, true);
+  assert.equal(cleansed.hunterWorld.gatesCleared, 10);
+  assert.equal(cleansed.hunterWorld.secretSkillCooldowns.massCleansingUsed, true);
+  const aged = ageUp(cleansed);
+  assert.equal(aged.hunterWorld.secretSkillCooldowns.massCleansingUsed, false);
+
+  const eraseLife = {
+    ...hunterBase,
+    activeFight: {
+      source: 'hunterDungeon',
+      dungeonId: 'erase-gate',
+      opponentId: 'calamityDragonBoss',
+      round: 1,
+      exchanges: [],
+      moveCooldowns: {},
+      meters: { playerHealth: 1000, maxPlayerHealth: 1000, opponentHealth: 999999, maxOpponentHealth: 999999, playerStamina: 100, maxPlayerStamina: 100, opponentStamina: 100, maxOpponentStamina: 100, guard: 0, momentum: 0, injuryRisk: 0 },
+    },
+    hunterWorld: {
+      ...hunterBase.hunterWorld,
+      activeDungeon: { id: 'erase-gate', name: 'Erase Gate', rank: 'S', encounters: [{ monsterId: 'dragonMonarchBoss', isBoss: true }], encounterIndex: 0, rewardsEarned: [], completed: false, bossDefeated: false },
+    },
+  };
+  const erased = takeFightTurn(eraseLife, 'ultimateErasure');
+  assert.equal(erased.activeFight.finished, true);
+  assert.equal(erased.hunterWorld.secretSkillCooldowns.ultimateErasureUsed, true);
+});
+
+test('armor can be bought equipped and improves Hunter combat resources', () => {
+  const base = createNewLife({ gender: 'Male', seed: 17005 });
+  const life = {
+    ...base,
+    resources: { ...base.resources, money: 10000 },
+    hunterWorld: { ...base.hunterWorld, unlocked: true, playerAwakened: true },
+  };
+
+  const bought = buySystemItem(life, 'manaPlate');
+  const equipped = bought.hunterWorld.equippedArmor === 'manaPlate' ? bought : buySystemItem(bought, 'manaPlate');
+
+  assert.equal(SYSTEM_SHOP_ITEMS.manaPlate.type, 'armor');
+  assert.equal(equipped.hunterWorld.equippedArmor, 'manaPlate');
+  assert.ok(maxLifeHealth(equipped) > maxLifeHealth(life));
+  assert.ok(maxLifeEnergy(equipped) > maxLifeEnergy(life));
 });
 
 test('new Hunter fight perks are level-up rewards and do not change Domain War power', () => {

@@ -12,6 +12,7 @@ export const STAT_CAP = 500;
 export const SECRET_CLAN_PASSWORD = 'BUCKY21';
 export const HUNTER_EVENT_PASSWORD = 'SOLO21';
 export const MONARCH_BODY_PASSWORD = 'MONARCH21';
+const WORLD_RESET_PASSWORD = 'WORLDRESET21';
 
 export const TECHNIQUE_TRACKS = {
   striking: {
@@ -62,6 +63,7 @@ const DEFAULT_HUNTER_WORLD = {
   autoGateLoadout: [],
   inventory: [],
   equippedWeapon: null,
+  equippedArmor: null,
   gateOffers: [],
   activeDungeon: null,
   redGatePending: false,
@@ -100,11 +102,20 @@ const DEFAULT_HUNTER_WORLD = {
     lastBattle: null,
   },
   systemEnding: null,
+  worldResets: 0,
+  secretSystemSkills: [],
+  secretSkillCooldowns: {},
 };
 const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Calamity'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
 const HUNTER_VITALITY_HEALTH_BONUS = 30;
 const SECRET_MENTOR_PASSWORD = 'MENTOR21';
+const SECRET_SYSTEM_SKILLS = [
+  'ultimateBody',
+  'shadowSacrifice',
+  'massCleansing',
+  'ultimateErasure',
+];
 const SYSTEM_PERK_VALUES = {
   executeCooldownMinus1: 1,
   specialStaminaMinus2: 2,
@@ -805,6 +816,28 @@ export const HUNTER_MOVES = {
     requiresHunterRank: 'SS',
     text: 'World Eater Domain opens under the battlefield and bites the Gate from below.',
   },
+  massCleansing: {
+    label: 'Mass Cleansing',
+    moveType: 'secret',
+    category: 'secret',
+    hint: 'SECRET World Reset skill. Instantly clears the active Gate and counts as 10 Gate clears. Once per age up.',
+    staminaCost: 0,
+    damageBias: 0,
+    guardBias: 0,
+    requiresSecretSkill: 'massCleansing',
+    text: 'Mass Cleansing floods the Gate with white System judgment.',
+  },
+  ultimateErasure: {
+    label: 'Ultimate Erasure',
+    moveType: 'secret',
+    category: 'secret',
+    hint: 'SECRET World Reset skill. One-shots any enemy. Once per Gate clear.',
+    staminaCost: 0,
+    damageBias: 0,
+    guardBias: 0,
+    requiresSecretSkill: 'ultimateErasure',
+    text: 'Ultimate Erasure deletes the target from the System record.',
+  },
 };
 
 const SHADOW_MONARCH_SKILL_EVOLUTIONS = {
@@ -885,6 +918,32 @@ export const HUNTER_ITEM_CATALOG = {
     cost: 9000,
     description: 'Unlocks Reaping Arc, a brutal late-fight execution sweep.',
     moveId: 'reapingArc',
+  },
+  hunterVest: {
+    id: 'hunterVest',
+    label: 'Hunter Vest',
+    type: 'armor',
+    rarity: 'common',
+    cost: 1400,
+    description: 'Basic Association armor that adds health and a little stamina.',
+    armor: { health: 28, stamina: 10, damageReduction: 0.04, damageBonus: 0 },
+  },
+  manaPlate: {
+    id: 'manaPlate',
+    label: 'Mana Plate',
+    type: 'armor',
+    rarity: 'rare',
+    cost: 6200,
+    description: 'Dungeon-forged armor that hardens under monster pressure.',
+    armor: { health: 80, stamina: 22, damageReduction: 0.1, damageBonus: 0.04 },
+  },
+  monarchAegis: {
+    id: 'monarchAegis',
+    label: 'Monarch Aegis',
+    type: 'armor',
+    rarity: 'legendary',
+    description: 'A royal armor drop that boosts health, stamina, damage, and damage reduction.',
+    armor: { health: 180, stamina: 48, damageReduction: 0.18, damageBonus: 0.1 },
   },
   monsterCore: {
     id: 'monsterCore',
@@ -1054,6 +1113,18 @@ function normalizeSystemPerks(perks = []) {
   });
 }
 
+function normalizeSecretSystemSkills(skills = []) {
+  if (!Array.isArray(skills)) return [];
+  return [...new Set(skills.filter((id) => SECRET_SYSTEM_SKILLS.includes(id)))];
+}
+
+function normalizeSecretSkillCooldowns(cooldowns = {}) {
+  return {
+    massCleansingUsed: Boolean(cooldowns?.massCleansingUsed),
+    ultimateErasureUsed: Boolean(cooldowns?.ultimateErasureUsed),
+  };
+}
+
 function systemPerkOption(perkId) {
   return Object.values(HUNTER_LEVEL_REWARD_OPTIONS).find((option) => option.type === 'perk' && option.perk === perkId) ?? null;
 }
@@ -1089,7 +1160,27 @@ function consumeHunterItemQuantity(hunterWorld, itemId, quantity = 1) {
   existing.quantity -= amount;
   hunterWorld.inventory = inventory.filter((item) => item.quantity > 0);
   if (hunterWorld.equippedWeapon === itemId && !hunterHasItem(hunterWorld, itemId)) hunterWorld.equippedWeapon = null;
+  if (hunterWorld.equippedArmor === itemId && !hunterHasItem(hunterWorld, itemId)) hunterWorld.equippedArmor = null;
   return true;
+}
+
+function equippedArmorItem(hunterWorld) {
+  const hunter = normalizeHunterWorld(hunterWorld);
+  const item = HUNTER_ITEM_CATALOG[hunter.equippedArmor];
+  return item?.type === 'armor' ? item : null;
+}
+
+function hunterArmorEffects(hunterWorld) {
+  return equippedArmorItem(hunterWorld)?.armor ?? { health: 0, stamina: 0, damageReduction: 0, damageBonus: 0 };
+}
+
+function hasSecretSystemSkill(life, skillId) {
+  return normalizeHunterWorld(life?.hunterWorld).secretSystemSkills.includes(skillId);
+}
+
+function hunterLevelStatGain(hunterWorld) {
+  const hunter = normalizeHunterWorld(hunterWorld);
+  return 5 + Math.max(0, Math.floor(hunter.worldResets ?? 0)) * 5;
 }
 
 function normalizeHunterMilestones(milestones = {}) {
@@ -1513,6 +1604,7 @@ function normalizeHunterWorld(hunterWorld = {}) {
     autoGateLoadout,
     inventory: normalizeHunterInventory(hunterWorld.inventory),
     equippedWeapon: typeof hunterWorld.equippedWeapon === 'string' ? hunterWorld.equippedWeapon : null,
+    equippedArmor: HUNTER_ITEM_CATALOG[hunterWorld.equippedArmor]?.type === 'armor' ? hunterWorld.equippedArmor : null,
     gateOffers: Array.isArray(hunterWorld.gateOffers)
       ? hunterWorld.gateOffers.map(normalizeHunterGateOffer).filter(Boolean).slice(0, 3)
       : [],
@@ -1532,6 +1624,9 @@ function normalizeHunterWorld(hunterWorld = {}) {
     shadowMonarch: normalizeShadowMonarch(hunterWorld.shadowMonarch),
     monarchWar: normalizeMonarchWar(hunterWorld.monarchWar),
     systemEnding: normalizeSystemEnding(hunterWorld.systemEnding),
+    worldResets: Math.max(0, Math.floor(hunterWorld.worldResets ?? 0)),
+    secretSystemSkills: normalizeSecretSystemSkills(hunterWorld.secretSystemSkills),
+    secretSkillCooldowns: normalizeSecretSkillCooldowns(hunterWorld.secretSkillCooldowns),
   };
 }
 
@@ -4471,7 +4566,8 @@ export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
-  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0);
+  const armorHealth = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(hunter).health ?? 0)) : 0;
+  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + armorHealth;
 }
 
 function staminaFromStats(stats = {}) {
@@ -4486,7 +4582,8 @@ function staminaFromStats(stats = {}) {
 export function maxLifeEnergy(life) {
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
-  return staminaFromStats(stats);
+  const armorStamina = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(life.hunterWorld).stamina ?? 0)) : 0;
+  return staminaFromStats(stats) + armorStamina;
 }
 
 function clampLifeResource(life, resource, value) {
@@ -4553,7 +4650,7 @@ function grantHunterXp(life, amount) {
   while (life.hunterWorld.xp >= hunterXpForNextLevel(life.hunterWorld.level)) {
     life.hunterWorld.xp -= hunterXpForNextLevel(life.hunterWorld.level);
     life.hunterWorld.level += 1;
-    life.hunterWorld.statPoints += 5;
+    life.hunterWorld.statPoints += hunterLevelStatGain(life.hunterWorld);
     life.hunterWorld.pendingLevelRewards.push(createHunterLevelRewardChoice(life, life.hunterWorld.level));
   }
 }
@@ -4637,11 +4734,17 @@ function dungeonLootDrops(life, dungeon, encounter, monster) {
     }
     const specialRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-special');
     if (specialRoll < (dungeon.isRedGate ? 0.36 : 0.16)) add(specialRoll < 0.06 ? 'awakeningRune' : 'monarchVial');
+    const armorRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'boss-armor');
+    if (armorRoll < (dungeon.isRedGate ? 0.48 : 0.22)) {
+      add(dungeon.isRedGate || hunterRankAtLeast(dungeon.rank, 'S') ? 'monarchAegis' : hunterRankAtLeast(dungeon.rank, 'B') ? 'manaPlate' : 'hunterVest');
+    }
     return drops;
   }
   add(dungeon.isRedGate ? 'gateShard' : 'monsterCore');
   const consumableRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'room-consumable');
   if (consumableRoll < (dungeon.isRedGate ? 0.55 : 0.28)) add(consumableRoll < 0.14 ? 'dungeonElixir' : 'manaAmpoule');
+  const armorRoll = deterministicRoll(life.rngSeed, roomKey, dungeon.rank, 'room-armor');
+  if (armorRoll < (dungeon.isRedGate ? 0.2 : 0.06)) add(hunterRankAtLeast(dungeon.rank, 'B') ? 'manaPlate' : 'hunterVest');
   return drops;
 }
 
@@ -5219,6 +5322,79 @@ function applyHunterDungeonFightResult(life, fight, won) {
   if (itemDrops.length) fight.result.rewards.push(`Boss loot: ${itemDrops.map(itemDropText).join(', ')}`);
   if (dungeon.redGateTriggered) fight.result.rewards.push('Emergency alert: a Red Gate has appeared on the next Gate Board');
   life.hunterWorld.activeDungeon = dungeon;
+}
+
+function strongestShadowIds(shadowArmy, count = 10) {
+  return normalizeShadowArmy(shadowArmy)
+    .slice()
+    .sort((a, b) => hunterRankPower(b.rank) - hunterRankPower(a.rank) || (b.armyPower ?? b.strength ?? 0) - (a.armyPower ?? a.strength ?? 0))
+    .slice(0, count)
+    .map((shadow) => shadow.id);
+}
+
+function applyShadowSacrifice(life, fight) {
+  life.hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  if (!hasSecretSystemSkill(life, 'shadowSacrifice') || life.hunterWorld.shadowArmy.length < 10) return null;
+  const ids = new Set(strongestShadowIds(life.hunterWorld.shadowArmy, 10));
+  life.hunterWorld.shadowArmy = life.hunterWorld.shadowArmy.filter((shadow) => !ids.has(shadow.id));
+  life.hunterWorld.autoGateLoadout = life.hunterWorld.autoGateLoadout.filter((id) => !ids.has(id));
+  fight.meters.playerHealth = 1;
+  return { removed: ids.size };
+}
+
+export function useMassCleansing(life) {
+  const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  const dungeon = next.hunterWorld.activeDungeon;
+  if (!hasSecretSystemSkill(next, 'massCleansing')) return addLog(next, 'Mass Cleansing is locked until a World Reset grants the secret skill.', 'world');
+  if (next.hunterWorld.secretSkillCooldowns.massCleansingUsed) return addLog(next, 'Mass Cleansing is on cooldown until Age Up.', 'world');
+  if (!dungeon || dungeon.completed || dungeon.failed || dungeon.retreated) return addLog(next, 'Mass Cleansing requires an active Gate.', 'world');
+  const tierRewards = HUNTER_DUNGEON_TIERS[dungeon.rank];
+  let totalXp = 0;
+  let totalMoney = 0;
+  let totalReputation = 0;
+  for (const [index, encounter] of dungeon.encounters.entries()) {
+    const monster = HUNTER_MONSTERS[encounter.monsterId] ?? HUNTER_MONSTERS.systemGoblinScout;
+    dungeon.encounterIndex = index;
+    if (encounter.isBoss) {
+      const xp = dungeonRewardAmount(tierRewards.boss.xp, dungeon.isRedGate);
+      const money = dungeonRewardAmount(tierRewards.boss.money, dungeon.isRedGate);
+      const reputation = dungeonRewardAmount(tierRewards.boss.reputation, dungeon.isRedGate);
+      totalXp += xp;
+      totalMoney += money;
+      totalReputation += reputation;
+      grantHunterXp(next, xp);
+      next.resources.money += money;
+      next.resources.reputation = clamp(next.resources.reputation + reputation, 0, 999);
+      const gainedStats = randomHunterStatRewards(next, tierRewards.boss.stats + (dungeon.isRedGate ? 1 : 0), `${dungeon.id}-mass`);
+      const itemDrops = awardDungeonLoot(next, dungeon, encounter, monster);
+      dungeon.rewardsEarned.push({ type: 'boss', monster: monster.name, xp, money, reputation, stats: gainedStats, items: itemDrops, massCleansing: true });
+      applyArisePassive(next, encounter.monsterId, dungeon.isRedGate ? 'mass-red-gate' : 'mass-gate');
+    } else {
+      const xp = dungeonRewardAmount(tierRewards.room.xp, dungeon.isRedGate);
+      const money = dungeonRewardAmount(tierRewards.room.money, dungeon.isRedGate);
+      const reputation = dungeonRewardAmount(tierRewards.room.reputation, dungeon.isRedGate);
+      totalXp += xp;
+      totalMoney += money;
+      totalReputation += reputation;
+      grantHunterXp(next, xp);
+      next.resources.money += money;
+      next.resources.reputation = clamp(next.resources.reputation + reputation, 0, 999);
+      const itemDrops = awardDungeonLoot(next, dungeon, encounter, monster);
+      dungeon.rewardsEarned.push({ type: 'room', monster: monster.name, xp, money, reputation, items: itemDrops, massCleansing: true });
+    }
+  }
+  dungeon.encounterIndex = Math.max(0, dungeon.encounters.length - 1);
+  dungeon.completed = true;
+  dungeon.bossDefeated = true;
+  dungeon.outcome = 'cleared';
+  next.hunterWorld.gatesCleared += 10;
+  next.hunterWorld.secretSkillCooldowns = { ...normalizeSecretSkillCooldowns(next.hunterWorld.secretSkillCooldowns), massCleansingUsed: true, ultimateErasureUsed: false };
+  dungeon.resultText = `Mass Cleansing erased the Gate. Rewards: +${totalXp} Hunter XP, +$${totalMoney}, +${totalReputation} reputation. Gate credit +10.`;
+  next.activeFight = null;
+  next.hunterWorld.activeDungeon = dungeon;
+  next.hunterWorld.gateOffers = [];
+  return addLog(next, dungeon.resultText, 'world');
 }
 
 function endFatalHunterFight(life, fight, opponent) {
@@ -5930,6 +6106,62 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
   life.resources.health = maxLifeHealth(life);
   life.resources.energy = maxLifeEnergy(life);
   return life;
+}
+
+function nextSecretSystemSkill(existing = []) {
+  const owned = new Set(normalizeSecretSystemSkills(existing));
+  return SECRET_SYSTEM_SKILLS.find((id) => !owned.has(id)) ?? null;
+}
+
+export function resetWorld(life, { debug = false } = {}) {
+  const currentHunter = normalizeHunterWorld(life.hunterWorld);
+  const eligible = currentHunter.shadowMonarch.unlocked && currentHunter.monarchWar.finalChoiceUnlocked;
+  if (!debug && !eligible) return addLog(life, 'RESET THE WORLD is locked until the Shadow Monarch defeats every Monarch.', 'world');
+  const previousSkills = normalizeSecretSystemSkills(currentHunter.secretSystemSkills);
+  const grantedSkill = nextSecretSystemSkill(previousSkills);
+  const secretSystemSkills = grantedSkill ? [...previousSkills, grantedSkill] : previousSkills;
+  const worldResets = Math.max(0, Math.floor(currentHunter.worldResets ?? 0)) + 1;
+  const fresh = createNewLife({
+    gender: life.identity?.gender ?? 'Male',
+    firstName: life.identity?.firstName ?? life.identity?.name?.split?.(' ')?.[0] ?? '',
+    seed: (life.rngSeed ?? Date.now()) + worldResets,
+  });
+  const preservedStats = debug
+    ? Object.fromEntries(Object.keys(fresh.stats).map((stat) => [stat, 2200]))
+    : clone(life.stats);
+  fresh.identity = {
+    ...fresh.identity,
+    firstName: life.identity?.firstName ?? fresh.identity.firstName,
+    lastName: life.identity?.lastName ?? fresh.identity.lastName,
+    name: life.identity?.name ?? fresh.identity.name,
+    gender: life.identity?.gender ?? fresh.identity.gender,
+    age: 12,
+    month: 0,
+  };
+  fresh.clan = clone(life.clan);
+  fresh.baseStats = clone(debug ? preservedStats : (life.baseStats ?? preservedStats));
+  fresh.stats = preservedStats;
+  fresh.mentor = clone(life.mentor);
+  fresh.hunterWorld = {
+    ...defaultHunterWorld(),
+    unlocked: true,
+    playerAwakened: true,
+    worldResets,
+    secretSystemSkills,
+    secretSkillCooldowns: {},
+  };
+  fresh.resources.health = maxLifeHealth(fresh);
+  fresh.resources.energy = maxLifeEnergy(fresh);
+  fresh.log = [
+    createLog(`RESET THE WORLD complete: World Reset ${worldResets}. Secret System skill awakened: ${grantedSkill ? labelFromId(grantedSkill) : 'all skills already owned'}.`, 'world'),
+    ...(fresh.log ?? []),
+  ].slice(0, 60);
+  return fresh;
+}
+
+export function redeemWorldResetPassword(life, password) {
+  if ((password ?? '').trim().toUpperCase() !== WORLD_RESET_PASSWORD) return addLog(life, 'World Reset override failed.', 'life');
+  return resetWorld(life, { debug: true });
 }
 
 export function rerollClan(life) {
@@ -6899,6 +7131,7 @@ export function getUnlockedHunterMoves(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   return Object.entries(HUNTER_MOVES)
     .filter(([, move]) => !move.requiresPerk || hasSystemPerk({ hunterWorld: hunter }, move.requiresPerk))
+    .filter(([, move]) => !move.requiresSecretSkill || hunter.secretSystemSkills.includes(move.requiresSecretSkill))
     .filter(([, move]) => !move.requiresShadowMonarch || hunter.shadowMonarch.unlocked)
     .filter(([, move]) => !move.requiresHunterRank || hunterRankAtLeast(hunter.rank, move.requiresHunterRank))
     .filter(([id, move]) => !move.requiresWeapon || hunter.equippedWeapon === move.requiresWeapon || hunterHasItem(hunter, move.requiresWeapon))
@@ -6917,7 +7150,10 @@ function hunterMoveDisabledReason(life, move) {
   if (!fight || fight.finished || (fight.source !== 'hunterQuest' && fight.source !== 'hunterDungeon')) return '';
   const hunter = normalizeHunterWorld(life.hunterWorld);
   if (move.requiresPerk && !hasSystemPerk(life, move.requiresPerk)) return 'Requires the matching ultimate System perk.';
+  if (move.requiresSecretSkill && !hunter.secretSystemSkills.includes(move.requiresSecretSkill)) return 'Requires the matching secret World Reset skill.';
   if (move.requiresShadowMonarch && !hunter.shadowMonarch.unlocked) return 'Requires Shadow Monarch transformation.';
+  if (move.id === 'massCleansing' && (fight.source !== 'hunterDungeon' || hunter.secretSkillCooldowns.massCleansingUsed)) return hunter.secretSkillCooldowns.massCleansingUsed ? 'Mass Cleansing is on cooldown until Age Up.' : 'Mass Cleansing can only be used inside a Gate.';
+  if (move.id === 'ultimateErasure' && hunter.secretSkillCooldowns.ultimateErasureUsed) return 'Ultimate Erasure has already been used for this Gate clear.';
   if (move.requiresHunterRank && !hunterRankAtLeast(hunter.rank, move.requiresHunterRank)) return `Requires ${move.requiresHunterRank}-rank Hunter status.`;
   if (move.requiresWeapon && hunter.equippedWeapon !== move.requiresWeapon && !hunterHasItem(hunter, move.requiresWeapon)) return 'Requires the matching System weapon.';
   const cooldown = Math.max(0, Math.floor(fight.moveCooldowns?.[move.id] ?? 0));
@@ -9181,11 +9417,46 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const move = HUNTER_MOVES[moveId] ? { id: moveId, ...HUNTER_MOVES[moveId] } : { id: 'slash', ...HUNTER_MOVES.slash };
   const disabledReason = hunterMoveDisabledReason(life, move);
   if (disabledReason) return addLog(life, disabledReason, 'world');
+  if (move.id === 'massCleansing') return useMassCleansing(life);
 
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   const fight = next.activeFight;
   const opponent = getCombatOpponent(next, fight.opponentId);
+  if (move.id === 'ultimateErasure') {
+    const damage = fight.meters.maxOpponentHealth ?? fight.meters.opponentHealth ?? 1;
+    next.hunterWorld.secretSkillCooldowns = { ...normalizeSecretSkillCooldowns(next.hunterWorld.secretSkillCooldowns), ultimateErasureUsed: true };
+    fight.meters.opponentHealth = 0;
+    fight.exchanges.unshift({
+      round: fight.round,
+      tactic: move.category,
+      moveId: move.id,
+      tacticLabel: move.label,
+      opponentTactic: 'erased',
+      opponentTacticLabel: 'Erased',
+      opponentMoveId: null,
+      opponentMoveLabel: 'None',
+      opponentMoveText: '',
+      text: `Exchange ${fight.round} - ${move.label}: ${move.text} Damage: You dealt ${damage}. You took 0. Secret System skill consumed for this Gate clear.`,
+      playerDamage: damage,
+      basePlayerDamage: damage,
+      enemyDamage: 0,
+      baseEnemyDamage: 0,
+      swing: 999,
+      critical: true,
+      criticalChance: 1,
+      enemyCritical: false,
+      enemyCriticalChance: 0,
+      opponentDodged: false,
+      opponentDodgeChance: 0,
+      dodged: false,
+      dodgeChance: 0,
+      weakMoveHit: false,
+      momentum: fight.meters.momentum,
+    });
+    finishActiveFight(next);
+    return next;
+  }
   const stats = getHunterEffectiveStats(next);
   const opponentStats = getOpponentStats(opponent);
   fight.hunterPerkState = fight.hunterPerkState ?? {};
@@ -9257,7 +9528,9 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const desperationMultiplier = desperationSlash ? 0.42 : 1;
   const shadowPassiveMultiplier = Math.max(1, shadowPassive.activeDamageMultiplier);
   const shadowPassiveFlatDamage = shadowPassive.flatDamage;
-  const basePlayerDamage = Math.max(1, Math.round(desperationMultiplier * basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * shadowPassiveMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus + shadowPassiveFlatDamage - opponentDefense)));
+  const armorEffects = hunterArmorEffects(next.hunterWorld);
+  const armorDamageMultiplier = 1 + Math.max(0, armorEffects.damageBonus ?? 0);
+  const basePlayerDamage = Math.max(1, Math.round(desperationMultiplier * basicDamageMultiplier * weaponDamageMultiplier * rhythmMultiplier * bloodScentMultiplier * coreSightMultiplier * limitBreakMultiplier * shadowPressureMultiplier * monarchInstinctMultiplier * shadowPassiveMultiplier * armorDamageMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 48) + profile.damageBonus + executeBonus + overclockBonus + rulersAuthorityBonus + shadowPassiveFlatDamage - opponentDefense)));
   const criticalChance = move.id === 'conserve'
     ? 0
     : clampFloat(0.05 + next.hunterWorld.stats.sense * 0.008 + next.hunterWorld.stats.intelligence * 0.004 + (fight.systemAnalysis ? systemPerkValue(next, 'analysisCritPlus3') : 0) + shadowPassive.critChance, 0.05, 0.67);
@@ -9269,6 +9542,11 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   const dodgeChance = clampFloat(0.04 + stats.speed * 0.0008 + stats.reflexes * 0.00055 + (move.id === 'dashStrike' ? 0.08 : 0) + (footworkActive ? systemPerkValue(next, 'perfectFootwork') : 0), 0.03, footworkActive ? 0.62 : 0.38);
   const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'hunter-dodge') < dodgeChance;
   let enemyDamage = dodged ? 0 : baseEnemyDamage;
+  const armorReduction = !dodged && armorEffects.damageReduction ? Math.max(0, Math.round(enemyDamage * Math.min(0.65, armorEffects.damageReduction))) : 0;
+  if (armorReduction) enemyDamage = Math.max(0, enemyDamage - armorReduction);
+  const ultimateBodyCap = hasSecretSystemSkill(next, 'ultimateBody') ? Math.max(1, Math.floor((fight.meters.maxPlayerHealth ?? 100) * 0.2)) : 0;
+  const ultimateBodyReduction = ultimateBodyCap && enemyDamage > ultimateBodyCap ? enemyDamage - ultimateBodyCap : 0;
+  if (ultimateBodyReduction) enemyDamage = ultimateBodyCap;
   const emergencyShadowShield = !dodged && shadowPassive.emergencyReduction > 0 && healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100) <= 35
     ? Math.max(0, Math.round(enemyDamage * Math.min(0.75, shadowPassive.emergencyReduction)))
     : 0;
@@ -9312,6 +9590,7 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     : clamp(fight.meters.playerStamina - staminaCost + (move.id === 'manaGuard' ? 6 + guardRecovery + manaThreadingRefund : 0) + limitBreakStamina, 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(5, Math.round(playerDamage / 3)) - shadowPassive.staminaDamage - (move.id === 'analyzeWeakness' ? 8 : 0) - (monarchInstinctActive ? 12 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
+  const shadowSacrifice = fight.meters.playerHealth <= 0 ? applyShadowSacrifice(next, fight) : null;
   fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
   const lifeSteal = move.id === 'abyssalLeech' ? Math.max(1, Math.round(playerDamage * 0.32 + next.hunterWorld.stats.intelligence * 0.8)) : 0;
   if (lifeSteal) fight.meters.playerHealth = clamp(fight.meters.playerHealth + lifeSteal, 0, fight.meters.maxPlayerHealth ?? 100);
@@ -9363,6 +9642,10 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
     lifeSteal ? ` Abyssal Leech restored ${lifeSteal} health.` : '',
     guardRecovery ? ` Absolute Guard recovery: +${guardRecovery} mana.` : '',
     manaThreadingRefund ? ` Mana Threading refunded ${manaThreadingRefund} stamina.` : '',
+    armorDamageMultiplier > 1 ? ` Armor damage bonus: +${Math.round((armorDamageMultiplier - 1) * 100)}%.` : '',
+    armorReduction ? ` Armor prevented ${armorReduction} damage.` : '',
+    ultimateBodyReduction ? ` Ultimate Body capped incoming damage at ${ultimateBodyCap}.` : '',
+    shadowSacrifice ? ` Shadow Sacrifice burned ${shadowSacrifice.removed} shadows and kept you alive.` : '',
     vitalPulseHeal ? ` Vital Pulse restored ${vitalPulseHeal} health.` : '',
     footworkActive ? ' Perfect Footwork blurred the monster timing.' : '',
     rhythmStacks ? ` Predator Rhythm x${rhythmStacks}.` : '',
@@ -10123,6 +10406,8 @@ function nextAvailableFightMove(life, preferredMoveId) {
 
 export function ageUp(life) {
   const next = clone(life);
+  next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  next.hunterWorld.secretSkillCooldowns = { ...next.hunterWorld.secretSkillCooldowns, massCleansingUsed: false };
   next.trainingSessionsUsed = 0;
   const ageStep = advanceLifeClock(next);
   next.resources.energy = maxLifeEnergy(next);
@@ -10466,6 +10751,7 @@ export function selectHunterGate(life, offerId) {
     outcome: null,
     awaitingAdvance: false,
   };
+  next.hunterWorld.secretSkillCooldowns = { ...normalizeSecretSkillCooldowns(next.hunterWorld.secretSkillCooldowns), ultimateErasureUsed: false };
   next.hunterWorld.gateOffers = [];
   return addLog(next, `Gate selected: ${offer.name}. ${offer.encounters.length} hostile rooms detected; the final signature is a boss.`, 'world');
 }
@@ -10613,6 +10899,7 @@ export function dismissHunterDungeonResult(life) {
   if (!dungeon || !dungeon.completed) return addLog(next, 'There is no resolved dungeon report to dismiss.', 'world');
   next.activeFight = null;
   next.hunterWorld.activeDungeon = null;
+  next.hunterWorld.secretSkillCooldowns = { ...normalizeSecretSkillCooldowns(next.hunterWorld.secretSkillCooldowns), ultimateErasureUsed: false };
   if (next.hunterWorld.shadowMonarch.unlocked) {
     next.hunterWorld.gateOffers = [];
     next.hunterWorld.monarchWar = { ...normalizeMonarchWar(next.hunterWorld.monarchWar), unlocked: true };
@@ -10728,10 +11015,15 @@ export function buySystemItem(life, itemId = 'recoveryPotion') {
     next.hunterWorld.equippedWeapon = item.id;
     return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
   }
+  if (item.type === 'armor' && hunterHasItem(next.hunterWorld, item.id)) {
+    next.hunterWorld.equippedArmor = item.id;
+    return addLog(next, `System armor equipped: ${item.label}.`, 'world');
+  }
   if (next.resources.money < item.cost) return addLog(next, 'Not enough money for the System Shop.', 'world');
   next.resources.money -= item.cost;
   addHunterItem(next.hunterWorld, item.id);
   if (item.type === 'weapon') next.hunterWorld.equippedWeapon = item.id;
+  if (item.type === 'armor') next.hunterWorld.equippedArmor = item.id;
   return addLog(next, `System Shop purchase: ${item.label} added to Items.`, 'world');
 }
 
@@ -10763,9 +11055,10 @@ export function equipHunterItem(life, itemId) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   const item = HUNTER_ITEM_CATALOG[itemId];
-  if (!item || item.type !== 'weapon' || !hunterHasItem(next.hunterWorld, itemId)) return addLog(next, 'That System weapon is not in your inventory.', 'world');
-  next.hunterWorld.equippedWeapon = item.id;
-  return addLog(next, `System weapon equipped: ${item.label}.`, 'world');
+  if (!item || !['weapon', 'armor'].includes(item.type) || !hunterHasItem(next.hunterWorld, itemId)) return addLog(next, 'That System equipment is not in your inventory.', 'world');
+  if (item.type === 'weapon') next.hunterWorld.equippedWeapon = item.id;
+  if (item.type === 'armor') next.hunterWorld.equippedArmor = item.id;
+  return addLog(next, `System ${item.type} equipped: ${item.label}.`, 'world');
 }
 
 export function advanceMonarchTrace(life) {

@@ -147,6 +147,36 @@ test('Hunter stat panel exposes bulk stat point allocation controls', async () =
   assert.match(appSource, /hunter-stat-amount-grid/);
 });
 
+test('Life panel exposes World Reset controls without revealing the debug code', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /RESET THE WORLD/);
+  assert.match(appSource, /data-action="world-reset"/);
+  assert.match(appSource, /world-reset-password-input/);
+  assert.match(appSource, /data-action="redeem-world-reset-password"/);
+  assert.match(appSource, /redeemWorldResetPassword/);
+  assert.doesNotMatch(appSource, /WORLDRESET21/);
+});
+
+test('Hunter inventory groups item types and shows armor rarity equipment state', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /Consumables/);
+  assert.match(appSource, /Weapons/);
+  assert.match(appSource, /Armor/);
+  assert.match(appSource, /Materials/);
+  assert.match(appSource, /Special/);
+  assert.match(appSource, /item-section-\$\{group\.type\}/);
+  assert.match(appSource, /item-rarity-badge/);
+  assert.match(appSource, /equippedArmor/);
+  assert.match(appSource, /Potions, Weapons & Armor/);
+  assert.match(cssSource, /\.hunter-item-section\s*{/);
+  assert.match(cssSource, /\.hunter-item-section-header\s*{/);
+  assert.match(cssSource, /\.item-rarity-badge\s*{/);
+  assert.match(cssSource, /\.hunter-item-card\.armor\s*{/);
+});
+
 test('Hunter full-screen flow has no ARISE popup priority', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const match = appSource.match(/function renderHunterFullScreenFlow\(\) \{[\s\S]*?\n\}/);
