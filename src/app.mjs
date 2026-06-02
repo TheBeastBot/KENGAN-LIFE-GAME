@@ -2982,12 +2982,14 @@ function renderHunterSkillsPanel() {
     .map((perk) => ({ ...perk, option: HUNTER_LEVEL_REWARD_OPTIONS[perk.id] }));
   const secretSkills = hunter.secretSystemSkills ?? [];
   const unlockedCount = moves.filter((move) => move.unlocked).length;
+  const ownedSkillCount = unlockedCount + ownedPerks.length + secretSkills.length;
   const secretSkillLabels = secretSkills.length ? secretSkills.map(labelize).join(' / ') : 'None awakened';
   return `
     <div class="system-chip-row hunter-skill-summary">
-      ${systemChip('Moves', `${unlockedCount}/${moves.length}`, unlockedCount ? 'ready' : '')}
-      ${systemChip('Passives', ownedPerks.length)}
-      ${systemChip('Secret Skills', secretSkills.length, secretSkills.length ? 'ready' : '')}
+      ${systemChip('Skills Owned', ownedSkillCount, ownedSkillCount ? 'ready' : '')}
+      ${systemChip('Combat Moves', `${unlockedCount}/${moves.length}`, unlockedCount ? 'ready' : '')}
+      ${systemChip('Passive Perks', ownedPerks.length)}
+      ${systemChip('Secret Powers', secretSkills.length, secretSkills.length ? 'ready' : '')}
       ${systemChip('Secret List', secretSkillLabels)}
     </div>
     <section class="hunter-skill-section">

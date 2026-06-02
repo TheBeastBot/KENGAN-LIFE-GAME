@@ -155,6 +155,11 @@ test('Hunter tab exposes a persistent System Skills section', async () => {
   assert.match(appSource, /id: 'hunter-skills'/);
   assert.match(appSource, /title: 'System Skills'/);
   assert.match(appSource, /'hunter-skills': true/);
+  assert.match(appSource, /Skills Owned/);
+  assert.match(appSource, /Combat Moves/);
+  assert.match(appSource, /Passive Perks/);
+  assert.match(appSource, /Secret Powers/);
+  assert.match(appSource, /ownedSkillCount = unlockedCount \+ ownedPerks\.length \+ secretSkills\.length/);
   assert.match(appSource, /Combat Skills/);
   assert.match(appSource, /System Passives/);
   assert.match(appSource, /Secret List/);
