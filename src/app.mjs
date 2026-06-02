@@ -5,6 +5,7 @@ import {
   FIGHT_MOVES,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
@@ -315,6 +316,7 @@ const dropdownState = createDropdownStateController({
     'hunter-core': true,
     'hunter-actions': true,
     'hunter-milestones': true,
+    'hunter-skills': true,
     'hunter-association-panel': true,
     'hunter-shadows': true,
     'hunter-crafting': true,
@@ -2960,6 +2962,74 @@ function renderHunterStatSheet() {
   `;
 }
 
+function hunterSkillRequirementText(move, hunter) {
+  const requirements = [];
+  if (move.requiresHunterRank) requirements.push(`${move.requiresHunterRank}-Rank`);
+  if (move.requiresPerk) requirements.push(HUNTER_LEVEL_REWARD_OPTIONS[move.requiresPerk]?.label ?? labelize(move.requiresPerk));
+  if (move.requiresWeapon) requirements.push(HUNTER_ITEM_CATALOG[move.requiresWeapon]?.label ?? labelize(move.requiresWeapon));
+  if (move.requiresShadowMonarch) requirements.push('Shadow Monarch');
+  if (move.requiresSecretSkill) requirements.push(`${labelize(move.requiresSecretSkill)} secret`);
+  if (!requirements.length) return hunter.unlocked ? 'Starter System skill' : 'System awakening required';
+  return requirements.join(' / ');
+}
+
+function renderHunterSkillsPanel() {
+  const hunter = normalizeHunterWorld(state.hunterWorld);
+  const unlockedIds = new Set(getUnlockedHunterMoves(state).map((move) => move.id));
+  const moves = Object.entries(HUNTER_MOVES).map(([id, move]) => ({ id, ...move, unlocked: unlockedIds.has(id) }));
+  const ownedPerks = normalizeSystemPerks(hunter.systemPerks)
+    .filter((perk) => (perk.count ?? 0) > 0)
+    .map((perk) => ({ ...perk, option: HUNTER_LEVEL_REWARD_OPTIONS[perk.id] }));
+  const secretSkills = hunter.secretSystemSkills ?? [];
+  const unlockedCount = moves.filter((move) => move.unlocked).length;
+  const secretSkillLabels = secretSkills.length ? secretSkills.map(labelize).join(' / ') : 'None awakened';
+  return `
+    <div class="system-chip-row hunter-skill-summary">
+      ${systemChip('Moves', `${unlockedCount}/${moves.length}`, unlockedCount ? 'ready' : '')}
+      ${systemChip('Passives', ownedPerks.length)}
+      ${systemChip('Secret Skills', secretSkills.length, secretSkills.length ? 'ready' : '')}
+      ${systemChip('Secret List', secretSkillLabels)}
+    </div>
+    <section class="hunter-skill-section">
+      <div class="hunter-item-section-header">
+        <h3>Combat Skills</h3>
+        <span class="system-chip compact"><small>Unlocked</small><strong>${unlockedCount}</strong></span>
+      </div>
+      <div class="world-grid hunter-skill-grid">
+        ${moves.map((move) => `
+          <article class="option-card system-window hunter-skill-card ${move.unlocked ? 'unlocked' : 'locked'} skill-${move.moveType ?? 'basic'}">
+            <div>
+              <p class="eyebrow">${escapeHtml(labelize(move.moveType ?? 'basic'))} / ${escapeHtml(labelize(move.category ?? 'system'))}</p>
+              <h3>${escapeHtml(move.label)}</h3>
+              <p>${escapeHtml(move.hint ?? move.text ?? 'System combat skill.')}</p>
+              <p class="muted">Requirement: ${escapeHtml(hunterSkillRequirementText(move, hunter))}</p>
+            </div>
+            <span class="skill-status-badge ${move.unlocked ? 'ready' : 'locked'}">${move.unlocked ? 'Unlocked' : 'Locked'}</span>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+    <section class="hunter-skill-section">
+      <div class="hunter-item-section-header">
+        <h3>System Passives</h3>
+        <span class="system-chip compact"><small>Owned</small><strong>${ownedPerks.length}</strong></span>
+      </div>
+      <div class="world-grid hunter-skill-grid">
+        ${ownedPerks.length ? ownedPerks.map((perk) => `
+          <article class="option-card system-window hunter-skill-card unlocked skill-passive">
+            <div>
+              <p class="eyebrow">Passive / ${escapeHtml(labelize(perk.option?.tier ?? 'system'))}</p>
+              <h3>${escapeHtml(perk.option?.label ?? labelize(perk.id))}</h3>
+              <p>${escapeHtml(perk.option?.description ?? 'System passive owned from level rewards.')}</p>
+            </div>
+            <span class="skill-status-badge ready">x${perk.count ?? 1}</span>
+          </article>
+        `).join('') : '<article class="option-card system-window hunter-skill-card locked"><div><h3>No passives owned yet</h3><p>Claim Hunter level rewards to unlock System passives.</p></div><span class="skill-status-badge locked">Empty</span></article>'}
+      </div>
+    </section>
+  `;
+}
+
 function renderHunterMilestones() {
   const milestones = getHunterMilestones(state);
   return `
@@ -3931,6 +4001,12 @@ function renderHunter() {
           ${systemChip('Trace', hunter.monarchTrace?.unlocked ? `Stage ${hunter.monarchTrace.stage}` : monarchMilestone?.ready ? 'Ready' : 'Dormant', monarchMilestone?.ready ? 'ready' : '')}
         </div>
       </div>`,
+      })}
+      ${renderCollapsibleSection({
+        id: 'hunter-skills',
+        title: 'System Skills',
+        subtitle: 'Unlocked moves, passives, secret skills, and locked requirements.',
+        body: renderHunterSkillsPanel(),
       })}
       ${renderCollapsibleSection({
         id: 'hunter-actions',

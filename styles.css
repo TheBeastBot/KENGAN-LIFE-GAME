@@ -1031,6 +1031,66 @@ select:focus {
     var(--panel-2);
 }
 
+.hunter-skill-summary {
+  margin-bottom: 12px;
+}
+
+.hunter-skill-section {
+  display: grid;
+  gap: 10px;
+}
+
+.hunter-skill-section + .hunter-skill-section {
+  margin-top: 14px;
+}
+
+.hunter-skill-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.hunter-skill-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.hunter-skill-card.unlocked {
+  border-color: rgba(125, 243, 198, 0.36);
+  box-shadow: inset 3px 0 0 rgba(125, 243, 198, 0.5);
+}
+
+.hunter-skill-card.locked {
+  opacity: 0.72;
+}
+
+.hunter-skill-card.skill-secret {
+  border-color: rgba(229, 185, 79, 0.46);
+  box-shadow: inset 3px 0 0 rgba(229, 185, 79, 0.58);
+}
+
+.skill-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid rgba(120, 217, 255, 0.22);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.skill-status-badge.ready {
+  border-color: rgba(125, 243, 198, 0.4);
+  color: #a9f7d8;
+}
+
+.skill-status-badge.locked {
+  border-color: rgba(222, 63, 79, 0.34);
+  color: #ff9aa4;
+}
+
 .empty-items {
   min-height: 120px;
   align-content: center;

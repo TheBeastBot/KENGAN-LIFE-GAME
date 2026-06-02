@@ -147,6 +147,25 @@ test('Hunter stat panel exposes bulk stat point allocation controls', async () =
   assert.match(appSource, /hunter-stat-amount-grid/);
 });
 
+test('Hunter tab exposes a persistent System Skills section', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /function renderHunterSkillsPanel/);
+  assert.match(appSource, /id: 'hunter-skills'/);
+  assert.match(appSource, /title: 'System Skills'/);
+  assert.match(appSource, /'hunter-skills': true/);
+  assert.match(appSource, /Combat Skills/);
+  assert.match(appSource, /System Passives/);
+  assert.match(appSource, /Secret List/);
+  assert.match(appSource, /hunterSkillRequirementText/);
+  assert.match(appSource, /skill-status-badge/);
+  assert.match(cssSource, /\.hunter-skill-grid\s*{/);
+  assert.match(cssSource, /\.hunter-skill-card\.unlocked\s*{/);
+  assert.match(cssSource, /\.hunter-skill-card\.locked\s*{/);
+  assert.match(cssSource, /\.skill-status-badge\.ready\s*{/);
+});
+
 test('Life panel exposes World Reset controls without revealing the debug code', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
 
