@@ -107,6 +107,20 @@ test('Hunter combat UI separates Basic and Special move dropdowns and level rewa
   assert.match(appSource, /hunter-level-reward-/);
 });
 
+test('Sorcerer UI exposes innate technique panels and technique-specific move groups', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /\['sorcerer', 'Sorcerer'\]/);
+  assert.match(appSource, /renderSorcererTechniquePanel/);
+  assert.match(appSource, /Innate Technique/);
+  assert.match(appSource, /Universal Basic Moves/);
+  assert.match(appSource, /Innate Special Moves/);
+  assert.match(appSource, /data-dropdown-id="sorcerer-basic-moves"/);
+  assert.match(appSource, /data-dropdown-id="sorcerer-special-moves"/);
+  assert.match(appSource, /sorcerer-missions-generate/);
+  assert.match(appSource, /sorcerer-mission-fight/);
+});
+
 test('Hunter System Status overrides generic option-card desktop grid', async () => {
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 

@@ -5,6 +5,8 @@ import {
   FIGHT_MOVES,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  SORCERER_INNATE_TECHNIQUES,
+  SORCERER_MOVES,
   HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
@@ -32,6 +34,10 @@ import {
   getAdaptedOpponent,
   getCombatOpponent,
   getHunterEffectiveStats,
+  getSorcererEffectiveStats,
+  getSorcererPower,
+  getSorcererRankReview,
+  getAllSorcererMovesForTechnique,
   getHunterAssociationReview,
   getHunterCraftingRecipes,
   getLockedFights,
@@ -54,6 +60,8 @@ import {
   TECHNIQUE_TRACKS,
   getUnlockedFightMoves,
   getUnlockedHunterMoves,
+  getUnlockedSorcererMoves,
+  normalizeSorcererWorld,
   joinTournament,
   recover,
   redeemClanPassword,
@@ -87,6 +95,10 @@ import {
   recruitCoachedFighter,
   releaseCoachedFighter,
   runHunterDailyQuest,
+  generateSorcererMissions,
+  selectSorcererMission,
+  startSorcererMissionFight,
+  dismissSorcererMission,
   scheduleCoachedFight,
   toggleAutoRecovery,
   equipBestAutoGateShadows,
@@ -103,6 +115,9 @@ import {
   advanceHunterDungeon,
   retreatHunterDungeon,
   visitHunterAssociation,
+  visitSorcererBureau,
+  spendSorcererStatPoint,
+  spendSorcererStatPoints,
 } from './sim.mjs';
 import { captureElementScroll, createDropdownStateController, restoreElementScroll } from './ui-state.mjs';
 
@@ -181,6 +196,33 @@ const DEFAULT_HUNTER_WORLD = {
   worldResets: 0,
   secretSystemSkills: [],
   secretSkillCooldowns: {},
+};
+const DEFAULT_SORCERER_WORLD = {
+  unlocked: false,
+  awakened: false,
+  rank: 'Grade 4',
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  stats: {
+    cursedEnergy: 0,
+    output: 0,
+    control: 0,
+    perception: 0,
+    technique: 0,
+    body: 0,
+  },
+  innateTechnique: null,
+  techniqueMastery: 0,
+  missionsCleared: 0,
+  curseWins: 0,
+  domainWins: 0,
+  blackSparks: 0,
+  vowStrain: 0,
+  missionOffers: [],
+  activeMission: null,
+  lastMissionMonth: null,
+  rejectedUntilMonth: null,
 };
 const MOVE_ICON_ASSETS = {
   jab: 'assets/icons/jab.png',
@@ -325,6 +367,14 @@ const dropdownState = createDropdownStateController({
     'hunter-log': false,
     'hunter-basic-moves': true,
     'hunter-special-moves': false,
+    'sorcerer-core': true,
+    'sorcerer-technique': true,
+    'sorcerer-missions': true,
+    'sorcerer-rank': true,
+    'sorcerer-stats': true,
+    'sorcerer-log': false,
+    'sorcerer-basic-moves': true,
+    'sorcerer-special-moves': true,
     'world-rumors': true,
   },
 });
@@ -341,6 +391,7 @@ const NAV_SECTIONS = [
   ['coach', 'Coach'],
   ['social', 'Social'],
   ['hunter', 'Hunter'],
+  ['sorcerer', 'Sorcerer'],
   ['world', 'World'],
 ];
 
@@ -389,6 +440,7 @@ function normalizeSave(save) {
     clan: migratedClan,
     clanAwakening: normalizeClanAwakening(save.clanAwakening, migratedClan),
     hunterWorld: normalizeHunterWorld(save.hunterWorld),
+    sorcererWorld: normalizeSorcererWorld(save.sorcererWorld),
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
@@ -1206,7 +1258,11 @@ function renderTabs() {
 }
 
 function availableNavSections() {
-  return NAV_SECTIONS.filter(([id]) => id !== 'hunter' || state.hunterWorld?.unlocked);
+  return NAV_SECTIONS.filter(([id]) => {
+    if (id === 'hunter') return state.hunterWorld?.unlocked;
+    if (id === 'sorcerer') return state.sorcererWorld?.unlocked;
+    return true;
+  });
 }
 
 function favoriteNavTabs() {
@@ -1282,6 +1338,7 @@ function renderActiveTab() {
   if (activeTab === 'body') return renderBody();
   if (activeTab === 'social') return renderSocial();
   if (activeTab === 'hunter') return renderHunter();
+  if (activeTab === 'sorcerer') return renderSorcerer();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -4133,6 +4190,222 @@ function renderHunter() {
   `;
 }
 
+function sorcererStatLabel(stat) {
+  return {
+    cursedEnergy: 'Cursed Energy',
+    output: 'Output',
+    control: 'Control',
+    perception: 'Perception',
+    technique: 'Technique',
+    body: 'Body',
+  }[stat] ?? labelize(stat);
+}
+
+function renderSorcererStatus(sorcerer) {
+  const technique = SORCERER_INNATE_TECHNIQUES[sorcerer.innateTechnique];
+  return `
+    <article class="option-card system-window system-status-panel sorcerer-status-panel">
+      <div>
+        <p class="eyebrow">Sorcerer File</p>
+        <h2>${escapeHtml(sorcerer.rank)}</h2>
+        <p>${escapeHtml(technique?.label ?? 'Unawakened Technique')} / ${escapeHtml(technique?.rarity ?? 'Unknown')} / Mastery ${sorcerer.techniqueMastery}</p>
+      </div>
+      <div class="system-chip-row">
+        ${systemChip('Level', sorcerer.level)}
+        ${systemChip('XP', sorcerer.xp)}
+        ${systemChip('Stat Pts', sorcerer.statPoints, sorcerer.statPoints ? 'ready' : '')}
+        ${systemChip('Power', getSorcererPower(state), 'power')}
+        ${systemChip('Missions', sorcerer.missionsCleared)}
+        ${systemChip('Domain Wins', sorcerer.domainWins, sorcerer.domainWins ? 'ready' : '')}
+        ${systemChip('Black Sparks', sorcerer.blackSparks, sorcerer.blackSparks ? 'active' : '')}
+        ${systemChip('Vow Strain', `${sorcerer.vowStrain}%`, sorcerer.vowStrain >= 60 ? 'danger' : '')}
+      </div>
+    </article>
+  `;
+}
+
+function renderSorcererTechniquePanel() {
+  const sorcerer = normalizeSorcererWorld(state.sorcererWorld);
+  const technique = SORCERER_INNATE_TECHNIQUES[sorcerer.innateTechnique];
+  const moves = getAllSorcererMovesForTechnique(state);
+  const basic = moves.filter((move) => move.moveType !== 'special');
+  const special = moves.filter((move) => move.moveType === 'special');
+  const moveCard = (move) => `
+    <article class="option-card system-window hunter-skill-card ${move.unlocked ? 'unlocked' : 'locked'}">
+      <div>
+        <p class="eyebrow">${move.moveType === 'special' ? 'Special Move' : 'Basic Move'}</p>
+        <h3>${escapeHtml(move.label)}</h3>
+        <p>${escapeHtml(move.hint ?? '')}</p>
+      </div>
+      <span class="skill-status-badge ${move.unlocked ? 'ready' : 'locked'}">${move.unlocked ? 'Unlocked' : `${move.requiresRank ?? 'Mastery'} ${move.requiresMastery ?? ''}`.trim()}</span>
+    </article>
+  `;
+  return `
+    <article class="option-card system-window sorcerer-technique-card">
+      <div>
+        <p class="eyebrow">Innate Technique</p>
+        <h2>${escapeHtml(technique?.label ?? 'Unknown Technique')}</h2>
+        <p>${escapeHtml(technique?.passive ?? 'No passive recorded.')}</p>
+      </div>
+      <div class="system-chip-row">
+        ${systemChip('Rarity', technique?.rarity ?? 'Unknown', 'rank')}
+        ${systemChip('Scaling', (technique?.scaling ?? []).map(sorcererStatLabel).join(' / ') || 'None')}
+        ${systemChip('Domain', technique?.domain ?? 'Dormant', sorcerer.techniqueMastery >= 45 ? 'ready' : '')}
+      </div>
+    </article>
+    <details class="collapsible-section hunter-move-section" data-dropdown-id="sorcerer-basic-moves" ${dropdownState.isOpen('sorcerer-basic-moves') ? 'open' : ''}>
+      <summary class="collapsible-summary"><span><strong>Universal Basic Moves</strong><em>Shared by every sorcerer.</em></span><b>${basic.length}</b></summary>
+      <div class="hunter-skill-grid">${basic.map(moveCard).join('')}</div>
+    </details>
+    <details class="collapsible-section hunter-move-section" data-dropdown-id="sorcerer-special-moves" ${dropdownState.isOpen('sorcerer-special-moves') ? 'open' : ''}>
+      <summary class="collapsible-summary"><span><strong>Innate Special Moves</strong><em>Determined by technique, rank, and mastery.</em></span><b>${special.filter((move) => move.unlocked).length}/${special.length}</b></summary>
+      <div class="hunter-skill-grid">${special.map(moveCard).join('')}</div>
+    </details>
+  `;
+}
+
+function renderSorcererMissions() {
+  const sorcerer = normalizeSorcererWorld(state.sorcererWorld);
+  const active = sorcerer.activeMission;
+  if (active) {
+    return `
+      <article class="option-card system-window hunter-activity">
+        <div class="activity-icon">CR</div>
+        <div>
+          <p class="eyebrow">Active Curse Report</p>
+          <h3>${escapeHtml(active.title)}</h3>
+          <p>Civilian risk ${active.civilianRisk}%. Clear the curse, then close the report.</p>
+        </div>
+        <div class="activity-actions">
+          ${active.completed ? button('Close Report', 'sorcerer-mission-dismiss', 'primary') : button('Enter Site', 'sorcerer-mission-fight', 'primary')}
+        </div>
+      </article>
+    `;
+  }
+  const offers = sorcerer.missionOffers ?? [];
+  return `
+    <div class="activity-list">
+      <article class="option-card system-window hunter-activity">
+        <div class="activity-icon">CB</div>
+        <div>
+          <p class="eyebrow">Curse Report Board</p>
+          <h3>${offers.length ? 'Reports Available' : 'No reports loaded'}</h3>
+          <p>Generate three missions scaled around your current Sorcerer grade.</p>
+        </div>
+        <div class="activity-actions">${button(offers.length ? 'Loaded' : 'Generate', 'sorcerer-missions-generate', offers.length ? '' : 'primary', offers.length)}</div>
+      </article>
+      ${offers.map((offer) => `
+        <article class="option-card system-window hunter-activity">
+          <div class="activity-icon">CS</div>
+          <div>
+            <p class="eyebrow">${escapeHtml(offer.rank)} / Risk ${offer.civilianRisk}%</p>
+            <h3>${escapeHtml(offer.title)}</h3>
+            <p>Rewards: +${offer.rewards.xp} XP, +$${offer.rewards.money}, +${offer.rewards.mastery} mastery, +${offer.rewards.statPoints} stat point.</p>
+          </div>
+          <div class="activity-actions">${button('Accept', `sorcerer-mission-select-${offer.id}`, 'primary')}</div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderSorcererRankPanel() {
+  const review = getSorcererRankReview(state);
+  return `
+    <article class="option-card system-window">
+      <div>
+        <p class="eyebrow">Sorcerer Bureau</p>
+        <h3>${review.maxRank ? 'Maximum Grade' : `${review.currentRank} -> ${review.nextRank}`}</h3>
+        <p>${review.eligible ? 'Promotion requirements satisfied.' : 'Build the missing requirements before review.'}</p>
+      </div>
+      <div class="system-scan-grid">
+        ${renderSystemScanRows(review.requirements.map((item) => ({ label: item.label, value: `${item.current}/${item.required}`, tone: item.met ? 'active' : 'danger' })))}
+      </div>
+      <div class="action-grid">${button('Request Review', 'sorcerer-bureau-review', 'primary', !review.eligible)}</div>
+    </article>
+  `;
+}
+
+function renderSorcererStatSheet() {
+  const sorcerer = normalizeSorcererWorld(state.sorcererWorld);
+  return `
+    <div class="hunter-stat-sheet">
+      ${Object.entries(sorcerer.stats).map(([stat, value]) => `
+        <article class="stat-row">
+          <span>${sorcererStatLabel(stat)}</span>
+          <strong>${value}</strong>
+          <button class="small-btn" data-action="sorcerer-stat-${stat}" ${sorcerer.statPoints <= 0 ? 'disabled' : ''}>+1</button>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderSorcererCurseFight() {
+  const fight = state.activeFight;
+  const opponent = activeFightOpponent(fight);
+  if (!opponent) return '<article class="option-card"><h2>Curse data missing</h2><p>Close this encounter and restart the report.</p></article>';
+  const moves = getUnlockedSorcererMoves(state);
+  const renderMove = (move) => `
+    <button class="move-card system-move-card role-${move.category ?? 'attack'} sorcerer-${move.moveType ?? 'basic'}-move" data-action="fight-turn-${move.id}">
+      <em>${move.moveType === 'special' ? 'Special Move' : 'Basic Move'}</em>
+      <strong>${escapeHtml(move.label)}</strong>
+      <span>${escapeHtml(move.hint ?? '')}</span>
+    </button>
+  `;
+  return `
+    <section class="combat stack hunter-combat-shell system-combat sorcerer-combat-shell">
+      <article class="fight-title system-fight-title ${fight.finished ? (fight.result.won ? 'complete' : 'failed') : 'active'}">
+        <div>
+          <p class="eyebrow">${fight.finished ? 'Curse Report' : `Exorcism · Exchange ${fight.round}`}</p>
+          <h2>${escapeHtml(state.identity.name)} vs ${escapeHtml(opponent.name)}</h2>
+          <p class="muted">${opponent.style} / ${opponent.threat}</p>
+        </div>
+        <span class="badge ${fight.finished && fight.result.won ? 'green' : 'red'}">${fight.finished ? (fight.result.won ? 'Exorcised' : 'Failed') : 'Live'}</span>
+      </article>
+      <div class="combat-meters">
+        ${combatMeter('You', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
+        ${combatMeter('Curse', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
+        ${combatMeter('Cursed Energy', fight.meters.playerStamina, `${fight.meters.playerStamina}/${fight.meters.maxPlayerStamina ?? 100}`, fight.meters.maxPlayerStamina ?? 100)}
+        ${combatMeter('Curse Pressure', fight.meters.opponentStamina, `${fight.meters.opponentStamina}/${fight.meters.maxOpponentStamina ?? 100}`, fight.meters.maxOpponentStamina ?? 100)}
+        ${combatMeter('Guard', fight.meters.guard, 'Flow')}
+        ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
+        ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
+      </div>
+      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid">${moves.map(renderMove).join('')}</div>`}
+      ${renderExchanges(fight)}
+    </section>
+  `;
+}
+
+function renderSorcerer() {
+  const sorcerer = normalizeSorcererWorld(state.sorcererWorld ?? DEFAULT_SORCERER_WORLD);
+  if (!sorcerer.unlocked) {
+    return `
+      <section class="stack">
+        <article class="option-card">
+          <div>
+            <p class="eyebrow">Sorcerer</p>
+            <h2>Locked</h2>
+            <p>Cursed energy has not awakened in this life yet.</p>
+          </div>
+        </article>
+      </section>
+    `;
+  }
+  if (state.activeFight?.source === 'sorcererMission') return renderSorcererCurseFight();
+  return `
+    <section class="stack hunter-panel sorcerer-panel">
+      ${renderSorcererStatus(sorcerer)}
+      ${renderCollapsibleSection({ id: 'sorcerer-core', title: 'Sorcerer Progression', subtitle: 'Grades, cursed energy, missions, and domain readiness.', body: renderSorcererRankPanel() })}
+      ${renderCollapsibleSection({ id: 'sorcerer-technique', title: 'Innate Technique', subtitle: 'Universal basics plus technique-specific special moves.', body: renderSorcererTechniquePanel() })}
+      ${renderCollapsibleSection({ id: 'sorcerer-missions', title: 'Curse Missions', subtitle: `${sorcerer.missionOffers?.length ?? 0} reports / ${sorcerer.missionsCleared} cleared`, body: renderSorcererMissions() })}
+      ${renderCollapsibleSection({ id: 'sorcerer-stats', title: 'Sorcerer Stat Points', subtitle: `${sorcerer.statPoints} points available`, body: `<article class="option-card system-window"><div>${renderSorcererStatSheet()}</div></article>` })}
+      ${renderCollapsibleSection({ id: 'sorcerer-log', title: 'Sorcerer Log', subtitle: 'World feed entries for cursed energy activity.', body: renderLog('world') })}
+    </section>
+  `;
+}
+
 function renderWorld() {
   return `
     <section class="stack">
@@ -4669,6 +4942,35 @@ function handleAction(action, source = null) {
   }
   if (action.startsWith('hunter-craft-')) {
     setState(craftHunterItem(state, action.replace('hunter-craft-', '')));
+    return;
+  }
+  if (action === 'sorcerer-missions-generate') {
+    activeTab = 'sorcerer';
+    setState(generateSorcererMissions(state));
+    return;
+  }
+  if (action.startsWith('sorcerer-mission-select-')) {
+    activeTab = 'sorcerer';
+    setState(selectSorcererMission(state, action.replace('sorcerer-mission-select-', '')));
+    return;
+  }
+  if (action === 'sorcerer-mission-fight') {
+    activeTab = 'sorcerer';
+    fightInfoOpen = false;
+    setState(startSorcererMissionFight(state));
+    return;
+  }
+  if (action === 'sorcerer-mission-dismiss') {
+    activeTab = 'sorcerer';
+    setState(dismissSorcererMission(state));
+    return;
+  }
+  if (action === 'sorcerer-bureau-review') {
+    setState(visitSorcererBureau(state));
+    return;
+  }
+  if (action.startsWith('sorcerer-stat-')) {
+    setState(spendSorcererStatPoint(state, action.replace('sorcerer-stat-', '')));
     return;
   }
   if (action.startsWith('trash-')) {

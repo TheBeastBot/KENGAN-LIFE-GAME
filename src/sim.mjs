@@ -110,6 +110,156 @@ const HUNTER_RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Calamity'];
 const HUNTER_SPECIAL_COOLDOWN = 5;
 const HUNTER_VITALITY_HEALTH_BONUS = 30;
 const SECRET_MENTOR_PASSWORD = 'MENTOR21';
+export const SORCERER_RANKS = ['Grade 4', 'Grade 3', 'Grade 2', 'Semi-Grade 1', 'Grade 1', 'Supreme Grade', 'Calamity Grade'];
+const DEFAULT_SORCERER_STATS = {
+  cursedEnergy: 0,
+  output: 0,
+  control: 0,
+  perception: 0,
+  technique: 0,
+  body: 0,
+};
+const DEFAULT_SORCERER_WORLD = {
+  unlocked: false,
+  awakened: false,
+  rank: 'Grade 4',
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  stats: DEFAULT_SORCERER_STATS,
+  innateTechnique: null,
+  techniqueMastery: 0,
+  missionsCleared: 0,
+  curseWins: 0,
+  domainWins: 0,
+  blackSparks: 0,
+  vowStrain: 0,
+  missionOffers: [],
+  activeMission: null,
+  lastMissionMonth: null,
+  rejectedUntilMonth: null,
+};
+export const SORCERER_INNATE_TECHNIQUES = {
+  impactFold: {
+    id: 'impactFold',
+    label: 'Impact Fold',
+    rarity: 'Common',
+    scaling: ['output', 'body'],
+    passive: 'Burst melee hits partially ignore curse guard.',
+    domain: 'Compression Arena',
+  },
+  threadShrine: {
+    id: 'threadShrine',
+    label: 'Thread Shrine',
+    rarity: 'Uncommon',
+    scaling: ['control', 'technique'],
+    passive: 'Binding lines add setup damage after Curse Read.',
+    domain: 'Loom of Severed Paths',
+  },
+  mirrorStep: {
+    id: 'mirrorStep',
+    label: 'Mirror Step',
+    rarity: 'Rare',
+    scaling: ['perception', 'control'],
+    passive: 'Evasion and counter timing are stronger after Footwork Burst.',
+    domain: 'Hall of Returning Blows',
+  },
+  beastPact: {
+    id: 'beastPact',
+    label: 'Beast Pact',
+    rarity: 'Rare',
+    scaling: ['cursedEnergy', 'body'],
+    passive: 'Summoned pressure reduces curse stamina each exchange.',
+    domain: 'Den of Borrowed Fangs',
+  },
+  bloodForge: {
+    id: 'bloodForge',
+    label: 'Blood Forge',
+    rarity: 'Epic',
+    scaling: ['body', 'output'],
+    passive: 'Self-risk moves gain damage while wounded.',
+    domain: 'Crimson Foundry',
+  },
+  limitlessField: {
+    id: 'limitlessField',
+    label: 'Limitless Field',
+    rarity: 'Mythic',
+    scaling: ['cursedEnergy', 'control'],
+    passive: 'Spacing defense reduces incoming damage at high cursed energy.',
+    domain: 'Still Horizon',
+  },
+  soulBrand: {
+    id: 'soulBrand',
+    label: 'Soul Brand',
+    rarity: 'Epic',
+    scaling: ['technique', 'perception'],
+    passive: 'Marked curses take stronger finishing damage.',
+    domain: 'Name-Eating Court',
+  },
+  nullScript: {
+    id: 'nullScript',
+    label: 'Null Script',
+    rarity: 'Legendary',
+    scaling: ['control', 'perception'],
+    passive: 'Anti-technique counters weaken domain and special attacks.',
+    domain: 'Blank Writ Chamber',
+  },
+  stormVessel: {
+    id: 'stormVessel',
+    label: 'Storm Vessel',
+    rarity: 'Epic',
+    scaling: ['output', 'perception'],
+    passive: 'Fast specials can stun curses but spend more cursed energy.',
+    domain: 'Thunder Vessel Sky',
+  },
+  graveChoir: {
+    id: 'graveChoir',
+    label: 'Grave Choir',
+    rarity: 'Legendary',
+    scaling: ['cursedEnergy', 'technique'],
+    passive: 'Defeated curse echoes add pressure to future missions.',
+    domain: 'Choir Below the Floor',
+  },
+};
+export const SORCERER_MOVES = {
+  reinforcedStrike: { label: 'Reinforced Strike', moveType: 'basic', category: 'attack', staminaCost: 12, damageBias: 1.12, guardBias: -2, hint: 'Universal cursed-energy strike. Scales with Output and Body.' },
+  guardFlow: { label: 'Guard Flow', moveType: 'basic', category: 'defense', staminaCost: 7, damageBias: 0.45, guardBias: 14, hint: 'Universal guard. Reduces incoming curse damage.' },
+  curseRead: { label: 'Curse Read', moveType: 'basic', category: 'support', staminaCost: 8, damageBias: 0.6, guardBias: 4, hint: 'Universal read. Boosts the next exchange and mastery growth.' },
+  footworkBurst: { label: 'Footwork Burst', moveType: 'basic', category: 'mobility', staminaCost: 15, damageBias: 0.92, guardBias: 2, hint: 'Universal movement burst. Improves dodge and momentum.' },
+  energyConserve: { label: 'Energy Conserve', moveType: 'basic', category: 'recovery', staminaCost: 0, damageBias: 0, guardBias: 10, hint: 'Recover cursed energy while bracing.' },
+  impactFoldCrush: { label: 'Fold Crush', technique: 'impactFold', moveType: 'special', requiresMastery: 0, category: 'technique', staminaCost: 24, damageBias: 1.72, guardBias: -7, hint: 'Impact Fold special. Compresses force through curse armor.' },
+  delayedImpact: { label: 'Delayed Impact', technique: 'impactFold', moveType: 'special', requiresMastery: 18, category: 'technique', staminaCost: 28, damageBias: 1.9, guardBias: -6, hint: 'Stores force and detonates it after the read.' },
+  threadBind: { label: 'Thread Bind', technique: 'threadShrine', moveType: 'special', requiresMastery: 0, category: 'technique', staminaCost: 20, damageBias: 1.35, guardBias: 7, hint: 'Binding threads slow the curse and protect the exchange.' },
+  shrineSever: { label: 'Shrine Sever', technique: 'threadShrine', moveType: 'special', requiresMastery: 20, category: 'technique', staminaCost: 30, damageBias: 1.95, guardBias: -8, hint: 'Cuts along prepared thread lines.' },
+  mirrorCounter: { label: 'Mirror Counter', technique: 'mirrorStep', moveType: 'special', requiresMastery: 0, category: 'counter', staminaCost: 21, damageBias: 1.45, guardBias: 8, hint: 'Afterimage counter that rewards perception.' },
+  afterimagePunish: { label: 'Afterimage Punish', technique: 'mirrorStep', moveType: 'special', requiresMastery: 22, category: 'counter', staminaCost: 27, damageBias: 1.82, guardBias: 5, hint: 'Punishes the curse for chasing the wrong body.' },
+  pactMaul: { label: 'Pact Maul', technique: 'beastPact', moveType: 'special', requiresMastery: 0, category: 'summon', staminaCost: 23, damageBias: 1.5, guardBias: 1, hint: 'Summoned fang pressure shreds curse stamina.' },
+  fangSacrifice: { label: 'Fang Sacrifice', technique: 'beastPact', moveType: 'special', requiresMastery: 24, category: 'summon', staminaCost: 34, damageBias: 2.05, guardBias: -4, hint: 'Burns a pact echo for heavy damage and protection.' },
+  bloodBlade: { label: 'Blood Blade', technique: 'bloodForge', moveType: 'special', requiresMastery: 0, category: 'technique', staminaCost: 18, healthCost: 6, damageBias: 1.72, guardBias: -5, hint: 'Self-risk blood weapon. Stronger while wounded.' },
+  crimsonRepair: { label: 'Crimson Repair', technique: 'bloodForge', moveType: 'special', requiresMastery: 26, category: 'heal', staminaCost: 26, damageBias: 0.55, guardBias: 8, healRatio: 0.18, hint: 'Turns blood heat into healing pressure.' },
+  fieldRepel: { label: 'Field Repel', technique: 'limitlessField', moveType: 'special', requiresMastery: 0, category: 'field', staminaCost: 24, damageBias: 1.3, guardBias: 16, hint: 'Creates impossible spacing and denies the return.' },
+  horizonCrush: { label: 'Horizon Crush', technique: 'limitlessField', moveType: 'special', requiresMastery: 30, category: 'field', staminaCost: 38, damageBias: 2.12, guardBias: 8, hint: 'Expensive spatial crush with high defense.' },
+  soulMark: { label: 'Soul Mark', technique: 'soulBrand', moveType: 'special', requiresMastery: 0, category: 'mark', staminaCost: 19, damageBias: 1.28, guardBias: 3, hint: 'Brands the curse for stronger finishers.' },
+  nameBreak: { label: 'Name Break', technique: 'soulBrand', moveType: 'special', requiresMastery: 26, category: 'mark', staminaCost: 32, damageBias: 2.05, guardBias: -7, hint: 'Execution hit against a marked curse.' },
+  nullCounter: { label: 'Null Counter', technique: 'nullScript', moveType: 'special', requiresMastery: 0, category: 'counter', staminaCost: 20, damageBias: 1.25, guardBias: 18, hint: 'Anti-technique response that weakens special attacks.' },
+  blankSeal: { label: 'Blank Seal', technique: 'nullScript', moveType: 'special', requiresMastery: 28, category: 'counter', staminaCost: 31, damageBias: 1.72, guardBias: 20, hint: 'Seals a curse pattern and crushes domain pressure.' },
+  voltLunge: { label: 'Volt Lunge', technique: 'stormVessel', moveType: 'special', requiresMastery: 0, category: 'speed', staminaCost: 25, damageBias: 1.58, guardBias: -3, hint: 'Lightning entry with stun pressure.' },
+  thunderSplit: { label: 'Thunder Split', technique: 'stormVessel', moveType: 'special', requiresMastery: 24, category: 'speed', staminaCost: 35, damageBias: 2.0, guardBias: -5, hint: 'High-drain lightning cleave.' },
+  choirCall: { label: 'Choir Call', technique: 'graveChoir', moveType: 'special', requiresMastery: 0, category: 'echo', staminaCost: 22, damageBias: 1.42, guardBias: 5, hint: 'Curse echoes add layered pressure.' },
+  graveProcession: { label: 'Grave Procession', technique: 'graveChoir', moveType: 'special', requiresMastery: 30, category: 'echo', staminaCost: 36, damageBias: 2.08, guardBias: 4, hint: 'A procession of defeated echoes overwhelms the target.' },
+  reverseFlow: { label: 'Reverse Flow', moveType: 'special', requiresRank: 'Grade 2', requiresMastery: 16, category: 'heal', staminaCost: 30, damageBias: 0.35, guardBias: 9, healRatio: 0.22, hint: 'Advanced healing. Costs cursed energy and rewards control.' },
+  bindingVow: { label: 'Binding Vow', moveType: 'special', requiresRank: 'Semi-Grade 1', requiresMastery: 22, category: 'vow', staminaCost: 18, damageBias: 1.65, guardBias: -10, hint: 'Accept strain for a temporary power spike.' },
+  simpleDomain: { label: 'Simple Domain', moveType: 'special', requiresRank: 'Grade 1', requiresMastery: 32, category: 'domain', staminaCost: 28, damageBias: 0.75, guardBias: 24, hint: 'Anti-domain shell. Best against domain pressure.' },
+  domainExpansion: { label: 'Domain Expansion', moveType: 'special', requiresRank: 'Supreme Grade', requiresMastery: 45, category: 'domain', staminaCost: 55, damageBias: 2.5, guardBias: 18, hint: 'Technique-specific domain. Heavy cost, huge control swing.' },
+};
+export const SORCERER_CURSES = {
+  alleyGrudge: { name: 'Alley Grudge', tier: 'Grade 4', style: 'scraping curse pressure', threat: 'Low Curse', power: 95, risk: 5, stats: { strength: 32, speed: 28, durability: 34, technique: 20, fightIq: 18, willpower: 30, reflexes: 24, control: 20, aggression: 34 }, moveIds: ['maul', 'shriek'] },
+  windowMouth: { name: 'Window Mouth', tier: 'Grade 3', style: 'ambush bite and shriek', threat: 'Skulking Curse', power: 155, risk: 8, stats: { strength: 46, speed: 44, durability: 42, technique: 30, fightIq: 28, willpower: 40, reflexes: 40, control: 28, aggression: 48 }, moveIds: ['shriek', 'ambush'] },
+  overpassWomb: { name: 'Overpass Womb', tier: 'Grade 2', style: 'heavy curse shell', threat: 'Armored Curse', power: 250, risk: 12, stats: { strength: 70, speed: 42, durability: 82, technique: 42, fightIq: 40, willpower: 70, reflexes: 38, control: 42, aggression: 62 }, moveIds: ['maul', 'domainPulse'] },
+  shrineMaggot: { name: 'Shrine Maggot', tier: 'Semi-Grade 1', style: 'binding curse technique', threat: 'Technique Curse', power: 390, risk: 16, stats: { strength: 78, speed: 76, durability: 80, technique: 92, fightIq: 84, willpower: 86, reflexes: 78, control: 92, aggression: 82 }, moveIds: ['ambush', 'domainPulse'] },
+  calamityBud: { name: 'Calamity Bud', tier: 'Grade 1', style: 'domain pressure and regeneration', threat: 'High Curse', power: 620, risk: 22, stats: { strength: 118, speed: 105, durability: 130, technique: 126, fightIq: 112, willpower: 135, reflexes: 108, control: 125, aggression: 120 }, moveIds: ['domainPulse', 'maul'] },
+  crownlessDisaster: { name: 'Crownless Disaster', tier: 'Supreme Grade', style: 'disaster curse field', threat: 'Supreme Curse', power: 1050, risk: 30, stats: { strength: 185, speed: 172, durability: 205, technique: 215, fightIq: 190, willpower: 220, reflexes: 178, control: 218, aggression: 205 }, moveIds: ['domainPulse', 'ambush'] },
+};
 const SECRET_SYSTEM_SKILLS = [
   'ultimateBody',
   'shadowSacrifice',
@@ -1079,10 +1229,47 @@ function defaultHunterWorld() {
   return clone(DEFAULT_HUNTER_WORLD);
 }
 
+function defaultSorcererWorld() {
+  return clone(DEFAULT_SORCERER_WORLD);
+}
+
 function normalizeHunterStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
   );
+}
+
+function normalizeSorcererStats(stats = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_SORCERER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_SORCERER_STATS[stat]))])
+  );
+}
+
+export function normalizeSorcererWorld(sorcererWorld = {}) {
+  const rank = SORCERER_RANKS.includes(sorcererWorld.rank) ? sorcererWorld.rank : DEFAULT_SORCERER_WORLD.rank;
+  const techniqueId = SORCERER_INNATE_TECHNIQUES[sorcererWorld.innateTechnique] ? sorcererWorld.innateTechnique : null;
+  return {
+    ...defaultSorcererWorld(),
+    ...sorcererWorld,
+    unlocked: Boolean(sorcererWorld.unlocked),
+    awakened: Boolean(sorcererWorld.awakened),
+    rank,
+    xp: Math.max(0, Math.floor(sorcererWorld.xp ?? 0)),
+    level: Math.max(1, Math.floor(sorcererWorld.level ?? 1)),
+    statPoints: Math.max(0, Math.floor(sorcererWorld.statPoints ?? 0)),
+    stats: normalizeSorcererStats(sorcererWorld.stats),
+    innateTechnique: techniqueId,
+    techniqueMastery: Math.max(0, Math.floor(sorcererWorld.techniqueMastery ?? 0)),
+    missionsCleared: Math.max(0, Math.floor(sorcererWorld.missionsCleared ?? 0)),
+    curseWins: Math.max(0, Math.floor(sorcererWorld.curseWins ?? 0)),
+    domainWins: Math.max(0, Math.floor(sorcererWorld.domainWins ?? 0)),
+    blackSparks: Math.max(0, Math.floor(sorcererWorld.blackSparks ?? 0)),
+    vowStrain: clamp(sorcererWorld.vowStrain ?? 0),
+    missionOffers: Array.isArray(sorcererWorld.missionOffers) ? sorcererWorld.missionOffers.filter(Boolean).slice(0, 3) : [],
+    activeMission: sorcererWorld.activeMission ?? null,
+    lastMissionMonth: sorcererWorld.lastMissionMonth ?? null,
+    rejectedUntilMonth: sorcererWorld.rejectedUntilMonth ?? null,
+  };
 }
 
 function normalizeHunterInventory(inventory = []) {
@@ -4556,18 +4743,27 @@ function usesHunterCombatOverlay(life) {
   return hunter.unlocked && hunter.playerAwakened;
 }
 
+function usesSorcererCombatOverlay(life) {
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  return sorcerer.unlocked && sorcerer.awakened;
+}
+
 function withPlayerCombatStats(life) {
-  return usesHunterCombatOverlay(life)
-    ? { ...life, stats: getHunterEffectiveStats(life) }
+  return usesSorcererCombatOverlay(life)
+    ? { ...life, stats: getSorcererEffectiveStats(life) }
+    : usesHunterCombatOverlay(life)
+      ? { ...life, stats: getHunterEffectiveStats(life) }
     : life;
 }
 
 export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
-  const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  const stats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
   const armorHealth = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(hunter).health ?? 0)) : 0;
-  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + armorHealth;
+  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + (usesSorcererStats ? sorcerer.stats.body * 22 + sorcerer.stats.cursedEnergy * 12 : 0) + armorHealth;
 }
 
 function staminaFromStats(stats = {}) {
@@ -4580,10 +4776,12 @@ function staminaFromStats(stats = {}) {
 }
 
 export function maxLifeEnergy(life) {
+  const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
-  const stats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  const stats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
   const armorStamina = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(life.hunterWorld).stamina ?? 0)) : 0;
-  return staminaFromStats(stats) + armorStamina;
+  return staminaFromStats(stats) + armorStamina + (usesSorcererStats ? sorcerer.stats.cursedEnergy * 8 + sorcerer.stats.control * 3 : 0);
 }
 
 function clampLifeResource(life, resource, value) {
@@ -5985,7 +6183,272 @@ function rivalAsOpponent(life) {
   };
 }
 
+function sorcererRankAtLeast(rank, requiredRank) {
+  return SORCERER_RANKS.indexOf(rank) >= SORCERER_RANKS.indexOf(requiredRank);
+}
+
+const SORCERER_RANK_REQUIREMENTS = {
+  'Grade 3': { level: 4, missionsCleared: 2, power: 125, mastery: 6 },
+  'Grade 2': { level: 8, missionsCleared: 5, power: 190, mastery: 14 },
+  'Semi-Grade 1': { level: 14, missionsCleared: 10, power: 285, mastery: 24 },
+  'Grade 1': { level: 22, missionsCleared: 18, power: 420, mastery: 36 },
+  'Supreme Grade': { level: 36, missionsCleared: 34, power: 760, mastery: 52, domainWins: 1 },
+  'Calamity Grade': { level: 58, missionsCleared: 70, power: 1450, mastery: 85, domainWins: 5 },
+};
+
+function sorcererXpForNextLevel(level) {
+  return 90 + Math.max(1, level) * 32;
+}
+
+function sorcererRankMultiplier(rank) {
+  return 1 + Math.max(0, SORCERER_RANKS.indexOf(rank)) * 0.12;
+}
+
+function rollInnateTechnique(life) {
+  const weights = { Common: 360, Uncommon: 240, Rare: 170, Epic: 95, Legendary: 30, Mythic: 5 };
+  const entries = Object.values(SORCERER_INNATE_TECHNIQUES);
+  const total = entries.reduce((sum, technique) => sum + (weights[technique.rarity] ?? 1), 0);
+  let roll = deterministicRoll(life.rngSeed, lifeMonth(life), life.identity?.name ?? '', 'innate-technique') * total;
+  for (const technique of entries) {
+    roll -= weights[technique.rarity] ?? 1;
+    if (roll <= 0) return technique.id;
+  }
+  return entries[0].id;
+}
+
+function unlockSorcererWorld(life, { techniqueId = null } = {}) {
+  const pickedTechnique = SORCERER_INNATE_TECHNIQUES[techniqueId] ? techniqueId : rollInnateTechnique(life);
+  life.sorcererWorld = {
+    ...normalizeSorcererWorld(life.sorcererWorld),
+    unlocked: true,
+    awakened: true,
+    innateTechnique: pickedTechnique,
+    statPoints: Math.max(6, life.sorcererWorld?.statPoints ?? 0),
+    missionOffers: [],
+  };
+  life.world.hiddenWorld = true;
+  life.world.heat = clamp((life.world.heat ?? 0) + 10, 0, 100);
+  life.world.rumors.unshift('A curse report network has your name now. Sorcerer missions are available.');
+}
+
+function sorcererAwakeningChance(life, context = {}) {
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  if (sorcerer.unlocked || sorcerer.rejectedUntilMonth > lifeMonth(life)) return 0;
+  if ((life.identity?.age ?? 0) < 15) return 0;
+  const lowHealth = Math.max(0, 55 - (life.resources?.health ?? 100)) * 0.004;
+  const danger = (life.world?.heat ?? 0) * 0.0018 + (life.record?.wins ?? 0) * 0.006 + (life.resources?.reputation ?? 0) * 0.00035;
+  const mind = ((life.stats?.willpower ?? 0) + (life.stats?.control ?? 0) + (life.stats?.fightIq ?? 0)) * 0.0009;
+  const fightSpike = context?.trigger === 'fight' || context?.won === false ? 0.08 : 0;
+  const hidden = life.world?.hiddenWorld ? 0.08 : 0;
+  return clampFloat(0.02 + lowHealth + danger + mind + fightSpike + hidden, 0, 0.82);
+}
+
+function sorcererAwakeningEvent(life) {
+  return {
+    id: 'sorcerer-awakening',
+    flag: `sorcererAwakening-${lifeMonth(life)}`,
+    title: 'Cursed Energy Awakening',
+    body: 'A near-death pressure twists through the room. For one breath, every ugly feeling in the air has a shape, and it is looking back.',
+    choices: [
+      {
+        id: 'grip-the-curse',
+        label: 'Grip the curse',
+        result: 'You forced the cursed pressure into a usable circuit. A dormant innate technique opened.',
+        effects: { sorcererWorld: { unlock: true }, world: { heat: 10 }, stats: { control: 3, willpower: 3 } },
+      },
+      {
+        id: 'seal-it-away',
+        label: 'Seal it away',
+        result: 'You survived by refusing the power. The pressure recedes, but it remembers where you live.',
+        effects: { sorcererWorld: { delayMonths: 8 }, resources: { mood: -4 }, stats: { willpower: 2 } },
+      },
+    ],
+  };
+}
+
+export function getSorcererEffectiveStats(life) {
+  const base = getHunterEffectiveStats(life);
+  const sorcerer = normalizeSorcererWorld(life?.sorcererWorld);
+  if (!sorcerer.unlocked || !sorcerer.awakened) return { ...base };
+  const stats = sorcerer.stats;
+  return {
+    ...base,
+    strength: (base.strength ?? 0) + stats.body * 5 + stats.output * 3,
+    speed: (base.speed ?? 0) + stats.perception * 3 + stats.control * 2,
+    reflexes: (base.reflexes ?? 0) + stats.perception * 5 + stats.control * 2,
+    durability: (base.durability ?? 0) + stats.body * 6 + stats.cursedEnergy * 2,
+    willpower: (base.willpower ?? 0) + stats.cursedEnergy * 4 + stats.body * 2,
+    fightIq: (base.fightIq ?? 0) + stats.perception * 3 + stats.technique * 4,
+    technique: (base.technique ?? 0) + stats.technique * 6 + stats.output * 2,
+    control: (base.control ?? 0) + stats.control * 6 + stats.cursedEnergy * 2,
+    aggression: base.aggression ?? 0,
+  };
+}
+
+function sorcererPower(life) {
+  const stats = getSorcererEffectiveStats(life);
+  const statPower = ((stats.strength ?? 0) + (stats.speed ?? 0) + (stats.durability ?? 0) + (stats.technique ?? 0) + (stats.fightIq ?? 0) + (stats.willpower ?? 0) + (stats.reflexes ?? 0) + (stats.control ?? 0)) / 8;
+  const sorcerer = normalizeSorcererWorld(life?.sorcererWorld);
+  return Math.round((statPower + sorcerer.level * 7 + sorcerer.techniqueMastery * 3.5 + sorcerer.domainWins * 28) * sorcererRankMultiplier(sorcerer.rank));
+}
+
+export function getSorcererPower(life) {
+  return sorcererPower(life);
+}
+
+export function getSorcererRankReview(life) {
+  const sorcerer = normalizeSorcererWorld(life?.sorcererWorld);
+  const currentIndex = SORCERER_RANKS.indexOf(sorcerer.rank);
+  const nextRank = SORCERER_RANKS[currentIndex + 1] ?? null;
+  const requirement = nextRank ? SORCERER_RANK_REQUIREMENTS[nextRank] : null;
+  const power = sorcererPower({ ...life, sorcererWorld: sorcerer });
+  const requirements = requirement ? [
+    { id: 'level', label: 'Level', current: sorcerer.level, required: requirement.level, met: sorcerer.level >= requirement.level },
+    { id: 'missions', label: 'Missions Cleared', current: sorcerer.missionsCleared, required: requirement.missionsCleared, met: sorcerer.missionsCleared >= requirement.missionsCleared },
+    { id: 'power', label: 'Sorcerer Power', current: power, required: requirement.power, met: power >= requirement.power },
+    { id: 'mastery', label: 'Technique Mastery', current: sorcerer.techniqueMastery, required: requirement.mastery, met: sorcerer.techniqueMastery >= requirement.mastery },
+  ] : [];
+  if (requirement?.domainWins) requirements.push({ id: 'domain', label: 'Domain Wins', current: sorcerer.domainWins, required: requirement.domainWins, met: sorcerer.domainWins >= requirement.domainWins });
+  return {
+    currentRank: sorcerer.rank,
+    nextRank,
+    power,
+    maxRank: !nextRank,
+    eligible: Boolean(requirement) && requirements.every((item) => item.met),
+    requirements,
+    rewards: requirement ? [`+${2 + currentIndex} Sorcerer stat points`, `+$${600 * (currentIndex + 1)}`, `${nextRank} mission clearance`] : ['Maximum Sorcerer grade reached'],
+  };
+}
+
+export function getUnlockedSorcererMoves(life) {
+  const sorcerer = normalizeSorcererWorld(life?.sorcererWorld);
+  const techniqueId = sorcerer.innateTechnique;
+  return Object.entries(SORCERER_MOVES)
+    .filter(([, move]) => move.moveType !== 'special' || !move.technique || move.technique === techniqueId)
+    .map(([id, move]) => {
+      const rankLocked = move.requiresRank && !sorcererRankAtLeast(sorcerer.rank, move.requiresRank);
+      const masteryLocked = Math.max(0, move.requiresMastery ?? 0) > sorcerer.techniqueMastery;
+      return { id, ...move, disabledReason: rankLocked ? `Requires ${move.requiresRank}` : masteryLocked ? `Requires Mastery ${move.requiresMastery}` : '' };
+    })
+    .filter((move) => move.moveType !== 'special' || !move.disabledReason);
+}
+
+export function getAllSorcererMovesForTechnique(life) {
+  const sorcerer = normalizeSorcererWorld(life?.sorcererWorld);
+  const unlockedIds = new Set(getUnlockedSorcererMoves(life).map((move) => move.id));
+  return Object.entries(SORCERER_MOVES)
+    .filter(([, move]) => move.moveType !== 'special' || !move.technique || move.technique === sorcerer.innateTechnique)
+    .map(([id, move]) => ({ id, ...move, unlocked: unlockedIds.has(id) }));
+}
+
+function sorcererMissionRanksFor(sorcerer) {
+  const index = Math.max(0, SORCERER_RANKS.indexOf(sorcerer.rank));
+  return SORCERER_RANKS.slice(Math.max(0, index - 1), Math.min(SORCERER_RANKS.length, index + 2));
+}
+
+function curseIdsForRank(rank) {
+  const rankIndex = SORCERER_RANKS.indexOf(rank);
+  return Object.entries(SORCERER_CURSES)
+    .filter(([, curse]) => SORCERER_RANKS.indexOf(curse.tier) <= rankIndex + 1)
+    .map(([id]) => id);
+}
+
+function createSorcererMissionBoard(life) {
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  const ranks = sorcererMissionRanksFor(sorcerer);
+  return [0, 1, 2].map((slot) => {
+    const rank = ranks[Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), slot, 'mission-rank') * ranks.length) % ranks.length] ?? sorcerer.rank;
+    const curses = curseIdsForRank(rank);
+    const curseId = curses[Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), slot, 'mission-curse') * curses.length) % curses.length] ?? 'alleyGrudge';
+    const curse = SORCERER_CURSES[curseId];
+    const hard = SORCERER_RANKS.indexOf(curse.tier) > SORCERER_RANKS.indexOf(sorcerer.rank);
+    return {
+      id: `curse-report-${lifeMonth(life)}-${slot}-${curseId}`,
+      title: `${curse.tier} Report: ${curse.name}`,
+      rank: curse.tier,
+      curseId,
+      civilianRisk: clamp(18 + SORCERER_RANKS.indexOf(curse.tier) * 10 + slot * 3, 0, 95),
+      rewards: { xp: Math.round(55 + curse.power * 0.55), money: Math.round(300 + curse.power * 9), reputation: 3 + SORCERER_RANKS.indexOf(curse.tier) * 3, mastery: hard ? 5 : 3, statPoints: hard ? 2 : 1 },
+    };
+  });
+}
+
+export function generateSorcererMissions(life) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  if (!next.sorcererWorld.unlocked) return addLog(next, 'Sorcerer missions are locked until cursed energy awakens.', 'world');
+  if (next.sorcererWorld.activeMission || next.sorcererWorld.missionOffers.length) return next;
+  next.sorcererWorld.missionOffers = createSorcererMissionBoard(next);
+  next.sorcererWorld.lastMissionMonth = lifeMonth(next);
+  return addLog(next, 'Curse Report Board updated: three sorcerer missions are available.', 'world');
+}
+
+export function selectSorcererMission(life, missionId) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  if (!next.sorcererWorld.unlocked) return addLog(next, 'Sorcerer missions are locked.', 'world');
+  if (next.activeFight) return addLog(next, 'Finish the active fight before taking a curse report.', 'world');
+  const mission = next.sorcererWorld.missionOffers.find((item) => item.id === missionId);
+  if (!mission) return addLog(next, 'That curse report is no longer available.', 'world');
+  next.sorcererWorld.activeMission = { ...mission, startedMonth: lifeMonth(next), completed: false, failed: false };
+  next.sorcererWorld.missionOffers = [];
+  return addLog(next, `Sorcerer mission accepted: ${mission.title}.`, 'world');
+}
+
+function grantSorcererXp(life, amount) {
+  life.sorcererWorld = normalizeSorcererWorld(life.sorcererWorld);
+  life.sorcererWorld.xp += Math.max(0, Math.floor(amount));
+  while (life.sorcererWorld.xp >= sorcererXpForNextLevel(life.sorcererWorld.level)) {
+    life.sorcererWorld.xp -= sorcererXpForNextLevel(life.sorcererWorld.level);
+    life.sorcererWorld.level += 1;
+    life.sorcererWorld.statPoints += 3;
+  }
+}
+
+export function spendSorcererStatPoint(life, stat) {
+  return spendSorcererStatPoints(life, stat, 1);
+}
+
+export function spendSorcererStatPoints(life, stat, amount = 1) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  const spendAmount = Math.max(1, Math.floor(Number(amount) || 1));
+  if (!next.sorcererWorld.unlocked || next.sorcererWorld.statPoints <= 0 || !(stat in DEFAULT_SORCERER_STATS)) return addLog(next, 'No Sorcerer stat point can be spent there.', 'world');
+  const pointsSpent = Math.min(next.sorcererWorld.statPoints, spendAmount);
+  next.sorcererWorld.statPoints -= pointsSpent;
+  next.sorcererWorld.stats = { ...next.sorcererWorld.stats, [stat]: (next.sorcererWorld.stats[stat] ?? 0) + pointsSpent };
+  return addLog(next, `Sorcerer stat point${pointsSpent === 1 ? '' : 's'} spent: ${labelFromId(stat)} increased by ${pointsSpent}.`, 'world');
+}
+
+export function visitSorcererBureau(life) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  if (!next.sorcererWorld.unlocked) return addLog(next, 'No Sorcerer Bureau file exists yet.', 'world');
+  const review = getSorcererRankReview(next);
+  if (review.eligible) {
+    next.sorcererWorld.rank = review.nextRank;
+    next.sorcererWorld.statPoints += 2 + Math.max(0, SORCERER_RANKS.indexOf(review.currentRank));
+    next.resources.money += 600 * (SORCERER_RANKS.indexOf(review.nextRank) + 1);
+    next.resources.reputation = clamp(next.resources.reputation + 8, 0, 999);
+    return addLog(next, `Sorcerer Bureau review: promoted to ${review.nextRank}.`, 'world');
+  }
+  const missing = review.requirements.filter((item) => !item.met).map((item) => `${item.label} ${item.current}/${item.required}`).join(', ');
+  return addLog(next, `Sorcerer Bureau review complete. Missing: ${missing || 'no further grade available'}.`, 'world');
+}
+
 export function getCombatOpponent(life, opponentId) {
+  if (SORCERER_CURSES[opponentId]) {
+    const curse = SORCERER_CURSES[opponentId];
+    return {
+      reward: Math.max(250, Math.round((curse.power ?? 100) * 4)),
+      rep: Math.max(4, Math.round((curse.power ?? 100) / 35)),
+      temperament: 'malicious curse pressure',
+      strengths: ['cursed body', 'negative energy', curse.threat ?? 'curse pressure'],
+      weakness: 'clean cursed energy timing and technique control',
+      requirements: {},
+      ...curse,
+    };
+  }
   if (HUNTER_MONSTERS[opponentId]) return HUNTER_MONSTERS[opponentId];
   return getAdaptedOpponent(life, opponentId);
 }
@@ -6085,6 +6548,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     },
     clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     hunterWorld: defaultHunterWorld(),
+    sorcererWorld: defaultSorcererWorld(),
     world: {
       hiddenWorld: false,
       league: 'None',
@@ -8926,12 +9390,15 @@ function createActiveFight(life, opponentId, options = {}) {
   const prep = life.nextFightPrep ?? {};
   const opponentStats = getOpponentStats(opponent);
   const isSystemFight = options.source === 'hunterQuest' || options.source === 'hunterDungeon';
+  const isSorcererFight = options.source === 'sorcererMission' || options.source === 'curseIncident' || options.source === 'domainClash';
   const hunter = normalizeHunterWorld(life.hunterWorld);
+  const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
   const usesHunterStats = isSystemFight || usesHunterCombatOverlay(life);
-  const playerStats = usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
+  const usesSorcererStats = isSorcererFight || usesSorcererCombatOverlay(life);
+  const playerStats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
   const maxPlayerHealth = maxLifeHealth(life);
   const maxOpponentHealth = Math.round(fightHealthFromStats(opponentStats) * systemMonsterHealthMultiplier(opponent));
-  const maxPlayerStamina = clamp(maxLifeEnergy(life) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, 520);
+  const maxPlayerStamina = clamp(maxLifeEnergy(life) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0) + (isSorcererFight ? sorcerer.stats.cursedEnergy * 5 + sorcerer.stats.control * 2 : 0), 25, 620);
   const maxOpponentStamina = clamp(staminaFromStats(opponentStats), 45, 520);
   const breakdown = fightBreakdown(life, opponent);
   if (opponent.adaptationCount) {
@@ -8973,7 +9440,7 @@ function createActiveFight(life, opponentId, options = {}) {
       maxPlayerStamina,
       maxOpponentStamina,
       playerStamina: options.carriedStamina == null
-        ? clamp(combatResourceValue(life.resources.energy, maxLifeEnergy(life), 25) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0), 25, maxPlayerStamina)
+        ? clamp(combatResourceValue(life.resources.energy, maxLifeEnergy(life), 25) + (prep.trainingCamp ? 10 : 0) + (isSystemFight ? hunter.stats.vitality * 3 + hunter.stats.agility * 2 : 0) + (isSorcererFight ? sorcerer.stats.cursedEnergy * 5 + sorcerer.stats.control * 2 : 0), 25, maxPlayerStamina)
         : clamp(options.carriedStamina, 0, maxPlayerStamina),
       opponentStamina: maxOpponentStamina,
       momentum: (prep.trainingCamp ? 5 : 0) + (prep.scoutTape ? 8 : 0) - (activeCallout?.opponentMomentum ?? 0),
@@ -9704,9 +10171,167 @@ function takeHunterQuestTurn(life, moveId = 'slash') {
   return next;
 }
 
+function sorcererMoveProfile(move, life) {
+  const stats = normalizeSorcererWorld(life.sorcererWorld).stats;
+  const scale = {
+    attack: stats.output * 4 + stats.body * 3,
+    defense: stats.control * 4 + stats.body * 2,
+    support: stats.perception * 4 + stats.technique * 3,
+    mobility: stats.perception * 4 + stats.control * 3,
+    recovery: stats.cursedEnergy * 3 + stats.control * 4,
+    technique: stats.technique * 5 + stats.output * 4,
+    counter: stats.perception * 5 + stats.control * 4,
+    summon: stats.cursedEnergy * 5 + stats.technique * 3,
+    heal: stats.control * 5 + stats.cursedEnergy * 4,
+    field: stats.cursedEnergy * 5 + stats.control * 5,
+    mark: stats.technique * 5 + stats.perception * 4,
+    speed: stats.output * 4 + stats.perception * 5,
+    echo: stats.cursedEnergy * 4 + stats.technique * 5,
+    vow: stats.output * 5 + stats.body * 3,
+    domain: stats.cursedEnergy * 5 + stats.control * 5 + stats.technique * 4,
+  }[move.category] ?? (stats.output * 4 + stats.technique * 3);
+  return {
+    stat: scale + normalizeSorcererWorld(life.sorcererWorld).techniqueMastery * 1.7,
+    damageBonus: Math.round((stats.output + stats.technique + stats.cursedEnergy) / 5),
+    incomingReduction: Math.round((stats.control + stats.body) / 8),
+  };
+}
+
+function chooseCurseMove(curse, fight) {
+  const moveIds = curse.moveIds?.length ? curse.moveIds : ['maul'];
+  const id = moveIds[Math.floor(deterministicRoll(fight.opponentId, fight.round, fight.exchanges.length, 'curse-move') * moveIds.length) % moveIds.length];
+  return {
+    maul: { id: 'maul', label: 'Grudge Maul', category: 'attack', damageMultiplier: 1.05, scoreBonus: 5, text: 'The curse swings a warped limb through the air.' },
+    shriek: { id: 'shriek', label: 'Hate Shriek', category: 'support', damageMultiplier: 0.82, scoreBonus: 14, text: 'The curse screams pressure into your nervous system.' },
+    ambush: { id: 'ambush', label: 'Blind Corner', category: 'mobility', damageMultiplier: 1.22, scoreBonus: 10, text: 'The curse folds through a blind angle.' },
+    domainPulse: { id: 'domainPulse', label: 'Domain Pulse', category: 'domain', damageMultiplier: 1.42, scoreBonus: 22, text: 'The curse pushes a crude domain pulse outward.' },
+  }[id];
+}
+
+function applySorcererFightResult(life, fight, won) {
+  life.sorcererWorld = normalizeSorcererWorld(life.sorcererWorld);
+  const mission = life.sorcererWorld.activeMission;
+  const curse = SORCERER_CURSES[fight.opponentId];
+  if (!mission && fight.source === 'sorcererMission') return;
+  if (mission) {
+    mission.completed = true;
+    mission.failed = !won;
+    mission.outcome = won ? 'exorcised' : 'failed';
+    life.sorcererWorld.activeMission = mission;
+  }
+  if (!won) {
+    life.sorcererWorld.vowStrain = clamp(life.sorcererWorld.vowStrain + 6);
+    life.resources.reputation = clamp(life.resources.reputation + 1, 0, 999);
+    fight.result.rewards.push('Mission failure: vow strain rises');
+    return;
+  }
+  const rewards = mission?.rewards ?? { xp: Math.round((curse?.power ?? 100) * 0.5), money: 500, reputation: 4, mastery: 3, statPoints: 1 };
+  grantSorcererXp(life, rewards.xp);
+  life.resources.money += rewards.money;
+  life.resources.reputation = clamp(life.resources.reputation + rewards.reputation, 0, 999);
+  life.sorcererWorld.statPoints += rewards.statPoints;
+  life.sorcererWorld.techniqueMastery += rewards.mastery;
+  life.sorcererWorld.missionsCleared += 1;
+  life.sorcererWorld.curseWins += 1;
+  if ((fight.exchanges ?? []).some((exchange) => exchange.moveId === 'domainExpansion')) life.sorcererWorld.domainWins += 1;
+  const techniqueUses = (fight.exchanges ?? []).filter((exchange) => SORCERER_MOVES[exchange.moveId]?.moveType === 'special').length;
+  if (techniqueUses) life.sorcererWorld.techniqueMastery += Math.min(6, techniqueUses);
+  fight.result.rewards.push(`Sorcerer rewards: +${rewards.xp} XP, +$${rewards.money}, +${rewards.mastery} mastery, +${rewards.statPoints} stat point`);
+}
+
+function takeSorcererFightTurn(life, moveId = 'reinforcedStrike') {
+  const move = SORCERER_MOVES[moveId] ? { id: moveId, ...SORCERER_MOVES[moveId] } : { id: 'reinforcedStrike', ...SORCERER_MOVES.reinforcedStrike };
+  const unlocked = getUnlockedSorcererMoves(life).some((item) => item.id === move.id);
+  if (!unlocked) return addLog(life, `${move.label} is not unlocked for this innate technique yet.`, 'world');
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  const fight = next.activeFight;
+  const curse = getCombatOpponent(next, fight.opponentId);
+  const stats = getSorcererEffectiveStats(next);
+  const sorcererStats = next.sorcererWorld.stats;
+  const profile = sorcererMoveProfile(move, next);
+  const enemyMove = chooseCurseMove(curse, fight);
+  const readBonus = fight.curseRead ? 22 + sorcererStats.perception * 2 : 0;
+  const domainActive = fight.sorcererDomainActive ? 35 + sorcererStats.control * 2 : 0;
+  const playerScore = profile.stat + fight.meters.playerStamina * 0.26 + fight.meters.momentum * 0.45 + readBonus + domainActive;
+  const enemyScore = opponentScore(curse, enemyMove.category, visibleFightRound(fight)) + enemyMove.scoreBonus + fight.meters.opponentStamina * 0.22 - (move.id === 'simpleDomain' ? 30 : 0);
+  const swing = playerScore - enemyScore;
+  const technique = SORCERER_INNATE_TECHNIQUES[next.sorcererWorld.innateTechnique];
+  const scalingBonus = technique?.scaling?.reduce((sum, stat) => sum + (sorcererStats[stat] ?? 0), 0) ?? 0;
+  const vowMultiplier = move.id === 'bindingVow' ? 1.38 : 1;
+  const domainMultiplier = fight.sorcererDomainActive ? 1.25 : 1;
+  const blackSparkChance = clampFloat(0.035 + sorcererStats.control * 0.006 + sorcererStats.perception * 0.004 + Math.max(0, fight.meters.momentum) * 0.0015, 0.02, 0.42);
+  const blackSpark = move.id !== 'energyConserve' && deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, fight.exchanges.length, 'black-spark') < blackSparkChance;
+  const basePlayerDamage = move.id === 'energyConserve'
+    ? 0
+    : Math.max(1, Math.round(vowMultiplier * domainMultiplier * (move.damageBias * (8 + Math.max(0, swing) / 45) + profile.damageBonus + scalingBonus / 5 - (curse.stats?.durability ?? 20) * 0.018)));
+  let playerDamage = blackSpark ? Math.round(basePlayerDamage * 1.9 + 10) : basePlayerDamage;
+  const dodgeChance = clampFloat(0.04 + stats.reflexes * 0.0007 + (move.id === 'footworkBurst' || technique?.id === 'mirrorStep' ? 0.08 : 0), 0.03, 0.48);
+  const dodged = deterministicRoll(next.rngSeed, fight.opponentId, fight.round, move.id, 'sorcerer-dodge') < dodgeChance;
+  const baseEnemyDamage = Math.max(1, Math.round(((curse.stats?.aggression ?? 30) / 18 + (enemyMove.damageMultiplier * (8 + Math.max(0, -swing) / 55)) - profile.incomingReduction) * (move.id === 'guardFlow' || move.id === 'simpleDomain' ? 0.58 : 1)));
+  let enemyDamage = dodged ? 0 : baseEnemyDamage;
+  const healthCost = Math.max(0, move.healthCost ?? 0);
+  const staminaCost = Math.max(0, move.staminaCost ?? 0);
+  if (move.id === 'domainExpansion') fight.sorcererDomainActive = { techniqueId: next.sorcererWorld.innateTechnique, label: technique?.domain ?? 'Unnamed Domain' };
+  if (move.id === 'bindingVow') next.sorcererWorld.vowStrain = clamp(next.sorcererWorld.vowStrain + 8);
+  if (move.id === 'simpleDomain' && enemyMove.category === 'domain') enemyDamage = Math.max(0, Math.round(enemyDamage * 0.35));
+  if (move.id === 'energyConserve') fight.meters.playerStamina = clamp(fight.meters.playerStamina + 24 + sorcererStats.control, 0, fight.meters.maxPlayerStamina ?? 100);
+  else fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina ?? 100);
+  fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage - healthCost, 0, fight.meters.maxPlayerHealth ?? 100);
+  fight.meters.opponentHealth = clamp(fight.meters.opponentHealth - playerDamage, 0, fight.meters.maxOpponentHealth ?? 100);
+  const heal = move.healRatio ? Math.round((fight.meters.maxPlayerHealth ?? 100) * move.healRatio + sorcererStats.control * 1.5) : 0;
+  if (heal) fight.meters.playerHealth = clamp(fight.meters.playerHealth + heal, 0, fight.meters.maxPlayerHealth ?? 100);
+  fight.meters.opponentStamina = clamp(fight.meters.opponentStamina - Math.max(6, Math.round(playerDamage / 3)) - (technique?.id === 'beastPact' ? 8 : 0), 0, fight.meters.maxOpponentStamina ?? 100);
+  fight.meters.guard = clamp(fight.meters.guard + move.guardBias, 0, 100);
+  fight.meters.momentum = clamp(fight.meters.momentum + Math.round(swing / 8) + (blackSpark ? 8 : 0), -50, 50);
+  fight.meters.injuryRisk = clamp(curse.risk + (100 - healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100)) / 8 - stats.durability * 0.012, 0, 100);
+  fight.curseRead = move.id === 'curseRead';
+  if (blackSpark) next.sorcererWorld.blackSparks += 1;
+  if (move.moveType === 'special') next.sorcererWorld.techniqueMastery += move.technique ? 1 : 0;
+  const domainLine = move.id === 'domainExpansion' ? ` Domain opened: ${technique?.domain ?? 'Unnamed Domain'}.` : fight.sorcererDomainActive ? ` Domain field active: ${fight.sorcererDomainActive.label}.` : '';
+  const sparkLine = blackSpark ? ' Black Spark detonates at the exact cursed-energy timing.' : '';
+  const healLine = heal ? ` Reverse flow restored ${heal} health.` : '';
+  const vowLine = move.id === 'bindingVow' ? ' Binding Vow strain rises for extra force.' : '';
+  fight.exchanges.unshift({
+    round: fight.round,
+    tactic: move.category,
+    moveId: move.id,
+    tacticLabel: move.label,
+    opponentTactic: enemyMove.category,
+    opponentTacticLabel: enemyMove.label,
+    opponentMoveId: enemyMove.id,
+    opponentMoveLabel: enemyMove.label,
+    opponentMoveText: enemyMove.text,
+    text: `Exchange ${fight.round} - ${move.label}: ${move.hint} ${curse.name} answers with ${enemyMove.label}${dodged ? ' but misses the angle' : ` for ${enemyDamage} damage`}. Damage: You dealt ${playerDamage}. You took ${enemyDamage}.${sparkLine}${domainLine}${healLine}${vowLine}`,
+    playerDamage,
+    basePlayerDamage,
+    enemyDamage,
+    baseEnemyDamage,
+    swing,
+    critical: blackSpark,
+    criticalChance: blackSparkChance,
+    enemyCritical: false,
+    enemyCriticalChance: 0,
+    dodged,
+    dodgeChance,
+    opponentDodged: false,
+    opponentDodgeChance: 0,
+    weakMoveHit: false,
+    momentum: fight.meters.momentum,
+  });
+  const finished = fight.round >= fight.maxRounds || fight.meters.playerHealth <= 0 || fight.meters.opponentHealth <= 0;
+  if (finished) {
+    finishActiveFight(next);
+    return next;
+  }
+  fight.round += 1;
+  return next;
+}
+
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
   if (life.activeFight.source === 'hunterQuest' || life.activeFight.source === 'hunterDungeon') return takeHunterQuestTurn(life, tactic);
+  if (life.activeFight.source === 'sorcererMission' || life.activeFight.source === 'curseIncident' || life.activeFight.source === 'domainClash') return takeSorcererFightTurn(life, tactic);
   life = withNormalizedClanAwakening(life);
   const opponent = getCombatOpponent(life, life.activeFight.opponentId);
   if (!opponent) return life;
@@ -10131,6 +10756,7 @@ function applyTournamentResult(life, fight, won) {
 function finishActiveFight(life) {
   const fight = life.activeFight;
   const systemFight = fight.source === 'hunterQuest' || fight.source === 'hunterDungeon';
+  const sorcererFight = fight.source === 'sorcererMission' || fight.source === 'curseIncident' || fight.source === 'domainClash';
   const opponent = getCombatOpponent(life, fight.opponentId);
   const playerHealthPercent = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
   const opponentHealthPercent = healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
@@ -10151,6 +10777,8 @@ function finishActiveFight(life) {
     reasons,
     rewards: systemFight
       ? [won ? 'System monster defeated' : 'System objective failed']
+      : sorcererFight
+        ? [won ? 'Curse exorcised' : 'Curse report failed']
       : (won ? [`+$${opponent.reward}`, `+${opponent.rep} reputation`] : [`+${Math.floor(opponent.rep / 4)} reputation`, 'Painful lesson']),
     injuries: [],
   };
@@ -10178,6 +10806,11 @@ function finishActiveFight(life) {
   }
   if (fight.source === 'hunterDungeon') {
     applyHunterDungeonFightResult(life, fight, won);
+    life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
+    return;
+  }
+  if (fight.source === 'sorcererMission' || fight.source === 'curseIncident' || fight.source === 'domainClash') {
+    applySorcererFightResult(life, fight, won);
     life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
     return;
   }
@@ -10407,6 +11040,7 @@ function nextAvailableFightMove(life, preferredMoveId) {
 export function ageUp(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
   next.hunterWorld.secretSkillCooldowns = { ...next.hunterWorld.secretSkillCooldowns, massCleansingUsed: false };
   next.trainingSessionsUsed = 0;
   const ageStep = advanceLifeClock(next);
@@ -10521,6 +11155,33 @@ export function spendLifeChoice(life, choice) {
     return findMentor(next);
   }
   return next;
+}
+
+export function startSorcererMissionFight(life) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  const mission = next.sorcererWorld.activeMission;
+  if (!next.sorcererWorld.unlocked) return addLog(next, 'Sorcerer missions are locked until cursed energy awakens.', 'world');
+  if (next.activeFight) return addLog(next, 'Finish the active fight before entering the curse site.', 'world');
+  if (!mission || mission.completed) return addLog(next, 'No active curse report is waiting.', 'world');
+  const curseId = mission.curseId ?? 'alleyGrudge';
+  const fight = createActiveFight(next, curseId, { source: 'sorcererMission', questId: mission.id });
+  if (!fight) return addLog(next, 'The curse report could not be resolved.', 'world');
+  fight.maxRounds = Math.min(fight.maxRounds, 18);
+  fight.breakdown.unshift(`Curse Report: ${mission.title}. Civilian risk ${mission.civilianRisk}%.`);
+  next.activeFight = fight;
+  return addLog(next, `Sorcerer mission fight started: ${SORCERER_CURSES[curseId]?.name ?? labelFromId(curseId)}.`, 'world');
+}
+
+export function dismissSorcererMission(life) {
+  const next = clone(life);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  const mission = next.sorcererWorld.activeMission;
+  if (!mission || !mission.completed) return addLog(next, 'No completed sorcerer mission report is waiting.', 'world');
+  next.activeFight = null;
+  next.sorcererWorld.activeMission = null;
+  next.sorcererWorld.missionOffers = createSorcererMissionBoard(next);
+  return addLog(next, `Sorcerer mission report closed: ${mission.title}. New curse reports posted.`, 'world');
 }
 
 export function runHunterDailyQuest(life) {
@@ -11175,6 +11836,7 @@ function queueTriggeredEvents(life, trigger, context = {}) {
 function findTriggeredEvent(life, trigger, context) {
   const flags = life.eventFlags ?? {};
   const systemAwakeningFlag = `systemAwakening-${lifeMonth(life)}`;
+  const sorcererAwakeningFlag = `sorcererAwakening-${lifeMonth(life)}`;
   const events = [
     {
       id: 'debt-collector-notice',
@@ -11658,6 +12320,14 @@ function findTriggeredEvent(life, trigger, context) {
         },
       ],
     },
+    {
+      ...sorcererAwakeningEvent(life),
+      trigger: ['ageUp', 'fight'].includes(trigger) &&
+        life.identity.age >= 15 &&
+        ((life.resources?.health ?? 100) <= 45 || context?.won === false || (life.injuries?.length ?? 0) > 0) &&
+        !flags[sorcererAwakeningFlag] &&
+        deterministicRoll(life.rngSeed, life.identity.age, life.identity.month ?? 0, context?.won ?? 'none', 'sorcerer-awakening') <= sorcererAwakeningChance(life, { ...context, trigger }),
+    },
   ];
 
   return clone(events.find((event) => event.trigger) ?? null);
@@ -11716,6 +12386,15 @@ function applyEventEffects(life, effects = {}) {
     }
     if (effects.hunterWorld.delayMonths) {
       life.hunterWorld.rejectedUntilMonth = lifeMonth(life) + effects.hunterWorld.delayMonths;
+    }
+  }
+  if (effects.sorcererWorld) {
+    life.sorcererWorld = normalizeSorcererWorld(life.sorcererWorld);
+    if (effects.sorcererWorld.unlock) {
+      unlockSorcererWorld(life, effects.sorcererWorld);
+    }
+    if (effects.sorcererWorld.delayMonths) {
+      life.sorcererWorld.rejectedUntilMonth = lifeMonth(life) + effects.sorcererWorld.delayMonths;
     }
   }
   if (effects.injury) {

@@ -17,6 +17,8 @@ import {
   HUNTER_MONSTERS,
   HUNTER_MONSTER_MOVES,
   HUNTER_MOVES,
+  SORCERER_INNATE_TECHNIQUES,
+  SORCERER_MOVES,
   HUNTER_LEVEL_REWARD_OPTIONS,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
@@ -52,11 +54,20 @@ import {
   getSpecialFights,
   getExperienceBoost,
   getHunterEffectiveStats,
+  getSorcererEffectiveStats,
+  getSorcererPower,
+  getSorcererRankReview,
   maxLifeEnergy,
   maxLifeHealth,
   getStatCap,
   getUnlockedFightMoves,
   getUnlockedHunterMoves,
+  getUnlockedSorcererMoves,
+  generateSorcererMissions,
+  selectSorcererMission,
+  startSorcererMissionFight,
+  dismissSorcererMission,
+  spendSorcererStatPoint,
   joinTournament,
   redeemClanPassword,
   redeemHunterPassword,
@@ -105,6 +116,7 @@ import {
   useHunterItem,
   useSocialAction,
   visitHunterAssociation,
+  visitSorcererBureau,
   ageUp,
 } from '../src/sim.mjs';
 
@@ -151,6 +163,166 @@ test('new life starts with locked hunter world state', () => {
   assert.equal(life.hunterWorld.statPoints, 0);
   assert.deepEqual(life.hunterWorld.stats, { strength: 0, agility: 0, vitality: 0, sense: 0, intelligence: 0 });
   assert.deepEqual(life.hunterWorld.shadowArmy, []);
+});
+
+test('new life starts with locked sorcerer world state', () => {
+  const life = createNewLife({ gender: 'Male', seed: 143 });
+
+  assert.equal(life.sorcererWorld.unlocked, false);
+  assert.equal(life.sorcererWorld.awakened, false);
+  assert.equal(life.sorcererWorld.rank, 'Grade 4');
+  assert.equal(life.sorcererWorld.level, 1);
+  assert.equal(life.sorcererWorld.statPoints, 0);
+  assert.deepEqual(life.sorcererWorld.stats, { cursedEnergy: 0, output: 0, control: 0, perception: 0, technique: 0, body: 0 });
+});
+
+test('accepting sorcerer awakening assigns an innate technique and universal basics', () => {
+  const life = {
+    ...createNewLife({ gender: 'Female', seed: 144 }),
+    pendingEvent: {
+      id: 'sorcerer-awakening',
+      choices: [
+        {
+          id: 'grip-the-curse',
+          label: 'Grip the curse',
+          result: 'A dormant innate technique opened.',
+          effects: { sorcererWorld: { unlock: true }, world: { heat: 10 } },
+        },
+      ],
+    },
+  };
+
+  const next = resolveEventChoice(life, 'grip-the-curse');
+  const moves = getUnlockedSorcererMoves(next).map((move) => move.id);
+
+  assert.equal(next.sorcererWorld.unlocked, true);
+  assert.equal(next.sorcererWorld.awakened, true);
+  assert.ok(SORCERER_INNATE_TECHNIQUES[next.sorcererWorld.innateTechnique]);
+  assert.ok(moves.includes('reinforcedStrike'));
+  assert.ok(moves.includes('guardFlow'));
+  assert.ok(moves.includes('curseRead'));
+  assert.ok(moves.some((id) => SORCERER_MOVES[id]?.technique === next.sorcererWorld.innateTechnique));
+});
+
+test('innate techniques determine sorcerer special moves while basics stay shared', () => {
+  const base = createNewLife({ seed: 145 });
+  const impact = {
+    ...base,
+    sorcererWorld: {
+      ...base.sorcererWorld,
+      unlocked: true,
+      awakened: true,
+      innateTechnique: 'impactFold',
+      techniqueMastery: 40,
+      rank: 'Grade 1',
+    },
+  };
+  const mirror = {
+    ...base,
+    sorcererWorld: {
+      ...base.sorcererWorld,
+      unlocked: true,
+      awakened: true,
+      innateTechnique: 'mirrorStep',
+      techniqueMastery: 40,
+      rank: 'Grade 1',
+    },
+  };
+
+  const impactMoves = getUnlockedSorcererMoves(impact).map((move) => move.id);
+  const mirrorMoves = getUnlockedSorcererMoves(mirror).map((move) => move.id);
+
+  assert.ok(impactMoves.includes('reinforcedStrike'));
+  assert.ok(mirrorMoves.includes('reinforcedStrike'));
+  assert.ok(impactMoves.includes('impactFoldCrush'));
+  assert.ok(!impactMoves.includes('mirrorCounter'));
+  assert.ok(mirrorMoves.includes('mirrorCounter'));
+  assert.ok(!mirrorMoves.includes('impactFoldCrush'));
+});
+
+test('sorcerer stats stack on Hunter effective stats for combined power gain', () => {
+  const life = {
+    ...createNewLife({ seed: 146 }),
+    hunterWorld: {
+      unlocked: true,
+      playerAwakened: true,
+      stats: { strength: 2, agility: 0, vitality: 0, sense: 0, intelligence: 0 },
+    },
+    sorcererWorld: {
+      unlocked: true,
+      awakened: true,
+      innateTechnique: 'impactFold',
+      rank: 'Grade 4',
+      level: 1,
+      stats: { cursedEnergy: 1, output: 2, control: 0, perception: 0, technique: 0, body: 3 },
+    },
+  };
+
+  const hunterStats = getHunterEffectiveStats(life);
+  const sorcererStats = getSorcererEffectiveStats(life);
+
+  assert.equal(hunterStats.strength, life.stats.strength + 20);
+  assert.equal(sorcererStats.strength, hunterStats.strength + 3 * 5 + 2 * 3);
+  assert.ok(getSorcererPower(life) > 0);
+});
+
+test('sorcerer missions create curse fights and grant mastery rewards', () => {
+  const awakened = {
+    ...createNewLife({ seed: 147 }),
+    identity: { ...createNewLife({ seed: 147 }).identity, age: 18 },
+    sorcererWorld: {
+      unlocked: true,
+      awakened: true,
+      innateTechnique: 'stormVessel',
+      rank: 'Grade 1',
+      level: 25,
+      statPoints: 20,
+      techniqueMastery: 40,
+      stats: { cursedEnergy: 80, output: 90, control: 80, perception: 85, technique: 75, body: 80 },
+    },
+  };
+
+  const withBoard = generateSorcererMissions(awakened);
+  const selected = selectSorcererMission(withBoard, withBoard.sorcererWorld.missionOffers[0].id);
+  let fighting = startSorcererMissionFight(selected);
+  let safety = 0;
+  while (fighting.activeFight && !fighting.activeFight.finished && safety < 20) {
+    fighting = takeFightTurn(fighting, 'voltLunge');
+    safety += 1;
+  }
+
+  assert.equal(fighting.activeFight.source, 'sorcererMission');
+  assert.equal(fighting.sorcererWorld.activeMission.completed, true);
+  assert.ok(fighting.sorcererWorld.techniqueMastery > awakened.sorcererWorld.techniqueMastery);
+  assert.ok(fighting.sorcererWorld.missionsCleared >= 1);
+
+  const dismissed = dismissSorcererMission(fighting);
+  assert.equal(dismissed.sorcererWorld.activeMission, null);
+  assert.equal(dismissed.sorcererWorld.missionOffers.length, 3);
+});
+
+test('sorcerer rank review promotes when level missions power and mastery are met', () => {
+  const life = {
+    ...createNewLife({ seed: 148 }),
+    sorcererWorld: {
+      unlocked: true,
+      awakened: true,
+      innateTechnique: 'impactFold',
+      rank: 'Grade 4',
+      level: 4,
+      missionsCleared: 2,
+      techniqueMastery: 10,
+      statPoints: 0,
+      stats: { cursedEnergy: 20, output: 20, control: 20, perception: 20, technique: 20, body: 20 },
+    },
+  };
+
+  const review = getSorcererRankReview(life);
+  const promoted = visitSorcererBureau(life);
+
+  assert.equal(review.eligible, true);
+  assert.equal(promoted.sorcererWorld.rank, 'Grade 3');
+  assert.ok(promoted.sorcererWorld.statPoints > life.sorcererWorld.statPoints);
 });
 
 test('high danger adult age up can trigger the system awakening event', () => {
