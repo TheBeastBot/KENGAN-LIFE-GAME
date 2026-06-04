@@ -94,6 +94,10 @@ import {
   spendMoneyAction,
   spendHunterStatPoint,
   spendHunterStatPoints,
+  spendZombieStatPoint,
+  runZombieActivity,
+  startZombieEncounter,
+  switchZombieCombatant,
   fightMonarchBoss,
   clearGateWithAutoShadows,
   startFight,
@@ -176,25 +180,138 @@ test('new life starts with locked sorcerer world state', () => {
   assert.deepEqual(life.sorcererWorld.stats, { cursedEnergy: 0, output: 0, control: 0, perception: 0, technique: 0, body: 0 });
 });
 
-test('accepting sorcerer awakening assigns an innate technique and universal basics', () => {
-  const life = {
-    ...createNewLife({ gender: 'Female', seed: 144 }),
-    pendingEvent: {
-      id: 'sorcerer-awakening',
-      choices: [
-        {
-          id: 'grip-the-curse',
-          label: 'Grip the curse',
-          result: 'A dormant innate technique opened.',
-          effects: { sorcererWorld: { unlock: true }, world: { heat: 10 } },
-        },
+test('new life chooses exactly one active world', () => {
+  const fighter = createNewLife({ seed: 500, world: 'fighter' });
+  const hunter = createNewLife({ seed: 501, world: 'hunter' });
+  const sorcerer = createNewLife({ seed: 502, world: 'sorcerer' });
+  const zombie = createNewLife({ seed: 503, world: 'zombie' });
+
+  assert.equal(fighter.activeWorld, 'fighter');
+  assert.equal(fighter.hunterWorld.unlocked, false);
+  assert.equal(fighter.sorcererWorld.unlocked, false);
+  assert.equal(fighter.zombieWorld.unlocked, false);
+  assert.equal(hunter.activeWorld, 'hunter');
+  assert.equal(hunter.hunterWorld.unlocked, true);
+  assert.equal(hunter.sorcererWorld.unlocked, false);
+  assert.equal(hunter.zombieWorld.unlocked, false);
+  assert.equal(sorcerer.activeWorld, 'sorcerer');
+  assert.equal(sorcerer.hunterWorld.unlocked, false);
+  assert.equal(sorcerer.sorcererWorld.unlocked, true);
+  assert.equal(sorcerer.zombieWorld.unlocked, false);
+  assert.equal(zombie.activeWorld, 'zombie');
+  assert.equal(zombie.hunterWorld.unlocked, false);
+  assert.equal(zombie.sorcererWorld.unlocked, false);
+  assert.equal(zombie.zombieWorld.unlocked, true);
+});
+
+test('hard-separated worlds block normal cross-world unlocks', () => {
+  const zombie = createNewLife({ seed: 504, world: 'zombie' });
+  const hunterAttempt = redeemHunterPassword({ ...zombie, identity: { ...zombie.identity, age: 22 } }, 'SOLO21');
+  const fightAttempt = startFight(zombie, 'localBrawler');
+
+  assert.equal(hunterAttempt.hunterWorld.unlocked, false);
+  assert.equal(hunterAttempt.pendingEvent.id, 'zombie-monarch-origin');
+  assert.match(hunterAttempt.log[0].text, /different world/i);
+  assert.equal(fightAttempt.activeFight, null);
+  assert.match(fightAttempt.log[0].text, /fighter world/i);
+});
+
+test('Hunter Monarch reset can recreate a boosted zombie world', () => {
+  const base = createNewLife({ seed: 505, world: 'hunter' });
+  const monarch = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowMonarch: { unlocked: true, evolvedSkills: true },
+      monarchWar: {
+        unlocked: true,
+        defeated: ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction'],
+        finalChoiceUnlocked: true,
+      },
+    },
+  };
+
+  const reset = resetWorld(monarch, { destination: 'zombie' });
+
+  assert.equal(reset.activeWorld, 'zombie');
+  assert.equal(reset.zombieWorld.unlocked, true);
+  assert.equal(reset.zombieWorld.monarchOrigin, true);
+  assert.equal(reset.zombieWorld.statPoints >= 15, true);
+  assert.equal(reset.hunterWorld.unlocked, false);
+  assert.equal(reset.sorcererWorld.unlocked, false);
+  assert.equal(reset.resources.health, maxLifeHealth(reset));
+});
+
+test('zombie activities grant XP levels stat points and survivability improves treatment', () => {
+  let life = createNewLife({ seed: 506, world: 'zombie' });
+  life.zombieWorld.resources.medicine = 5;
+  life.resources.health = 40;
+
+  life = runZombieActivity(life, 'trainDrills');
+  life = runZombieActivity(life, 'trainDrills');
+  life = spendZombieStatPoint({ ...life, zombieWorld: { ...life.zombieWorld, statPoints: life.zombieWorld.statPoints + 2 } }, 'survivability');
+  life = spendZombieStatPoint(life, 'survivability');
+  const beforeHeal = life.resources.health;
+  const treated = runZombieActivity(life, 'treatWounds');
+
+  assert.equal(life.zombieWorld.level > 1, true);
+  assert.equal(life.zombieWorld.stats.survivability, 2);
+  assert.equal(treated.resources.health > beforeHeal, true);
+  assert.equal(treated.zombieWorld.resources.medicine, life.zombieWorld.resources.medicine - 1);
+});
+
+test('zombie encounters support multiple zombies guns ammo body injuries and teammate switching', () => {
+  let life = createNewLife({ seed: 507, world: 'zombie' });
+  life = {
+    ...life,
+    zombieWorld: {
+      ...life.zombieWorld,
+      stats: { physical: 4, fighting: 4, survivability: 1, leadership: 3, soldier: 0 },
+      resources: { ...life.zombieWorld.resources, ammo: 2 },
+      team: [
+        { id: 'maya', name: 'Maya Cruz', role: 'Medic', trust: 62, health: 80, stamina: 70, weapon: 'crowbar', present: true, relationship: 'teammate' },
       ],
     },
   };
 
-  const next = resolveEventChoice(life, 'grip-the-curse');
+  const started = startZombieEncounter(life, 'streetHorde');
+  const shot = takeFightTurn(started, 'gunFire');
+  const switched = switchZombieCombatant(shot, 'maya');
+  const bitten = takeFightTurn(switched, 'meleeSwing');
+
+  assert.equal(started.activeFight.source, 'zombieEncounter');
+  assert.equal(started.activeFight.zombies.length > 1, true);
+  assert.equal(shot.zombieWorld.resources.ammo, 1);
+  assert.equal(shot.activeFight.exchanges[0].hit, false);
+  assert.equal(switched.activeFight.party.activeId, 'maya');
+  assert.ok(bitten.zombieWorld.bodyInjuries.some((injury) => ['arm', 'hand', 'torso', 'leg', 'eye', 'head'].includes(injury.part)));
+});
+
+test('choosing curses after the Monarchs assigns an innate technique and universal basics', () => {
+  const base = createNewLife({ gender: 'Female', seed: 144 });
+  const life = {
+    ...base,
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowMonarch: { unlocked: true, evolvedSkills: true },
+      monarchWar: {
+        unlocked: true,
+        defeated: ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction'],
+        finalChoiceUnlocked: true,
+      },
+    },
+  };
+
+  const next = chooseSystemEnding(life, 'curseWorld');
   const moves = getUnlockedSorcererMoves(next).map((move) => move.id);
 
+  assert.equal(next.hunterWorld.systemEnding.choice, 'curseWorld');
+  assert.equal(next.hunterWorld.unlocked, false);
+  assert.equal(next.hunterWorld.playerAwakened, false);
   assert.equal(next.sorcererWorld.unlocked, true);
   assert.equal(next.sorcererWorld.awakened, true);
   assert.ok(SORCERER_INNATE_TECHNIQUES[next.sorcererWorld.innateTechnique]);
@@ -202,6 +319,31 @@ test('accepting sorcerer awakening assigns an innate technique and universal bas
   assert.ok(moves.includes('guardFlow'));
   assert.ok(moves.includes('curseRead'));
   assert.ok(moves.some((id) => SORCERER_MOVES[id]?.technique === next.sorcererWorld.innateTechnique));
+});
+
+test('curse world choice permanently blocks Hunter password re-entry', () => {
+  const base = createNewLife({ gender: 'Male', seed: 149 });
+  const life = chooseSystemEnding({
+    ...base,
+    identity: { ...base.identity, age: 22 },
+    hunterWorld: {
+      ...base.hunterWorld,
+      unlocked: true,
+      playerAwakened: true,
+      shadowMonarch: { unlocked: true, evolvedSkills: true },
+      monarchWar: {
+        unlocked: true,
+        defeated: ['monarch-fangs', 'monarch-frost', 'monarch-flames', 'monarch-destruction'],
+        finalChoiceUnlocked: true,
+      },
+    },
+  }, 'curseWorld');
+
+  const attemptedHunter = redeemHunterPassword(life, 'SOLO21');
+
+  assert.equal(attemptedHunter.hunterWorld.unlocked, false);
+  assert.equal(attemptedHunter.pendingEvent, null);
+  assert.match(attemptedHunter.log[0].text, /curses replaced portals/i);
 });
 
 test('innate techniques determine sorcerer special moves while basics stay shared', () => {
@@ -6725,12 +6867,17 @@ test('Monarch War defeats all Monarchs and unlocks final System choices', () => 
   }
   const defender = chooseSystemEnding(life, 'defendPlanet');
   const closed = chooseSystemEnding(life, 'closePortals');
+  const cursed = chooseSystemEnding(life, 'curseWorld');
 
   assert.equal(life.hunterWorld.monarchWar.finalChoiceUnlocked, true);
   assert.equal(defender.hunterWorld.systemEnding.choice, 'defendPlanet');
   assert.equal(defender.hunterWorld.unlocked, true);
   assert.equal(closed.hunterWorld.systemEnding.choice, 'closePortals');
   assert.equal(closed.hunterWorld.unlocked, false);
+  assert.equal(cursed.hunterWorld.systemEnding.choice, 'curseWorld');
+  assert.equal(cursed.hunterWorld.unlocked, false);
+  assert.equal(cursed.sorcererWorld.unlocked, true);
+  assert.equal(cursed.sorcererWorld.missionOffers.length, 3);
 });
 
 test('World Reset preserves clan mentor and base stats while granting secret skills', () => {

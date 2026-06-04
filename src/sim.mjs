@@ -139,6 +139,86 @@ const DEFAULT_SORCERER_WORLD = {
   lastMissionMonth: null,
   rejectedUntilMonth: null,
 };
+export const PLAYABLE_WORLDS = ['fighter', 'hunter', 'sorcerer', 'zombie'];
+const DEFAULT_ZOMBIE_STATS = {
+  physical: 0,
+  fighting: 0,
+  survivability: 0,
+  leadership: 0,
+  soldier: 0,
+};
+const DEFAULT_ZOMBIE_WORLD = {
+  unlocked: false,
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  stats: DEFAULT_ZOMBIE_STATS,
+  resources: {
+    food: 6,
+    water: 6,
+    medicine: 2,
+    ammo: 3,
+    materials: 4,
+    shelter: 45,
+    morale: 55,
+  },
+  location: 'Apartment Block',
+  survivorReputation: 0,
+  team: [],
+  relationships: {},
+  inventory: [],
+  equippedMelee: 'kitchenKnife',
+  equippedGun: 'oldPistol',
+  bodyInjuries: [],
+  infections: [],
+  currentEncounter: null,
+  encountersCleared: 0,
+  monarchOrigin: false,
+  monarchBonus: null,
+};
+export const ZOMBIE_ACTIVITIES = {
+  scavenge: { label: 'Scavenge Supplies', xp: 65, risk: 24, costs: {}, gains: { food: 2, water: 1, medicine: 1, materials: 2 } },
+  secureShelter: { label: 'Secure Shelter', xp: 45, risk: 8, costs: { materials: 2 }, gains: { shelter: 12, morale: 2 } },
+  treatWounds: { label: 'Treat Wounds', xp: 38, risk: 4, costs: { medicine: 1 }, gains: { morale: 1 } },
+  trainDrills: { label: 'Train Drills', xp: 90, risk: 10, costs: { food: 1, water: 1 }, gains: { morale: 1 } },
+  recruitSurvivor: { label: 'Recruit Survivor', xp: 70, risk: 18, costs: { food: 1 }, gains: { morale: 4 } },
+  guardShift: { label: 'Guard Shift', xp: 55, risk: 14, costs: { water: 1 }, gains: { shelter: 3, morale: 1 } },
+  craftGear: { label: 'Craft Gear', xp: 50, risk: 6, costs: { materials: 2 }, gains: { ammo: 1 } },
+  moveLocation: { label: 'Move Location', xp: 80, risk: 32, costs: { food: 1, water: 1 }, gains: { food: 1, medicine: 1, materials: 2 } },
+};
+const ZOMBIE_ENCOUNTERS = {
+  streetHorde: {
+    id: 'streetHorde',
+    name: 'Street Horde',
+    threat: 'Close-quarters horde',
+    zombieCount: 4,
+    health: 34,
+    damage: 13,
+    risk: 38,
+    xp: 130,
+  },
+  pharmacyRush: {
+    id: 'pharmacyRush',
+    name: 'Pharmacy Rush',
+    threat: 'Fast infected in tight aisles',
+    zombieCount: 3,
+    health: 42,
+    damage: 16,
+    risk: 44,
+    xp: 160,
+  },
+  barricadeRaid: {
+    id: 'barricadeRaid',
+    name: 'Barricade Raid',
+    threat: 'Night raid at the shelter',
+    zombieCount: 5,
+    health: 38,
+    damage: 15,
+    risk: 48,
+    xp: 185,
+  },
+};
+const ZOMBIE_BODY_PARTS = ['head', 'eye', 'arm', 'hand', 'torso', 'leg'];
 export const SORCERER_INNATE_TECHNIQUES = {
   impactFold: {
     id: 'impactFold',
@@ -1233,6 +1313,18 @@ function defaultSorcererWorld() {
   return clone(DEFAULT_SORCERER_WORLD);
 }
 
+function defaultZombieWorld() {
+  return clone(DEFAULT_ZOMBIE_WORLD);
+}
+
+function normalizeActiveWorld(world) {
+  return PLAYABLE_WORLDS.includes(world) ? world : null;
+}
+
+function worldLocked(life, world) {
+  return Boolean(life?.activeWorld) && life.activeWorld !== world;
+}
+
 function normalizeHunterStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
@@ -1243,6 +1335,87 @@ function normalizeSorcererStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_SORCERER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_SORCERER_STATS[stat]))])
   );
+}
+
+function normalizeZombieStats(stats = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_ZOMBIE_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_ZOMBIE_STATS[stat]))])
+  );
+}
+
+function normalizeZombieResources(resources = {}) {
+  return {
+    food: clamp(resources.food ?? DEFAULT_ZOMBIE_WORLD.resources.food, 0, 999),
+    water: clamp(resources.water ?? DEFAULT_ZOMBIE_WORLD.resources.water, 0, 999),
+    medicine: clamp(resources.medicine ?? DEFAULT_ZOMBIE_WORLD.resources.medicine, 0, 999),
+    ammo: clamp(resources.ammo ?? DEFAULT_ZOMBIE_WORLD.resources.ammo, 0, 999),
+    materials: clamp(resources.materials ?? DEFAULT_ZOMBIE_WORLD.resources.materials, 0, 999),
+    shelter: clamp(resources.shelter ?? DEFAULT_ZOMBIE_WORLD.resources.shelter, 0, 100),
+    morale: clamp(resources.morale ?? DEFAULT_ZOMBIE_WORLD.resources.morale, 0, 100),
+  };
+}
+
+function normalizeZombieBodyInjuries(injuries = []) {
+  if (!Array.isArray(injuries)) return [];
+  return injuries.map((injury, index) => {
+    if (typeof injury === 'string') {
+      return { id: `legacy-${index}`, part: 'torso', severity: 'mild', permanent: false, label: injury };
+    }
+    const part = ZOMBIE_BODY_PARTS.includes(injury?.part) ? injury.part : 'torso';
+    const severity = ['mild', 'moderate', 'severe'].includes(injury?.severity) ? injury.severity : 'mild';
+    return {
+      id: injury?.id ?? `${part}-${index}`,
+      part,
+      severity,
+      permanent: Boolean(injury?.permanent),
+      label: injury?.label ?? `${severity} ${part} injury`,
+    };
+  }).slice(0, 12);
+}
+
+function normalizeZombieTeam(team = []) {
+  if (!Array.isArray(team)) return [];
+  return team
+    .filter((member) => member?.id && member?.name)
+    .map((member) => ({
+      id: String(member.id),
+      name: String(member.name),
+      role: member.role ?? 'Survivor',
+      trust: clamp(member.trust ?? 45, 0, 100),
+      health: clamp(member.health ?? 70, 0, 140),
+      stamina: clamp(member.stamina ?? 65, 0, 140),
+      weapon: member.weapon ?? 'pipe',
+      present: member.present !== false,
+      relationship: member.relationship ?? 'teammate',
+      injuries: normalizeZombieBodyInjuries(member.injuries),
+    }))
+    .slice(0, 6);
+}
+
+export function normalizeZombieWorld(zombieWorld = {}) {
+  return {
+    ...defaultZombieWorld(),
+    ...zombieWorld,
+    unlocked: Boolean(zombieWorld.unlocked),
+    xp: Math.max(0, Math.floor(zombieWorld.xp ?? 0)),
+    level: Math.max(1, Math.floor(zombieWorld.level ?? 1)),
+    statPoints: Math.max(0, Math.floor(zombieWorld.statPoints ?? 0)),
+    stats: normalizeZombieStats(zombieWorld.stats),
+    resources: normalizeZombieResources(zombieWorld.resources),
+    location: zombieWorld.location ?? DEFAULT_ZOMBIE_WORLD.location,
+    survivorReputation: clamp(zombieWorld.survivorReputation ?? 0, 0, 999),
+    team: normalizeZombieTeam(zombieWorld.team),
+    relationships: zombieWorld.relationships ?? {},
+    inventory: Array.isArray(zombieWorld.inventory) ? zombieWorld.inventory.slice(0, 40) : [],
+    equippedMelee: zombieWorld.equippedMelee ?? DEFAULT_ZOMBIE_WORLD.equippedMelee,
+    equippedGun: zombieWorld.equippedGun ?? DEFAULT_ZOMBIE_WORLD.equippedGun,
+    bodyInjuries: normalizeZombieBodyInjuries(zombieWorld.bodyInjuries ?? zombieWorld.injuries),
+    infections: Array.isArray(zombieWorld.infections) ? zombieWorld.infections.slice(0, 8) : [],
+    currentEncounter: zombieWorld.currentEncounter ?? null,
+    encountersCleared: Math.max(0, Math.floor(zombieWorld.encountersCleared ?? 0)),
+    monarchOrigin: Boolean(zombieWorld.monarchOrigin),
+    monarchBonus: zombieWorld.monarchBonus ?? null,
+  };
 }
 
 export function normalizeSorcererWorld(sorcererWorld = {}) {
@@ -1428,7 +1601,7 @@ function normalizeMonarchWar(war = {}) {
 }
 
 function normalizeSystemEnding(ending) {
-  if (!ending || !['closePortals', 'defendPlanet'].includes(ending.choice)) return null;
+  if (!ending || !['closePortals', 'defendPlanet', 'curseWorld'].includes(ending.choice)) return null;
   return {
     choice: ending.choice,
     chosenMonth: ending.chosenMonth ?? null,
@@ -4759,6 +4932,10 @@ function withPlayerCombatStats(life) {
 export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
+  const zombie = normalizeZombieWorld(life.zombieWorld);
+  if (life?.activeWorld === 'zombie' && zombie.unlocked) {
+    return 95 + zombie.stats.physical * 18 + zombie.stats.survivability * 8 + (zombie.monarchOrigin ? 45 : 0);
+  }
   const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
@@ -4776,6 +4953,10 @@ function staminaFromStats(stats = {}) {
 }
 
 export function maxLifeEnergy(life) {
+  const zombie = normalizeZombieWorld(life.zombieWorld);
+  if (life?.activeWorld === 'zombie' && zombie.unlocked) {
+    return 85 + zombie.stats.physical * 10 + zombie.stats.fighting * 4 + (zombie.monarchOrigin ? 25 : 0);
+  }
   const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
@@ -5649,7 +5830,9 @@ function unlockHunterWorld(life, { protectCivilians = false } = {}) {
 }
 
 function hunterAwakeningChance(life, context = {}) {
+  if (worldLocked(life, 'hunter')) return 0;
   if (life.identity.age < 18) return 0;
+  if (normalizeHunterWorld(life.hunterWorld).systemEnding?.choice === 'curseWorld' || normalizeSorcererWorld(life.sorcererWorld).unlocked) return 0;
   if (normalizeHunterWorld(life.hunterWorld).unlocked) return 0;
   if (normalizeHunterWorld(life.hunterWorld).rejectedUntilMonth > lifeMonth(life)) return 0;
   if (isMishimeClan(life.clan) && (normalizeClanAwakening(life)?.stage ?? 0) < 3) return 0;
@@ -6232,6 +6415,7 @@ function unlockSorcererWorld(life, { techniqueId = null } = {}) {
 }
 
 function sorcererAwakeningChance(life, context = {}) {
+  if (worldLocked(life, 'sorcerer')) return 0;
   const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
   if (sorcerer.unlocked || sorcerer.rejectedUntilMonth > lifeMonth(life)) return 0;
   if ((life.identity?.age ?? 0) < 15) return 0;
@@ -6241,29 +6425,6 @@ function sorcererAwakeningChance(life, context = {}) {
   const fightSpike = context?.trigger === 'fight' || context?.won === false ? 0.08 : 0;
   const hidden = life.world?.hiddenWorld ? 0.08 : 0;
   return clampFloat(0.02 + lowHealth + danger + mind + fightSpike + hidden, 0, 0.82);
-}
-
-function sorcererAwakeningEvent(life) {
-  return {
-    id: 'sorcerer-awakening',
-    flag: `sorcererAwakening-${lifeMonth(life)}`,
-    title: 'Cursed Energy Awakening',
-    body: 'A near-death pressure twists through the room. For one breath, every ugly feeling in the air has a shape, and it is looking back.',
-    choices: [
-      {
-        id: 'grip-the-curse',
-        label: 'Grip the curse',
-        result: 'You forced the cursed pressure into a usable circuit. A dormant innate technique opened.',
-        effects: { sorcererWorld: { unlock: true }, world: { heat: 10 }, stats: { control: 3, willpower: 3 } },
-      },
-      {
-        id: 'seal-it-away',
-        label: 'Seal it away',
-        result: 'You survived by refusing the power. The pressure recedes, but it remembers where you live.',
-        effects: { sorcererWorld: { delayMonths: 8 }, resources: { mood: -4 }, stats: { willpower: 2 } },
-      },
-    ],
-  };
 }
 
 export function getSorcererEffectiveStats(life) {
@@ -6436,6 +6597,342 @@ export function visitSorcererBureau(life) {
   return addLog(next, `Sorcerer Bureau review complete. Missing: ${missing || 'no further grade available'}.`, 'world');
 }
 
+function zombieXpForNextLevel(level) {
+  return 85 + Math.max(1, level) * 30;
+}
+
+function grantZombieXp(life, amount) {
+  life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+  life.zombieWorld.xp += Math.max(0, Math.floor(amount));
+  while (life.zombieWorld.xp >= zombieXpForNextLevel(life.zombieWorld.level)) {
+    life.zombieWorld.xp -= zombieXpForNextLevel(life.zombieWorld.level);
+    life.zombieWorld.level += 1;
+    life.zombieWorld.statPoints += 3 + (life.zombieWorld.monarchOrigin ? 2 : 0);
+  }
+}
+
+function applyZombieMonarchOrigin(life) {
+  life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+  if (life.zombieWorld.monarchOrigin) return false;
+  life.zombieWorld.monarchOrigin = true;
+  life.zombieWorld.monarchBonus = {
+    regeneration: 8,
+    damageBonus: 0.22,
+    injuryReduction: 0.35,
+  };
+  life.zombieWorld.statPoints += 15;
+  life.zombieWorld.stats.physical += 2;
+  life.zombieWorld.stats.fighting += 2;
+  life.zombieWorld.stats.survivability += 2;
+  life.resources.health = maxLifeHealth(life);
+  life.resources.energy = maxLifeEnergy(life);
+  return true;
+}
+
+function zombieMonarchOriginEvent(life) {
+  return {
+    id: 'zombie-monarch-origin',
+    flag: `zombieMonarchOrigin-${lifeMonth(life)}`,
+    title: 'The First Night Question',
+    body: 'A cracked emergency broadcast asks whether you are the great monarch who created this ruined world. The answer is not written anywhere safe.',
+    password: true,
+    choices: [
+      {
+        id: 'deny-origin',
+        label: 'Keep moving',
+        result: 'You ignore the broadcast and stay focused on ordinary survival.',
+        effects: { zombieWorld: { morale: 2 } },
+      },
+    ],
+  };
+}
+
+export function redeemZombieMonarchPassword(life, password) {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  if (next.activeWorld !== 'zombie' || !next.zombieWorld.unlocked) return addLog(next, 'No zombie-world origin signal is active in this life.', 'world');
+  if ((password ?? '').trim().toUpperCase() !== MONARCH_BODY_PASSWORD) return addLog(next, 'The origin answer is rejected.', 'world');
+  applyZombieMonarchOrigin(next);
+  if (next.pendingEvent?.id === 'zombie-monarch-origin') next.pendingEvent = null;
+  return addLog(next, 'Origin accepted: the ruined world recognizes its Monarch. Regeneration, damage, health, and survival stats awaken.', 'world');
+}
+
+export function spendZombieStatPoint(life, stat) {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  if (!next.zombieWorld.unlocked || next.zombieWorld.statPoints <= 0 || !(stat in DEFAULT_ZOMBIE_STATS)) {
+    return addLog(next, 'No Zombie stat point can be spent there.', 'world');
+  }
+  const before = clone(next);
+  next.zombieWorld.statPoints -= 1;
+  next.zombieWorld.stats[stat] += 1;
+  applyVitalCapGrowth(before, next);
+  return addLog(next, `Zombie stat point spent: ${labelFromId(stat)} increased.`, 'world');
+}
+
+function zombieResourceCostBlocked(zombie, costs = {}) {
+  return Object.entries(costs).find(([resource, amount]) => (zombie.resources?.[resource] ?? 0) < amount) ?? null;
+}
+
+function addZombieBodyInjury(life, part, severity = 'mild') {
+  life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+  const permanent = part === 'eye' && severity === 'severe';
+  const injury = {
+    id: `${part}-${lifeMonth(life)}-${life.zombieWorld.bodyInjuries.length}`,
+    part,
+    severity,
+    permanent,
+    label: `${permanent ? 'permanent ' : ''}${severity} ${part} injury`,
+  };
+  life.zombieWorld.bodyInjuries = [injury, ...life.zombieWorld.bodyInjuries].slice(0, 12);
+  return injury;
+}
+
+export function runZombieActivity(life, activityId) {
+  const activity = ZOMBIE_ACTIVITIES[activityId];
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  if (worldLocked(next, 'zombie') || !next.zombieWorld.unlocked) return addLog(next, 'Zombie survival actions belong to the Zombie world.', 'world');
+  if (!activity) return addLog(next, 'Unknown zombie survival activity.', 'world');
+  const blocked = zombieResourceCostBlocked(next.zombieWorld, activity.costs);
+  if (blocked) return addLog(next, `${activity.label} blocked: not enough ${blocked[0]}.`, 'world');
+
+  for (const [resource, amount] of Object.entries(activity.costs ?? {})) {
+    next.zombieWorld.resources[resource] = clamp(next.zombieWorld.resources[resource] - amount, 0, 999);
+  }
+  for (const [resource, amount] of Object.entries(activity.gains ?? {})) {
+    next.zombieWorld.resources[resource] = clamp(next.zombieWorld.resources[resource] + amount, 0, resource === 'shelter' || resource === 'morale' ? 100 : 999);
+  }
+  if (activityId === 'treatWounds') {
+    const heal = 16 + next.zombieWorld.stats.survivability * 7 + (next.zombieWorld.monarchOrigin ? 8 : 0);
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + heal);
+    next.zombieWorld.bodyInjuries = next.zombieWorld.bodyInjuries.filter((injury, index) => injury.permanent || index > 0);
+  }
+  if (activityId === 'recruitSurvivor' && next.zombieWorld.team.length < 6) {
+    const recruitIndex = next.zombieWorld.team.length + 1;
+    next.zombieWorld.team.push({
+      id: `survivor-${lifeMonth(next)}-${recruitIndex}`,
+      name: ['Maya Cruz', 'Jon Bell', 'Tessa Park', 'Omar Vale'][recruitIndex % 4],
+      role: ['Medic', 'Runner', 'Guard', 'Mechanic'][recruitIndex % 4],
+      trust: 42 + next.zombieWorld.stats.leadership * 3,
+      health: 72,
+      stamina: 66,
+      weapon: recruitIndex % 2 ? 'pipe' : 'crowbar',
+      present: true,
+      relationship: 'teammate',
+    });
+    next.zombieWorld.survivorReputation = clamp(next.zombieWorld.survivorReputation + 5 + next.zombieWorld.stats.leadership, 0, 999);
+  }
+  if (activityId === 'moveLocation') {
+    next.zombieWorld.location = next.zombieWorld.location === 'Apartment Block' ? 'Pharmacy District' : 'Highway Shelter';
+  }
+  const dangerRoll = deterministicRoll(next.rngSeed, lifeMonth(next), activityId, next.zombieWorld.level, 'zombie-activity-danger') * 100;
+  const safety = next.zombieWorld.resources.shelter * 0.12 + next.zombieWorld.stats.survivability * 2 + (next.zombieWorld.monarchOrigin ? 12 : 0);
+  if (dangerRoll + safety < activity.risk) {
+    const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, activityId, 'injury-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
+    addZombieBodyInjury(next, part, activity.risk >= 28 ? 'moderate' : 'mild');
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health - Math.max(4, Math.round(activity.risk / 2)));
+  }
+  grantZombieXp(next, activity.xp);
+  next.zombieWorld.resources.food = clamp(next.zombieWorld.resources.food - 1, 0, 999);
+  next.zombieWorld.resources.water = clamp(next.zombieWorld.resources.water - 1, 0, 999);
+  return addLog(next, `${activity.label}: survival XP gained, supplies updated, and the shelter clock keeps bleeding.`, 'world');
+}
+
+function createZombieParty(life) {
+  const zombie = normalizeZombieWorld(life.zombieWorld);
+  return {
+    activeId: 'player',
+    members: [
+      { id: 'player', name: life.identity?.name ?? 'You', role: 'Player', health: life.resources.health, stamina: life.resources.energy, present: true },
+      ...zombie.team.filter((member) => member.present),
+    ],
+  };
+}
+
+export function startZombieEncounter(life, encounterId = 'streetHorde') {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  if (worldLocked(next, 'zombie') || !next.zombieWorld.unlocked) return addLog(next, 'Zombie encounters belong to the Zombie world.', 'world');
+  if (next.activeFight) return addLog(next, 'Finish the active encounter before drawing more infected.', 'world');
+  const template = ZOMBIE_ENCOUNTERS[encounterId] ?? ZOMBIE_ENCOUNTERS.streetHorde;
+  const maxPlayerHealth = maxLifeHealth(next);
+  const maxPlayerStamina = maxLifeEnergy(next);
+  next.activeFight = {
+    opponentId: template.id,
+    source: 'zombieEncounter',
+    round: 1,
+    maxRounds: 30,
+    exchangesPerRound: 5,
+    breakdown: [`${template.name}: ${template.zombieCount} infected. Guns must be aimed, ammo is finite, and wounds can become permanent.`],
+    exchanges: [],
+    moveCooldowns: {},
+    specialCharges: 0,
+    party: createZombieParty(next),
+    zombies: Array.from({ length: template.zombieCount }, (_, index) => ({
+      id: `${template.id}-${index + 1}`,
+      name: `Infected ${index + 1}`,
+      health: template.health,
+      maxHealth: template.health,
+      damage: template.damage,
+      alive: true,
+    })),
+    meters: {
+      playerHealth: combatResourceValue(next.resources.health, maxPlayerHealth, 1),
+      opponentHealth: template.health * template.zombieCount,
+      maxPlayerHealth,
+      maxOpponentHealth: template.health * template.zombieCount,
+      maxPlayerStamina,
+      maxOpponentStamina: 100,
+      playerStamina: combatResourceValue(next.resources.energy, maxPlayerStamina, 15),
+      opponentStamina: 100,
+      momentum: 0,
+      guard: 35 + next.zombieWorld.stats.fighting * 2,
+      injuryRisk: template.risk,
+    },
+    finished: false,
+    result: null,
+  };
+  return addLog(next, `Zombie encounter started: ${template.name}.`, 'world');
+}
+
+export function switchZombieCombatant(life, memberId) {
+  const next = clone(life);
+  const fight = next.activeFight;
+  if (!fight || fight.source !== 'zombieEncounter' || fight.finished) return addLog(next, 'No live zombie encounter can switch survivors.', 'world');
+  const member = fight.party?.members?.find((item) => item.id === memberId && item.present !== false);
+  if (!member) return addLog(next, 'That survivor is not present in the encounter.', 'world');
+  fight.party.activeId = member.id;
+  fight.meters.momentum = clamp(fight.meters.momentum - 6, -50, 50);
+  fight.exchanges.unshift({
+    round: fight.round,
+    tactic: 'switch',
+    moveId: 'switch',
+    tacticLabel: 'Switch Survivor',
+    text: `Switch: ${member.name} takes point while the group covers the gap.`,
+    playerDamage: 0,
+    enemyDamage: 0,
+  });
+  fight.round += 1;
+  return addLog(next, `${member.name} switched to the front of the zombie encounter.`, 'world');
+}
+
+function liveZombies(fight) {
+  return (fight.zombies ?? []).filter((zombie) => zombie.alive && zombie.health > 0);
+}
+
+function applyZombieFightResult(life, fight, won) {
+  life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+  const template = ZOMBIE_ENCOUNTERS[fight.opponentId] ?? ZOMBIE_ENCOUNTERS.streetHorde;
+  if (won) {
+    life.zombieWorld.encountersCleared += 1;
+    life.zombieWorld.resources.food = clamp(life.zombieWorld.resources.food + 1, 0, 999);
+    life.zombieWorld.resources.materials = clamp(life.zombieWorld.resources.materials + 2, 0, 999);
+    grantZombieXp(life, template.xp);
+    fight.result.rewards.push(`+${template.xp} Zombie XP`, '+1 food', '+2 materials');
+  } else {
+    life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale - 12, 0, 100);
+    fight.result.rewards.push('Morale cracked by the failed encounter');
+  }
+}
+
+function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  const fight = next.activeFight;
+  if (!fight || fight.finished) return next;
+  const stats = next.zombieWorld.stats;
+  const activeId = fight.party?.activeId ?? 'player';
+  const activeMember = fight.party?.members?.find((member) => member.id === activeId) ?? fight.party?.members?.[0];
+  const leadershipBoost = activeId === 'player' ? 0 : stats.leadership * 2;
+  const target = liveZombies(fight)[0];
+  if (!target) {
+    finishActiveFight(next);
+    return next;
+  }
+
+  let playerDamage = 0;
+  let hit = true;
+  let spentAmmo = 0;
+  let staminaCost = 8;
+  let incomingReduction = stats.leadership + (moveId === 'guard' ? 10 : 0);
+  if (moveId === 'gunFire' || moveId === 'suppress') {
+    spentAmmo = moveId === 'suppress' ? 2 : 1;
+    if (next.zombieWorld.resources.ammo < spentAmmo) return addLog(next, 'No ammo left for that gun action.', 'world');
+    next.zombieWorld.resources.ammo = clamp(next.zombieWorld.resources.ammo - spentAmmo, 0, 999);
+    const hitChance = clampFloat(0.28 + stats.soldier * 0.055 + fight.meters.momentum * 0.002 - liveZombies(fight).length * 0.018, 0.12, 0.88);
+    hit = deterministicRoll(next.rngSeed, fight.round, moveId, activeId, 'zombie-gun-hit') < hitChance;
+    playerDamage = hit ? Math.round(22 + stats.soldier * 6 + stats.physical * 1.5 + leadershipBoost) : 0;
+    staminaCost = 5;
+    incomingReduction += moveId === 'suppress' ? 8 + stats.soldier : 0;
+  } else if (moveId === 'shove') {
+    playerDamage = Math.round(5 + stats.physical * 2 + stats.fighting + leadershipBoost);
+    incomingReduction += 10 + stats.physical;
+    staminaCost = 12;
+  } else if (moveId === 'grappleEscape') {
+    playerDamage = Math.round(4 + stats.fighting * 2 + leadershipBoost);
+    incomingReduction += 14 + stats.fighting;
+    staminaCost = 14;
+  } else if (moveId === 'unarmedStrike') {
+    playerDamage = Math.round(8 + stats.physical * 2 + stats.fighting * 3 + leadershipBoost);
+    staminaCost = 10;
+  } else if (moveId === 'retreat') {
+    const retreatChance = clampFloat(0.38 + stats.survivability * 0.045 + stats.leadership * 0.025 - liveZombies(fight).length * 0.03, 0.12, 0.86);
+    const escaped = deterministicRoll(next.rngSeed, fight.round, activeId, 'zombie-retreat') < retreatChance;
+    next.zombieWorld.resources.morale = clamp(next.zombieWorld.resources.morale - 8, 0, 100);
+    next.zombieWorld.resources.food = clamp(next.zombieWorld.resources.food - 1, 0, 999);
+    if (escaped) {
+      fight.finished = true;
+      fight.result = { won: false, summary: 'You retreated from the infected before the line collapsed.', reasons: ['Retreat preserved the group but cost supplies and morale.'], rewards: ['-1 food', '-8 morale'], injuries: [] };
+      next.activeFight = fight;
+      return addLog(next, 'Retreated from the zombie encounter. Supplies and morale took the hit.', 'world');
+    }
+    playerDamage = 0;
+    incomingReduction -= 4;
+  } else {
+    playerDamage = Math.round(12 + stats.physical * 3 + stats.fighting * 4 + stats.soldier + leadershipBoost + (next.zombieWorld.monarchOrigin ? 8 : 0));
+    staminaCost = 11;
+  }
+
+  target.health = Math.max(0, target.health - playerDamage);
+  if (target.health <= 0) target.alive = false;
+  fight.meters.opponentHealth = liveZombies(fight).reduce((sum, zombie) => sum + zombie.health, 0);
+  const swarm = liveZombies(fight).length;
+  const baseIncoming = Math.max(0, swarm * 8 + (ZOMBIE_ENCOUNTERS[fight.opponentId]?.damage ?? 12) - incomingReduction);
+  const enemyDamage = Math.max(0, Math.round(baseIncoming * (activeId === 'player' ? 1 : Math.max(0.55, 1 - stats.leadership * 0.025))));
+  fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina ?? 100);
+  fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
+  fight.meters.momentum = clamp(fight.meters.momentum + (hit ? Math.round(playerDamage / 8) : -6) - Math.max(0, enemyDamage - 8), -50, 50);
+  fight.meters.injuryRisk = clamp((ZOMBIE_ENCOUNTERS[fight.opponentId]?.risk ?? 35) + swarm * 4 + Math.max(0, enemyDamage - 6) - stats.survivability * 2 - (next.zombieWorld.monarchOrigin ? 10 : 0), 0, 100);
+  if (enemyDamage > 0 || fight.meters.injuryRisk > 25) {
+    const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, fight.round, moveId, 'body-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
+    const severity = fight.meters.injuryRisk > 58 ? 'severe' : fight.meters.injuryRisk > 34 ? 'moderate' : 'mild';
+    const injury = addZombieBodyInjury(next, part, severity);
+    if (fight.result?.injuries) fight.result.injuries.push(injury.label);
+  }
+  fight.exchanges.unshift({
+    round: fight.round,
+    tactic: moveId,
+    moveId,
+    tacticLabel: labelFromId(moveId),
+    opponentTactic: 'swarm',
+    opponentTacticLabel: 'Swarm',
+    text: `Exchange ${fight.round} - ${labelFromId(moveId)}: ${activeMember?.name ?? 'You'} ${hit ? `dealt ${playerDamage}` : 'missed under pressure'} while ${swarm} infected pressed in for ${enemyDamage} damage.${spentAmmo ? ` Ammo spent: ${spentAmmo}.` : ''}`,
+    playerDamage,
+    enemyDamage,
+    hit,
+    spentAmmo,
+    zombieCount: swarm,
+  });
+  const finished = fight.meters.playerHealth <= 0 || liveZombies(fight).length === 0 || fight.round >= fight.maxRounds;
+  if (finished) {
+    finishActiveFight(next);
+    return next;
+  }
+  fight.round += 1;
+  return next;
+}
+
 export function getCombatOpponent(life, opponentId) {
   if (SORCERER_CURSES[opponentId]) {
     const curse = SORCERER_CURSES[opponentId];
@@ -6453,8 +6950,9 @@ export function getCombatOpponent(life, opponentId) {
   return getAdaptedOpponent(life, opponentId);
 }
 
-export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now() } = {}) {
+export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now(), world = null } = {}) {
   const rng = createRng(seed);
+  const activeWorld = normalizeActiveWorld(world);
   const clan = rollClan(rng);
   const rolledBaseStats = baseStats(rng);
   const stats = applyClanBonuses(rolledBaseStats, clan);
@@ -6479,6 +6977,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
       age: 12,
       month: 0,
     },
+    activeWorld,
     phase: 'Youth',
     background: {
       familyWealth,
@@ -6549,6 +7048,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     clanAwakening: isMishimeClan(clan) ? { ...DEFAULT_CLAN_AWAKENING } : null,
     hunterWorld: defaultHunterWorld(),
     sorcererWorld: defaultSorcererWorld(),
+    zombieWorld: defaultZombieWorld(),
     world: {
       hiddenWorld: false,
       league: 'None',
@@ -6567,6 +7067,19 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
       createLog(`Clan result: ${clan.name} [${clan.rarity}].`, 'clan'),
     ],
   };
+  if (activeWorld === 'hunter') {
+    life.hunterWorld = { ...normalizeHunterWorld(life.hunterWorld), unlocked: true, playerAwakened: true, lastGateMonth: lifeMonth(life) };
+    life.hunterWorld.gateOffers = createHunterGateBoard(life);
+    life.world.rumors.unshift('This life begins under the System. Gate signals are already cutting through the city.');
+  } else if (activeWorld === 'sorcerer') {
+    unlockSorcererWorld(life);
+    life.sorcererWorld.missionOffers = createSorcererMissionBoard(life);
+  } else if (activeWorld === 'zombie') {
+    life.zombieWorld = { ...normalizeZombieWorld(life.zombieWorld), unlocked: true };
+    life.pendingEvent = zombieMonarchOriginEvent(life);
+    life.eventFlags = { ...life.eventFlags, [life.pendingEvent.flag]: true };
+    life.world.rumors = ['The city fell before anyone agreed on what to call the infected.'];
+  }
   life.resources.health = maxLifeHealth(life);
   life.resources.energy = maxLifeEnergy(life);
   return life;
@@ -6577,10 +7090,12 @@ function nextSecretSystemSkill(existing = []) {
   return SECRET_SYSTEM_SKILLS.find((id) => !owned.has(id)) ?? null;
 }
 
-export function resetWorld(life, { debug = false } = {}) {
+export function resetWorld(life, { debug = false, destination = 'hunter' } = {}) {
   const currentHunter = normalizeHunterWorld(life.hunterWorld);
+  if (currentHunter.systemEnding?.choice === 'curseWorld') return addLog(life, 'World Reset is unavailable after curses replace portals. The Hunter path is sealed.', 'world');
   const eligible = currentHunter.shadowMonarch.unlocked && currentHunter.monarchWar.finalChoiceUnlocked;
   if (!debug && !eligible) return addLog(life, 'RESET THE WORLD is locked until the Shadow Monarch defeats every Monarch.', 'world');
+  const resetWorldTarget = normalizeActiveWorld(destination) ?? 'hunter';
   const previousSkills = normalizeSecretSystemSkills(currentHunter.secretSystemSkills);
   const grantedSkill = nextSecretSystemSkill(previousSkills);
   const secretSystemSkills = grantedSkill ? [...previousSkills, grantedSkill] : previousSkills;
@@ -6589,6 +7104,7 @@ export function resetWorld(life, { debug = false } = {}) {
     gender: life.identity?.gender ?? 'Male',
     firstName: life.identity?.firstName ?? life.identity?.name?.split?.(' ')?.[0] ?? '',
     seed: (life.rngSeed ?? Date.now()) + worldResets,
+    world: resetWorldTarget,
   });
   const preservedStats = debug
     ? Object.fromEntries(Object.keys(fresh.stats).map((stat) => [stat, 2200]))
@@ -6606,18 +7122,30 @@ export function resetWorld(life, { debug = false } = {}) {
   fresh.baseStats = clone(debug ? preservedStats : (life.baseStats ?? preservedStats));
   fresh.stats = preservedStats;
   fresh.mentor = clone(life.mentor);
-  fresh.hunterWorld = {
-    ...defaultHunterWorld(),
-    unlocked: true,
-    playerAwakened: true,
-    worldResets,
-    secretSystemSkills,
-    secretSkillCooldowns: {},
-  };
+  fresh.hunterWorld = resetWorldTarget === 'hunter'
+    ? {
+        ...defaultHunterWorld(),
+        unlocked: true,
+        playerAwakened: true,
+        worldResets,
+        secretSystemSkills,
+        secretSkillCooldowns: {},
+      }
+    : { ...defaultHunterWorld(), worldResets, secretSystemSkills, secretSkillCooldowns: {} };
+  if (resetWorldTarget === 'zombie') {
+    fresh.zombieWorld = { ...normalizeZombieWorld(fresh.zombieWorld), unlocked: true };
+    applyZombieMonarchOrigin(fresh);
+    fresh.pendingEvent = null;
+  } else if (resetWorldTarget === 'sorcerer') {
+    fresh.sorcererWorld = normalizeSorcererWorld(fresh.sorcererWorld);
+    fresh.sorcererWorld.statPoints += 12;
+    fresh.sorcererWorld.techniqueMastery = Math.max(fresh.sorcererWorld.techniqueMastery, 18);
+    fresh.sorcererWorld.missionOffers = createSorcererMissionBoard(fresh);
+  }
   fresh.resources.health = maxLifeHealth(fresh);
   fresh.resources.energy = maxLifeEnergy(fresh);
   fresh.log = [
-    createLog(`RESET THE WORLD complete: World Reset ${worldResets}. Secret System skill awakened: ${grantedSkill ? labelFromId(grantedSkill) : 'all skills already owned'}.`, 'world'),
+    createLog(`RESET THE WORLD complete: World Reset ${worldResets}. Destination: ${labelFromId(resetWorldTarget)}. Secret System skill awakened: ${grantedSkill ? labelFromId(grantedSkill) : 'all skills already owned'}.`, 'world'),
     ...(fresh.log ?? []),
   ].slice(0, 60);
   return fresh;
@@ -6699,6 +7227,12 @@ export function redeemHunterPassword(life, password) {
     return addLog(life, 'Hunter password locked: you can only enter SOLO21 past age 18.', 'world');
   }
   const hunterWorld = normalizeHunterWorld(life.hunterWorld);
+  if (hunterWorld.systemEnding?.choice === 'curseWorld' || normalizeSorcererWorld(life.sorcererWorld).unlocked) {
+    return addLog(life, 'Hunter password locked: curses replaced portals in this world.', 'world');
+  }
+  if (worldLocked(life, 'hunter')) {
+    return addLog(life, 'Hunter password locked: this life belongs to a different world.', 'world');
+  }
   if (hunterWorld.unlocked) {
     return addLog(life, 'Hunter Gates are already unlocked.', 'world');
   }
@@ -9453,6 +9987,7 @@ function createActiveFight(life, opponentId, options = {}) {
 }
 
 export function startFight(life, opponentId) {
+  if (worldLocked(life, 'fighter')) return addLog(life, 'Normal fights belong to the Fighter world in this life.', 'fight');
   life = withNormalizedClanAwakening(life);
   const opponent = opponentId === 'rival' ? rivalAsOpponent(life) : OPPONENTS[opponentId];
   if (!opponent) return life;
@@ -10330,6 +10865,7 @@ function takeSorcererFightTurn(life, moveId = 'reinforcedStrike') {
 
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
+  if (life.activeFight.source === 'zombieEncounter') return takeZombieEncounterTurn(life, tactic);
   if (life.activeFight.source === 'hunterQuest' || life.activeFight.source === 'hunterDungeon') return takeHunterQuestTurn(life, tactic);
   if (life.activeFight.source === 'sorcererMission' || life.activeFight.source === 'curseIncident' || life.activeFight.source === 'domainClash') return takeSorcererFightTurn(life, tactic);
   life = withNormalizedClanAwakening(life);
@@ -10757,7 +11293,10 @@ function finishActiveFight(life) {
   const fight = life.activeFight;
   const systemFight = fight.source === 'hunterQuest' || fight.source === 'hunterDungeon';
   const sorcererFight = fight.source === 'sorcererMission' || fight.source === 'curseIncident' || fight.source === 'domainClash';
-  const opponent = getCombatOpponent(life, fight.opponentId);
+  const zombieFight = fight.source === 'zombieEncounter';
+  const opponent = zombieFight
+    ? { name: ZOMBIE_ENCOUNTERS[fight.opponentId]?.name ?? 'the infected', reward: 0, rep: 0, risk: ZOMBIE_ENCOUNTERS[fight.opponentId]?.risk ?? 35, tier: 'Zombie' }
+    : getCombatOpponent(life, fight.opponentId);
   const playerHealthPercent = healthPercent(fight.meters.playerHealth, fight.meters.maxPlayerHealth ?? 100);
   const opponentHealthPercent = healthPercent(fight.meters.opponentHealth, fight.meters.maxOpponentHealth ?? 100);
   const won = fight.meters.opponentHealth <= 0 || (
@@ -10779,6 +11318,8 @@ function finishActiveFight(life) {
       ? [won ? 'System monster defeated' : 'System objective failed']
       : sorcererFight
         ? [won ? 'Curse exorcised' : 'Curse report failed']
+        : zombieFight
+          ? [won ? 'Infected cleared' : 'Zombie encounter survived badly']
       : (won ? [`+$${opponent.reward}`, `+${opponent.rep} reputation`] : [`+${Math.floor(opponent.rep / 4)} reputation`, 'Painful lesson']),
     injuries: [],
   };
@@ -10811,6 +11352,13 @@ function finishActiveFight(life) {
   }
   if (fight.source === 'sorcererMission' || fight.source === 'curseIncident' || fight.source === 'domainClash') {
     applySorcererFightResult(life, fight, won);
+    life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
+    return;
+  }
+  if (zombieFight) {
+    applyZombieFightResult(life, fight, won);
+    life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
+    life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth + (life.zombieWorld?.monarchOrigin ? 4 : 0));
     life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
     return;
   }
@@ -11041,14 +11589,28 @@ export function ageUp(life) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
   next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
   next.hunterWorld.secretSkillCooldowns = { ...next.hunterWorld.secretSkillCooldowns, massCleansingUsed: false };
   next.trainingSessionsUsed = 0;
   const ageStep = advanceLifeClock(next);
   next.resources.energy = maxLifeEnergy(next);
-  next.resources.health = clampLifeResource(next, 'health', next.resources.health + (ageStep === 'month' ? 2 : 4));
+  const zombieHealing = next.activeWorld === 'zombie' && next.zombieWorld.unlocked
+    ? (ageStep === 'month' ? 1 : 2) + next.zombieWorld.stats.survivability * 2 + (next.zombieWorld.monarchOrigin ? 6 : 0)
+    : (ageStep === 'month' ? 2 : 4);
+  next.resources.health = clampLifeResource(next, 'health', next.resources.health + zombieHealing);
   next.resources.mood = clamp(next.resources.mood + (ageStep === 'month' ? 1 : 2));
   next.resources.money += next.identity.age < 18 ? 20 : ageStep === 'month' ? 60 : 120;
   const followerIncome = applyFollowerAgeUpIncome(next);
+  if (next.activeWorld === 'zombie' && next.zombieWorld.unlocked) {
+    next.zombieWorld.resources.food = clamp(next.zombieWorld.resources.food - 2, 0, 999);
+    next.zombieWorld.resources.water = clamp(next.zombieWorld.resources.water - 2, 0, 999);
+    const shortage = (next.zombieWorld.resources.food === 0 ? 8 : 0) + (next.zombieWorld.resources.water === 0 ? 10 : 0);
+    if (shortage) {
+      next.resources.health = clampLifeResource(next, 'health', next.resources.health - Math.max(0, shortage - next.zombieWorld.stats.survivability));
+      next.zombieWorld.resources.morale = clamp(next.zombieWorld.resources.morale - shortage, 0, 100);
+    }
+    grantZombieXp(next, 30 + next.zombieWorld.stats.survivability * 3);
+  }
 
   if (next.identity.age >= 18 && next.phase === 'Youth') {
     next.phase = 'Local Fighter';
@@ -11789,11 +12351,13 @@ export function fightMonarchBoss(life, bossId) {
 export function chooseSystemEnding(life, choice) {
   const next = clone(life);
   next.hunterWorld = normalizeHunterWorld(next.hunterWorld);
+  next.sorcererWorld = normalizeSorcererWorld(next.sorcererWorld);
   const war = normalizeMonarchWar(next.hunterWorld.monarchWar);
   if (!war.finalChoiceUnlocked) return addLog(next, 'The final System choice is locked until every Monarch falls.', 'world');
-  if (!['closePortals', 'defendPlanet'].includes(choice)) return addLog(next, 'That System ending choice does not exist.', 'world');
+  if (!['closePortals', 'defendPlanet', 'curseWorld'].includes(choice)) return addLog(next, 'That System ending choice does not exist.', 'world');
   next.hunterWorld.systemEnding = { choice, chosenMonth: lifeMonth(next) };
   if (choice === 'closePortals') {
+    next.activeWorld = 'fighter';
     next.hunterWorld.unlocked = false;
     next.hunterWorld.playerAwakened = false;
     next.hunterWorld.gateOffers = [];
@@ -11801,6 +12365,23 @@ export function chooseSystemEnding(life, choice) {
     next.hunterWorld.statPoints = 0;
     next.hunterWorld.shadowMonarch = { ...next.hunterWorld.shadowMonarch, powersLost: true };
     return addLog(next, 'Final choice: all portals closed. The System ends, and your Hunter powers fade.', 'world');
+  }
+  if (choice === 'curseWorld') {
+    next.activeWorld = 'sorcerer';
+    next.hunterWorld.unlocked = false;
+    next.hunterWorld.playerAwakened = false;
+    next.hunterWorld.gateOffers = [];
+    next.hunterWorld.activeDungeon = null;
+    next.hunterWorld.dailyQuest = null;
+    next.hunterWorld.statPoints = 0;
+    next.hunterWorld.shadowMonarch = { ...next.hunterWorld.shadowMonarch, powersLost: true };
+    unlockSorcererWorld(next);
+    next.sorcererWorld.statPoints += 12;
+    next.sorcererWorld.techniqueMastery = Math.max(next.sorcererWorld.techniqueMastery, 18);
+    next.sorcererWorld.missionOffers = createSorcererMissionBoard(next);
+    next.world.league = 'Curse Report Network';
+    next.resources.reputation = clamp(next.resources.reputation + 60, 0, 999);
+    return addLog(next, 'Final choice: portals collapse into curse reports. Hunter powers are sealed, and cursed energy becomes the new world system.', 'world');
   }
   next.resources.reputation = clamp(next.resources.reputation + 120, 0, 999);
   return addLog(next, 'Final choice: the System remains. You stand as the planet defender.', 'world');
@@ -11836,7 +12417,6 @@ function queueTriggeredEvents(life, trigger, context = {}) {
 function findTriggeredEvent(life, trigger, context) {
   const flags = life.eventFlags ?? {};
   const systemAwakeningFlag = `systemAwakening-${lifeMonth(life)}`;
-  const sorcererAwakeningFlag = `sorcererAwakening-${lifeMonth(life)}`;
   const events = [
     {
       id: 'debt-collector-notice',
@@ -12320,14 +12900,6 @@ function findTriggeredEvent(life, trigger, context) {
         },
       ],
     },
-    {
-      ...sorcererAwakeningEvent(life),
-      trigger: ['ageUp', 'fight'].includes(trigger) &&
-        life.identity.age >= 15 &&
-        ((life.resources?.health ?? 100) <= 45 || context?.won === false || (life.injuries?.length ?? 0) > 0) &&
-        !flags[sorcererAwakeningFlag] &&
-        deterministicRoll(life.rngSeed, life.identity.age, life.identity.month ?? 0, context?.won ?? 'none', 'sorcerer-awakening') <= sorcererAwakeningChance(life, { ...context, trigger }),
-    },
   ];
 
   return clone(events.find((event) => event.trigger) ?? null);
@@ -12396,6 +12968,11 @@ function applyEventEffects(life, effects = {}) {
     if (effects.sorcererWorld.delayMonths) {
       life.sorcererWorld.rejectedUntilMonth = lifeMonth(life) + effects.sorcererWorld.delayMonths;
     }
+  }
+  if (effects.zombieWorld) {
+    life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+    if (effects.zombieWorld.monarchOrigin) applyZombieMonarchOrigin(life);
+    if (effects.zombieWorld.morale) life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale + effects.zombieWorld.morale, 0, 100);
   }
   if (effects.injury) {
     addOrUpgradeInjury(life, withInjuryTier({ name: effects.injury, text: `${effects.injury} needs recovery before harder fights.` }, 'Mild'));

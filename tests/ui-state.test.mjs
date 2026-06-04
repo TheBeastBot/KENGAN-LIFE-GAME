@@ -121,6 +121,14 @@ test('Sorcerer UI exposes innate technique panels and technique-specific move gr
   assert.match(appSource, /sorcerer-mission-fight/);
 });
 
+test('Monarch ending UI can replace portals with curses', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /Replace With Curses/);
+  assert.match(appSource, /system-ending-curseWorld/);
+  assert.match(appSource, /Hunter powers are sealed/);
+});
+
 test('Hunter System Status overrides generic option-card desktop grid', async () => {
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 

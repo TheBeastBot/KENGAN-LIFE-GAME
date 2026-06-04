@@ -7,6 +7,7 @@ import {
   HUNTER_MOVES,
   SORCERER_INNATE_TECHNIQUES,
   SORCERER_MOVES,
+  ZOMBIE_ACTIVITIES,
   HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
@@ -62,12 +63,14 @@ import {
   getUnlockedHunterMoves,
   getUnlockedSorcererMoves,
   normalizeSorcererWorld,
+  normalizeZombieWorld,
   joinTournament,
   recover,
   redeemClanPassword,
   redeemHunterPassword,
   redeemMentorPassword,
   redeemMonarchBodyPassword,
+  redeemZombieMonarchPassword,
   redeemWorldResetPassword,
   resetWorld,
   rerollClan,
@@ -108,6 +111,10 @@ import {
   useSocialAction,
   spendHunterStatPoint,
   spendHunterStatPoints,
+  spendZombieStatPoint,
+  runZombieActivity,
+  startZombieEncounter,
+  switchZombieCombatant,
   fightMonarchBoss,
   clearGateWithAutoShadows,
   selectHunterGate,
@@ -319,6 +326,7 @@ const TEKKEN_FIGHTER_IDS = new Set([
 let state = loadGame();
 let selectedGender = 'Male';
 let selectedFirstName = '';
+let selectedWorld = 'zombie';
 let activeTab = 'life';
 let selectedFightCategory = null;
 let selectedShadowDomainId = null;
@@ -375,6 +383,14 @@ const dropdownState = createDropdownStateController({
     'sorcerer-log': false,
     'sorcerer-basic-moves': true,
     'sorcerer-special-moves': true,
+    'zombie-status': true,
+    'zombie-team': true,
+    'zombie-supplies': true,
+    'zombie-activities': true,
+    'zombie-encounters': true,
+    'zombie-injuries': true,
+    'zombie-stats': true,
+    'zombie-log': false,
     'world-rumors': true,
   },
 });
@@ -392,6 +408,7 @@ const NAV_SECTIONS = [
   ['social', 'Social'],
   ['hunter', 'Hunter'],
   ['sorcerer', 'Sorcerer'],
+  ['zombie', 'Zombie'],
   ['world', 'World'],
 ];
 
@@ -429,6 +446,15 @@ function loadGame() {
 function normalizeSave(save) {
   const migratedClan = migrateClan(save.clan);
   const identity = normalizeIdentity(save.identity, migratedClan);
+  const activeWorld = ['fighter', 'hunter', 'sorcerer', 'zombie'].includes(save.activeWorld)
+    ? save.activeWorld
+    : save.zombieWorld?.unlocked
+      ? 'zombie'
+      : save.sorcererWorld?.unlocked
+        ? 'sorcerer'
+        : save.hunterWorld?.unlocked
+          ? 'hunter'
+          : null;
   return {
     ...save,
     identity: {
@@ -437,10 +463,12 @@ function normalizeSave(save) {
       age: save.identity?.age ?? 12,
       month: save.identity?.month ?? 0,
     },
+    activeWorld,
     clan: migratedClan,
     clanAwakening: normalizeClanAwakening(save.clanAwakening, migratedClan),
     hunterWorld: normalizeHunterWorld(save.hunterWorld),
     sorcererWorld: normalizeSorcererWorld(save.sorcererWorld),
+    zombieWorld: normalizeZombieWorld(save.zombieWorld),
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
@@ -1053,16 +1081,30 @@ function renderCollapsibleSection({ id, title, subtitle = '', count = '', body =
 }
 
 function renderStart() {
+  const worlds = [
+    ['zombie', 'Zombie', 'Rooted survival, scarce supplies, teammates, guns, and permanent wounds.'],
+    ['hunter', 'Hunter', 'System gates, stat points, shadows, and Monarch world recreation.'],
+    ['sorcerer', 'Sorcerer', 'Cursed energy, missions, innate techniques, and domain pressure.'],
+    ['fighter', 'Fighter', 'Underground martial arts, tournaments, rivals, coaches, and clans.'],
+  ];
   app.innerHTML = `
     <main class="shell start-shell">
       <section class="hero-panel">
         <p class="eyebrow">Underground Life Sim</p>
-        <h1>Born normal. Built into a legend.</h1>
-        <p class="subcopy">Choose gender, roll your life, chase a stronger clan, and survive the fight world behind ordinary society.</p>
+        <h1>Choose the world that breaks you first.</h1>
+        <p class="subcopy">Each life now commits to one progression path. Hunter Monarchs can later recreate reality into another world with bonuses.</p>
         <label class="name-field" for="first-name-input">
           <span>First Name</span>
           <input id="first-name-input" type="text" autocomplete="given-name" maxlength="24" placeholder="Enter first name" value="${escapeHtml(selectedFirstName)}" />
         </label>
+        <div class="world-choice-grid">
+          ${worlds.map(([id, label, text]) => `
+            <button class="world-choice ${selectedWorld === id ? 'selected' : ''}" data-world="${id}">
+              <strong>${label}</strong>
+              <span>${text}</span>
+            </button>
+          `).join('')}
+        </div>
         <div class="gender-grid">
           ${['Male', 'Female', 'Nonbinary'].map((gender) => `
             <button class="gender-btn ${selectedGender === gender ? 'selected' : ''}" data-gender="${gender}">${gender}</button>
@@ -1261,6 +1303,7 @@ function availableNavSections() {
   return NAV_SECTIONS.filter(([id]) => {
     if (id === 'hunter') return state.hunterWorld?.unlocked;
     if (id === 'sorcerer') return state.sorcererWorld?.unlocked;
+    if (id === 'zombie') return state.zombieWorld?.unlocked;
     return true;
   });
 }
@@ -1339,6 +1382,7 @@ function renderActiveTab() {
   if (activeTab === 'social') return renderSocial();
   if (activeTab === 'hunter') return renderHunter();
   if (activeTab === 'sorcerer') return renderSorcerer();
+  if (activeTab === 'zombie') return renderZombie();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -1437,7 +1481,22 @@ function renderLife() {
       })}
       <button class="danger" data-action="end-life">End Life</button>
       <button class="danger" data-action="reset">Reset Life</button>
-      ${canResetWorld ? '<button class="danger" data-action="world-reset">RESET THE WORLD</button>' : ''}
+      ${canResetWorld ? `
+        <article class="option-card system-window world-reset-card">
+          <div>
+            <p class="eyebrow">RESET THE WORLD</p>
+            <h3>Choose the recreated world</h3>
+            <p>Hunter Monarch authority can restart reality as Hunter, Zombie, Sorcerer, or Fighter.</p>
+          </div>
+          <div class="action-grid">
+            <button class="primary" data-action="world-reset">Default Hunter Reset</button>
+            ${button('Hunter', 'world-reset-hunter', 'primary')}
+            ${button('Zombie', 'world-reset-zombie', 'danger')}
+            ${button('Sorcerer', 'world-reset-sorcerer')}
+            ${button('Fighter', 'world-reset-fighter')}
+          </div>
+        </article>
+      ` : ''}
     </section>
   `;
 }
@@ -3285,6 +3344,11 @@ function renderMonarchWarPanel() {
     { id: 'monarch-destruction', name: 'Monarch of Destruction', power: 1220 },
   ];
   const defeated = new Set(hunter.monarchWar?.defeated ?? []);
+  const endingText = {
+    closePortals: 'The System ended and your Hunter powers faded.',
+    defendPlanet: 'The System remains while you defend the planet.',
+    curseWorld: 'Portals were remade into curse reports. Hunter powers are sealed, and cursed energy rules the hidden world.',
+  }[hunter.systemEnding?.choice] ?? 'The final choice has been recorded.';
   return `
     <div class="activity-list monarch-war-grid">
       ${bosses.map((boss) => `
@@ -3302,9 +3366,9 @@ function renderMonarchWarPanel() {
           <div>
             <p class="eyebrow">Final System Choice</p>
             <h3>${hunter.systemEnding ? 'Choice Recorded' : 'Portals Await Judgment'}</h3>
-            <p>${hunter.systemEnding ? escapeHtml(hunter.systemEnding.choice === 'closePortals' ? 'The System ended and your Hunter powers faded.' : 'The System remains while you defend the planet.') : 'All Monarchs are defeated. Decide what happens to the System.'}</p>
+            <p>${hunter.systemEnding ? escapeHtml(endingText) : 'All Monarchs are defeated. Decide what happens to the System.'}</p>
           </div>
-          ${hunter.systemEnding ? '<span class="lock-pill">Complete</span>' : `${button('Close Portals', 'system-ending-closePortals', 'danger')}${button('Defend Planet', 'system-ending-defendPlanet', 'primary')}`}
+          ${hunter.systemEnding ? '<span class="lock-pill">Complete</span>' : `${button('Replace With Curses', 'system-ending-curseWorld', 'danger')}${button('Close Portals', 'system-ending-closePortals')}${button('Defend Planet', 'system-ending-defendPlanet', 'primary')}`}
         </article>
       ` : ''}
     </div>
@@ -4406,6 +4470,199 @@ function renderSorcerer() {
   `;
 }
 
+function renderZombieStatus(zombie) {
+  const supplies = zombie.resources;
+  return `
+    <article class="option-card zombie-window zombie-status-panel">
+      <div>
+        <p class="eyebrow">Zombie Survival File</p>
+        <h2>${escapeHtml(state.identity.name)}</h2>
+        <p>${escapeHtml(zombie.location)} / ${zombie.monarchOrigin ? 'Monarch-created world' : 'Rooted survivor'} / ${zombie.team.length} teammate${zombie.team.length === 1 ? '' : 's'}</p>
+      </div>
+      <div class="system-chip-row">
+        ${systemChip('Level', zombie.level)}
+        ${systemChip('XP', zombie.xp)}
+        ${systemChip('Stat Pts', zombie.statPoints, zombie.statPoints ? 'ready' : '')}
+        ${systemChip('Health', `${state.resources.health}/${maxLifeHealth(state)}`, state.resources.health < maxLifeHealth(state) * 0.35 ? 'danger' : '')}
+        ${systemChip('Stamina', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
+        ${systemChip('Food', supplies.food, supplies.food <= 1 ? 'danger' : '')}
+        ${systemChip('Water', supplies.water, supplies.water <= 1 ? 'danger' : '')}
+        ${systemChip('Ammo', supplies.ammo, supplies.ammo <= 1 ? 'danger' : '')}
+      </div>
+    </article>
+  `;
+}
+
+function renderZombieSupplies(zombie) {
+  const supplies = zombie.resources;
+  return `
+    <div class="world-grid zombie-supply-grid">
+      ${metric('Food', supplies.food)}
+      ${metric('Water', supplies.water)}
+      ${metric('Medicine', supplies.medicine)}
+      ${metric('Ammo', supplies.ammo)}
+      ${metric('Materials', supplies.materials)}
+      ${metric('Shelter', `${supplies.shelter}%`)}
+      ${metric('Morale', `${supplies.morale}%`)}
+      ${metric('Reputation', zombie.survivorReputation)}
+    </div>
+  `;
+}
+
+function renderZombieTeam(zombie) {
+  const members = zombie.team.filter((member) => member.present !== false);
+  return members.length
+    ? `<div class="activity-list">${members.map((member) => `
+      <article class="option-card zombie-window hunter-activity">
+        <div class="activity-icon">TM</div>
+        <div>
+          <p class="eyebrow">${escapeHtml(member.role)} / Trust ${member.trust}</p>
+          <h3>${escapeHtml(member.name)}</h3>
+          <p>Health ${member.health} / Stamina ${member.stamina} / Weapon ${escapeHtml(labelize(member.weapon))}</p>
+        </div>
+        <span class="lock-pill">${escapeHtml(member.relationship)}</span>
+      </article>
+    `).join('')}</div>`
+    : '<article class="option-card zombie-window"><h3>No team yet</h3><p>Recruit survivors to build a party that can fight beside you.</p></article>';
+}
+
+function renderZombieActivities(zombie) {
+  return `
+    <div class="activity-list">
+      ${Object.entries(ZOMBIE_ACTIVITIES).map(([id, activity]) => `
+        <article class="option-card zombie-window hunter-activity">
+          <div class="activity-icon">${escapeHtml(id.slice(0, 2).toUpperCase())}</div>
+          <div>
+            <p class="eyebrow">Risk ${activity.risk}% / +${activity.xp} XP</p>
+            <h3>${escapeHtml(activity.label)}</h3>
+            <p>Costs: ${Object.entries(activity.costs ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'None'} / Gains: ${Object.entries(activity.gains ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'XP only'}</p>
+          </div>
+          <div class="activity-actions">${button('Do', `zombie-activity-${id}`, 'primary')}</div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderZombieEncounters() {
+  const encounters = [
+    ['streetHorde', 'Street Horde', '4 infected / low supplies, high wound risk'],
+    ['pharmacyRush', 'Pharmacy Rush', '3 faster infected / better medicine payout'],
+    ['barricadeRaid', 'Barricade Raid', '5 infected / brutal shelter pressure'],
+  ];
+  return `
+    <div class="activity-list">
+      ${encounters.map(([id, title, text]) => `
+        <article class="option-card zombie-window hunter-activity">
+          <div class="activity-icon">ZE</div>
+          <div>
+            <p class="eyebrow">Zombie Encounter</p>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(text)}. Guns consume ammo and must hit.</p>
+          </div>
+          <div class="activity-actions">${button('Engage', `zombie-encounter-${id}`, 'danger')}</div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderZombieInjuries(zombie) {
+  return zombie.bodyInjuries.length
+    ? `<div class="activity-list">${zombie.bodyInjuries.map((injury) => `
+      <article class="option-card zombie-window injury-card">
+        <div>
+          <p class="eyebrow">${escapeHtml(injury.part)} / ${escapeHtml(injury.severity)}</p>
+          <h3>${escapeHtml(injury.label)}</h3>
+          <p>${injury.permanent ? 'Permanent debuff. It can be managed, not erased.' : 'Treat wounds can reduce recent non-permanent injuries.'}</p>
+        </div>
+      </article>
+    `).join('')}</div>`
+    : '<article class="option-card zombie-window"><h3>No body injuries recorded</h3><p>That is rare. Keep it that way.</p></article>';
+}
+
+function renderZombieStats(zombie) {
+  return `
+    <div class="hunter-stat-sheet zombie-stat-sheet">
+      ${Object.entries(zombie.stats).map(([stat, value]) => `
+        <article class="stat-row">
+          <span>${labelize(stat)}</span>
+          <strong>${value}</strong>
+          <button class="small-btn" data-action="zombie-stat-${stat}" ${zombie.statPoints <= 0 ? 'disabled' : ''}>+1</button>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderZombieCombat() {
+  const fight = state.activeFight;
+  const zombie = normalizeZombieWorld(state.zombieWorld);
+  const party = fight.party?.members ?? [];
+  const liveZombies = (fight.zombies ?? []).filter((item) => item.alive && item.health > 0);
+  const moves = [
+    ['meleeSwing', 'Melee Swing', 'Physical + Fighting'],
+    ['unarmedStrike', 'Unarmed Strike', 'Close risk'],
+    ['shove', 'Shove', 'Space and damage reduction'],
+    ['grappleEscape', 'Grapple Escape', 'Safer under pressure'],
+    ['gunFire', 'Gun Fire', 'Uses 1 ammo and must hit'],
+    ['suppress', 'Suppress', 'Uses 2 ammo, lowers incoming'],
+    ['guard', 'Guard', 'Brace the swarm'],
+    ['retreat', 'Retreat', 'Costs supplies and morale'],
+  ];
+  return `
+    <section class="combat stack zombie-combat-shell system-combat">
+      <article class="fight-title system-fight-title active">
+        <div>
+          <p class="eyebrow">${fight.finished ? 'Encounter Report' : `Zombie Encounter · Exchange ${fight.round}`}</p>
+          <h2>${escapeHtml(fight.opponentId ? labelize(fight.opponentId) : 'Zombie Encounter')}</h2>
+          <p class="muted">${liveZombies.length} infected still moving / Ammo ${zombie.resources.ammo}</p>
+        </div>
+        <span class="badge red">${fight.finished ? (fight.result?.won ? 'Cleared' : 'Failed') : 'Live'}</span>
+      </article>
+      <div class="combat-meters">
+        ${combatMeter('Active Survivor', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
+        ${combatMeter('Horde', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
+        ${combatMeter('Stamina', fight.meters.playerStamina, `${fight.meters.playerStamina}/${fight.meters.maxPlayerStamina ?? 100}`, fight.meters.maxPlayerStamina ?? 100)}
+        ${combatMeter('Guard', fight.meters.guard, 'Brace')}
+        ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
+        ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
+      </div>
+      <div class="zombie-party-row">
+        ${party.map((member) => `<button class="small-btn ${fight.party?.activeId === member.id ? 'selected' : ''}" data-action="zombie-switch-${member.id}" ${fight.finished ? 'disabled' : ''}>${escapeHtml(member.name)}</button>`).join('')}
+      </div>
+      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid">${moves.map(([id, label, hint]) => `
+        <button class="move-card system-move-card zombie-move-card" data-action="fight-turn-${id}">
+          <em>Zombie Move</em>
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(hint)}</span>
+        </button>
+      `).join('')}</div>`}
+      ${renderExchanges(fight)}
+    </section>
+  `;
+}
+
+function renderZombie() {
+  const zombie = normalizeZombieWorld(state.zombieWorld);
+  if (!zombie.unlocked) {
+    return '<section class="stack"><article class="option-card"><h2>Zombie World Locked</h2><p>This life did not begin in the outbreak.</p></article></section>';
+  }
+  if (state.activeFight?.source === 'zombieEncounter') return renderZombieCombat();
+  return `
+    <section class="stack zombie-panel">
+      ${renderZombieStatus(zombie)}
+      ${renderCollapsibleSection({ id: 'zombie-supplies', title: 'Supplies', subtitle: 'Food, water, medicine, ammo, materials, shelter, and morale.', body: renderZombieSupplies(zombie) })}
+      ${renderCollapsibleSection({ id: 'zombie-activities', title: 'Activities', subtitle: 'Hard survival actions that pay XP and risk wounds.', body: renderZombieActivities(zombie) })}
+      ${renderCollapsibleSection({ id: 'zombie-encounters', title: 'Encounters', subtitle: 'Multi-zombie fights with guns, ammo, teammates, and body injuries.', body: renderZombieEncounters() })}
+      ${renderCollapsibleSection({ id: 'zombie-team', title: 'Team', subtitle: `${zombie.team.length} survivor${zombie.team.length === 1 ? '' : 's'} in your group`, body: renderZombieTeam(zombie) })}
+      ${renderCollapsibleSection({ id: 'zombie-injuries', title: 'Body Injuries', subtitle: `${zombie.bodyInjuries.length} wound${zombie.bodyInjuries.length === 1 ? '' : 's'} recorded`, body: renderZombieInjuries(zombie) })}
+      ${renderCollapsibleSection({ id: 'zombie-stats', title: 'Zombie Stat Points', subtitle: `${zombie.statPoints} points available`, body: `<article class="option-card zombie-window"><div>${renderZombieStats(zombie)}</div></article>` })}
+      ${renderCollapsibleSection({ id: 'zombie-log', title: 'Zombie Log', subtitle: 'World feed entries for survival activity.', body: renderLog('world') })}
+    </section>
+  `;
+}
+
 function renderWorld() {
   return `
     <section class="stack">
@@ -4460,6 +4717,12 @@ function renderPendingEvent() {
         <p class="eyebrow">Triggered Event</p>
         <h2>${event.title}</h2>
         <p>${event.body}</p>
+        ${event.password ? `
+          <div class="password-row">
+            <input id="zombie-monarch-password-input" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Answer the broadcast" />
+            <button class="primary" data-action="redeem-zombie-monarch-password">Answer</button>
+          </div>
+        ` : ''}
         <div class="event-choice-grid">
           ${event.choices.map((choice) => `
             <button data-action="event-${choice.id}">
@@ -4517,6 +4780,8 @@ function previewEffects(effects = {}) {
   if (effects.world?.league) parts.push(effects.world.league);
   if (effects.hunterWorld?.unlock) parts.push('Unlock Hunter Gates');
   if (effects.hunterWorld?.delayMonths) parts.push(`Delay ${effects.hunterWorld.delayMonths} months`);
+  if (effects.zombieWorld?.monarchOrigin) parts.push('Monarch origin');
+  if (effects.zombieWorld?.morale) parts.push(`${effects.zombieWorld.morale > 0 ? '+' : ''}${effects.zombieWorld.morale} morale`);
   return parts.slice(0, 4).join(' / ') || 'Story choice';
 }
 
@@ -4601,7 +4866,7 @@ function handleAction(action, source = null) {
   if (action === 'new-life') {
     const firstNameInput = document.querySelector('#first-name-input');
     selectedFirstName = firstNameInput?.value ?? '';
-    setState(createNewLife({ gender: selectedGender, firstName: selectedFirstName }));
+    setState(createNewLife({ gender: selectedGender, firstName: selectedFirstName, world: selectedWorld }));
     activeTab = 'life';
     selectedFightCategory = null;
     hunterQuestPopupOpen = false;
@@ -4656,6 +4921,12 @@ function handleAction(action, source = null) {
     setState(redeemMonarchBodyPassword(state, input?.value ?? ''));
     return;
   }
+  if (action === 'redeem-zombie-monarch-password') {
+    const input = document.querySelector('#zombie-monarch-password-input');
+    setState(redeemZombieMonarchPassword(state, input?.value ?? ''));
+    activeTab = 'zombie';
+    return;
+  }
   if (action === 'redeem-world-reset-password') {
     const input = document.querySelector('#world-reset-password-input');
     setState(redeemWorldResetPassword(state, input?.value ?? ''));
@@ -4680,6 +4951,12 @@ function handleAction(action, source = null) {
   if (action === 'world-reset') {
     setState(resetWorld(state));
     activeTab = 'life';
+    return;
+  }
+  if (action.startsWith('world-reset-')) {
+    const destination = action.replace('world-reset-', '');
+    setState(resetWorld(state, { destination }));
+    activeTab = destination === 'zombie' ? 'zombie' : destination === 'sorcerer' ? 'sorcerer' : destination === 'hunter' ? 'hunter' : 'life';
     return;
   }
   if (action === 'end-life') setState(endLife(state));
@@ -4973,6 +5250,25 @@ function handleAction(action, source = null) {
     setState(spendSorcererStatPoint(state, action.replace('sorcerer-stat-', '')));
     return;
   }
+  if (action.startsWith('zombie-activity-')) {
+    activeTab = 'zombie';
+    setState(runZombieActivity(state, action.replace('zombie-activity-', '')));
+    return;
+  }
+  if (action.startsWith('zombie-encounter-')) {
+    activeTab = 'zombie';
+    fightInfoOpen = false;
+    setState(startZombieEncounter(state, action.replace('zombie-encounter-', '')));
+    return;
+  }
+  if (action.startsWith('zombie-stat-')) {
+    setState(spendZombieStatPoint(state, action.replace('zombie-stat-', '')));
+    return;
+  }
+  if (action.startsWith('zombie-switch-')) {
+    setState(switchZombieCombatant(state, action.replace('zombie-switch-', '')));
+    return;
+  }
   if (action.startsWith('trash-')) {
     const [, opponentId, styleId] = action.match(/^trash-(.+)-([^-]+)$/) ?? [];
     if (opponentId && styleId) setState(trashTalkOpponent(state, opponentId, styleId));
@@ -5110,6 +5406,13 @@ function updateCoachBookingPreview(select) {
 }
 
 document.addEventListener('click', (event) => {
+  const world = event.target.closest('[data-world]');
+  if (world) {
+    selectedWorld = world.dataset.world;
+    render();
+    return;
+  }
+
   const gender = event.target.closest('[data-gender]');
   if (gender) {
     selectedGender = gender.dataset.gender;
