@@ -4463,6 +4463,56 @@ select:focus {
   background: rgba(17, 20, 18, 0.82);
 }
 
+.zombie-activity-card.option-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) minmax(96px, auto);
+  grid-template-areas: "icon body action";
+  align-items: center;
+  gap: 12px;
+}
+
+.zombie-activity-icon {
+  grid-area: icon;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(123, 166, 106, 0.45);
+  background: rgba(13, 18, 15, 0.9);
+  color: #dbe8d4;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.zombie-card-main {
+  grid-area: body;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.zombie-card-main h3,
+.zombie-card-main p {
+  overflow-wrap: anywhere;
+}
+
+.zombie-card-action {
+  grid-area: action;
+  justify-self: end;
+  align-self: center;
+}
+
+.zombie-card-action.activity-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.zombie-card-action button {
+  min-width: 88px;
+}
+
 .zombie-combat-shell .fight-title {
   border-color: rgba(200, 74, 61, 0.42);
   background: linear-gradient(135deg, rgba(39, 22, 22, 0.96), rgba(21, 27, 22, 0.96));
@@ -4481,6 +4531,38 @@ select:focus {
 
 .zombie-move-card {
   border-color: rgba(123, 166, 106, 0.3);
+}
+
+@media (max-width: 560px) {
+  .zombie-activity-card.option-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "icon body"
+      "action action";
+    align-items: start;
+    gap: 10px 12px;
+    padding: 14px;
+  }
+
+  .zombie-activity-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .zombie-card-action {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .zombie-card-action.activity-actions {
+    justify-content: stretch;
+  }
+
+  .zombie-card-action button {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .zombie-stat-sheet .stat-row strong {

@@ -4513,14 +4513,14 @@ function renderZombieTeam(zombie) {
   const members = zombie.team.filter((member) => member.present !== false);
   return members.length
     ? `<div class="activity-list">${members.map((member) => `
-      <article class="option-card zombie-window hunter-activity">
-        <div class="activity-icon">TM</div>
-        <div>
+      <article class="option-card zombie-window zombie-activity-card">
+        <div class="activity-icon zombie-activity-icon">TM</div>
+        <div class="zombie-card-main">
           <p class="eyebrow">${escapeHtml(member.role)} / Trust ${member.trust}</p>
           <h3>${escapeHtml(member.name)}</h3>
           <p>Health ${member.health} / Stamina ${member.stamina} / Weapon ${escapeHtml(labelize(member.weapon))}</p>
         </div>
-        <span class="lock-pill">${escapeHtml(member.relationship)}</span>
+        <span class="lock-pill zombie-card-action">${escapeHtml(member.relationship)}</span>
       </article>
     `).join('')}</div>`
     : '<article class="option-card zombie-window"><h3>No team yet</h3><p>Recruit survivors to build a party that can fight beside you.</p></article>';
@@ -4530,14 +4530,14 @@ function renderZombieActivities(zombie) {
   return `
     <div class="activity-list">
       ${Object.entries(ZOMBIE_ACTIVITIES).map(([id, activity]) => `
-        <article class="option-card zombie-window hunter-activity">
-          <div class="activity-icon">${escapeHtml(id.slice(0, 2).toUpperCase())}</div>
-          <div>
+        <article class="option-card zombie-window zombie-activity-card">
+          <div class="activity-icon zombie-activity-icon">${escapeHtml(id.slice(0, 2).toUpperCase())}</div>
+          <div class="zombie-card-main">
             <p class="eyebrow">Risk ${activity.risk}% / +${activity.xp} XP</p>
             <h3>${escapeHtml(activity.label)}</h3>
             <p>Costs: ${Object.entries(activity.costs ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'None'} / Gains: ${Object.entries(activity.gains ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'XP only'}</p>
           </div>
-          <div class="activity-actions">${button('Do', `zombie-activity-${id}`, 'primary')}</div>
+          <div class="activity-actions zombie-card-action">${button('Do', `zombie-activity-${id}`, 'primary')}</div>
         </article>
       `).join('')}
     </div>
@@ -4553,14 +4553,14 @@ function renderZombieEncounters() {
   return `
     <div class="activity-list">
       ${encounters.map(([id, title, text]) => `
-        <article class="option-card zombie-window hunter-activity">
-          <div class="activity-icon">ZE</div>
-          <div>
+        <article class="option-card zombie-window zombie-activity-card">
+          <div class="activity-icon zombie-activity-icon">ZE</div>
+          <div class="zombie-card-main">
             <p class="eyebrow">Zombie Encounter</p>
             <h3>${escapeHtml(title)}</h3>
             <p>${escapeHtml(text)}. Guns consume ammo and must hit.</p>
           </div>
-          <div class="activity-actions">${button('Engage', `zombie-encounter-${id}`, 'danger')}</div>
+          <div class="activity-actions zombie-card-action">${button('Engage', `zombie-encounter-${id}`, 'danger')}</div>
         </article>
       `).join('')}
     </div>

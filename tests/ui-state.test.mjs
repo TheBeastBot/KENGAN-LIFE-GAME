@@ -144,6 +144,18 @@ test('Hunter activity and quest cards override generic option-card grids', async
   assert.match(cssSource, /\.quest-choice-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(160px,\s*1fr\)\);/);
 });
 
+test('Zombie activity cards use their own responsive action layout', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /option-card zombie-window zombie-activity-card/);
+  assert.match(appSource, /activity-actions zombie-card-action/);
+  assert.doesNotMatch(appSource, /option-card zombie-window hunter-activity/);
+  assert.match(cssSource, /\.zombie-activity-card\.option-card\s*{[\s\S]*grid-template-areas:\s*"icon body action";/);
+  assert.match(cssSource, /@media \(max-width:\s*560px\)\s*{[\s\S]*\.zombie-activity-card\.option-card\s*{[\s\S]*"action action";/);
+  assert.match(cssSource, /\.zombie-card-action button\s*{[\s\S]*min-width:\s*88px;/);
+});
+
 test('Hunter System guidance exposes next actions and pending badges', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
