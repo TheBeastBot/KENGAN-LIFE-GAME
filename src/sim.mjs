@@ -6821,6 +6821,20 @@ function liveZombies(fight) {
   return (fight.zombies ?? []).filter((zombie) => zombie.alive && zombie.health > 0);
 }
 
+function applyZombieLineDamage(fight, damage = 0) {
+  let remaining = Math.max(0, Math.round(damage));
+  const hitNames = [];
+  for (const zombie of liveZombies(fight)) {
+    if (remaining <= 0) break;
+    const dealt = Math.min(zombie.health, remaining);
+    zombie.health = Math.max(0, zombie.health - dealt);
+    remaining -= dealt;
+    if (dealt > 0) hitNames.push(zombie.name);
+    if (zombie.health <= 0) zombie.alive = false;
+  }
+  return hitNames;
+}
+
 function applyZombieFightResult(life, fight, won) {
   life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
   const template = ZOMBIE_ENCOUNTERS[fight.opponentId] ?? ZOMBIE_ENCOUNTERS.streetHorde;
@@ -6845,6 +6859,7 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   const activeId = fight.party?.activeId ?? 'player';
   const activeMember = fight.party?.members?.find((member) => member.id === activeId) ?? fight.party?.members?.[0];
   const leadershipBoost = activeId === 'player' ? 0 : stats.leadership * 2;
+  const assistingMembers = (fight.party?.members ?? []).filter((member) => member.present !== false && member.id !== activeId);
   const target = liveZombies(fight)[0];
   if (!target) {
     finishActiveFight(next);
@@ -6894,8 +6909,15 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     staminaCost = 11;
   }
 
-  target.health = Math.max(0, target.health - playerDamage);
-  if (target.health <= 0) target.alive = false;
+  const assistDamage = moveId === 'retreat'
+    ? 0
+    : assistingMembers.reduce((sum, member) => {
+      const memberHealth = Number.isFinite(member.health) ? member.health : 0;
+      if (memberHealth <= 0) return sum;
+      return sum + Math.max(1, Math.round(3 + stats.leadership * 1.6 + stats.fighting * 0.6));
+    }, 0);
+  const totalDamage = playerDamage + assistDamage;
+  const damagedZombies = applyZombieLineDamage(fight, totalDamage);
   fight.meters.opponentHealth = liveZombies(fight).reduce((sum, zombie) => sum + zombie.health, 0);
   const swarm = liveZombies(fight).length;
   const baseIncoming = Math.max(0, swarm * 8 + (ZOMBIE_ENCOUNTERS[fight.opponentId]?.damage ?? 12) - incomingReduction);
@@ -6917,11 +6939,13 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     tacticLabel: labelFromId(moveId),
     opponentTactic: 'swarm',
     opponentTacticLabel: 'Swarm',
-    text: `Exchange ${fight.round} - ${labelFromId(moveId)}: ${activeMember?.name ?? 'You'} ${hit ? `dealt ${playerDamage}` : 'missed under pressure'} while ${swarm} infected pressed in for ${enemyDamage} damage.${spentAmmo ? ` Ammo spent: ${spentAmmo}.` : ''}`,
-    playerDamage,
+    text: `Exchange ${fight.round} - ${labelFromId(moveId)}: ${activeMember?.name ?? 'You'} ${hit ? `dealt ${playerDamage}` : 'missed under pressure'}${assistDamage ? ` and the team added ${assistDamage}` : ''} against ${damagedZombies.length ? damagedZombies.join(', ') : 'the horde'} while ${swarm} infected pressed in for ${enemyDamage} damage.${spentAmmo ? ` Ammo spent: ${spentAmmo}.` : ''}`,
+    playerDamage: totalDamage,
     enemyDamage,
     hit,
     spentAmmo,
+    assistDamage,
+    damagedZombies,
     zombieCount: swarm,
   });
   const finished = fight.meters.playerHealth <= 0 || liveZombies(fight).length === 0 || fight.round >= fight.maxRounds;

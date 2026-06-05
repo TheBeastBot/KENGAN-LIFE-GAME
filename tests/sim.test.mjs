@@ -285,7 +285,10 @@ test('zombie encounters support multiple zombies guns ammo body injuries and tea
   assert.equal(started.activeFight.zombies.length > 1, true);
   assert.equal(shot.zombieWorld.resources.ammo, 1);
   assert.equal(shot.activeFight.exchanges[0].hit, false);
+  assert.equal(shot.activeFight.exchanges[0].assistDamage > 0, true);
+  assert.equal(shot.activeFight.exchanges[0].damagedZombies.length > 0, true);
   assert.equal(switched.activeFight.party.activeId, 'maya');
+  assert.equal(bitten.activeFight.exchanges[0].assistDamage > 0, true);
   assert.ok(bitten.zombieWorld.bodyInjuries.some((injury) => ['arm', 'hand', 'torso', 'leg', 'eye', 'head'].includes(injury.part)));
 });
 

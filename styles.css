@@ -4518,15 +4518,72 @@ select:focus {
   background: linear-gradient(135deg, rgba(39, 22, 22, 0.96), rgba(21, 27, 22, 0.96));
 }
 
+.zombie-combat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.zombie-roster-panel.option-card {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
 .zombie-party-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.zombie-party-row .selected {
+.zombie-combatant-card,
+.zombie-enemy-card {
+  min-height: 74px;
+  border-radius: 8px;
+  border: 1px solid rgba(123, 166, 106, 0.28);
+  background: rgba(13, 18, 15, 0.82);
+  color: var(--text);
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  padding: 10px;
+  text-align: left;
+}
+
+.zombie-combatant-card strong,
+.zombie-enemy-card strong {
+  font-size: 0.9rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.zombie-combatant-card span,
+.zombie-combatant-card em,
+.zombie-enemy-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.zombie-combatant-card.selected {
   border-color: #7ba66a;
   background: rgba(123, 166, 106, 0.2);
+}
+
+.zombie-horde-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.zombie-enemy-card.alive {
+  border-color: rgba(200, 74, 61, 0.5);
+}
+
+.zombie-enemy-card.down {
+  opacity: 0.48;
+  text-decoration: line-through;
 }
 
 .zombie-move-card {
@@ -4534,6 +4591,15 @@ select:focus {
 }
 
 @media (max-width: 560px) {
+  .zombie-combat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zombie-party-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .zombie-activity-card.option-card {
     grid-template-columns: 44px minmax(0, 1fr);
     grid-template-areas:

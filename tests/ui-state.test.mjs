@@ -169,6 +169,19 @@ test('Zombie mode navigation hides fighter-life tabs and exposes dedicated activ
   assert.doesNotMatch(zombieRenderer, /id: 'zombie-activities'/);
 });
 
+test('Zombie combat UI exposes party and infected rosters', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /function renderZombieCombat\(\)/);
+  assert.match(appSource, /Survivor Party/);
+  assert.match(appSource, /Infected Line/);
+  assert.match(appSource, /class="zombie-combatant-card/);
+  assert.match(appSource, /class="zombie-enemy-card/);
+  assert.match(cssSource, /\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(cssSource, /@media \(max-width:\s*560px\)\s*{[\s\S]*\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+});
+
 test('Hunter System guidance exposes next actions and pending badges', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');

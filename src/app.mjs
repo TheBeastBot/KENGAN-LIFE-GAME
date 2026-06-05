@@ -4620,6 +4620,8 @@ function renderZombieCombat() {
   const fight = state.activeFight;
   const zombie = normalizeZombieWorld(state.zombieWorld);
   const party = fight.party?.members ?? [];
+  const activeMember = party.find((member) => member.id === fight.party?.activeId) ?? party[0];
+  const allZombies = fight.zombies ?? [];
   const liveZombies = (fight.zombies ?? []).filter((item) => item.alive && item.health > 0);
   const moves = [
     ['meleeSwing', 'Melee Swing', 'Physical + Fighting'],
@@ -4637,7 +4639,7 @@ function renderZombieCombat() {
         <div>
           <p class="eyebrow">${fight.finished ? 'Encounter Report' : `Zombie Encounter · Exchange ${fight.round}`}</p>
           <h2>${escapeHtml(fight.opponentId ? labelize(fight.opponentId) : 'Zombie Encounter')}</h2>
-          <p class="muted">${liveZombies.length} infected still moving / Ammo ${zombie.resources.ammo}</p>
+          <p class="muted">${party.length} survivor${party.length === 1 ? '' : 's'} present / ${liveZombies.length}/${allZombies.length} infected still moving / Ammo ${zombie.resources.ammo}</p>
         </div>
         <span class="badge red">${fight.finished ? (fight.result?.won ? 'Cleared' : 'Failed') : 'Live'}</span>
       </article>
@@ -4649,8 +4651,36 @@ function renderZombieCombat() {
         ${combatMeter('Momentum', fight.meters.momentum + 50, fight.meters.momentum)}
         ${combatMeter('Injury Risk', fight.meters.injuryRisk, 'Danger')}
       </div>
-      <div class="zombie-party-row">
-        ${party.map((member) => `<button class="small-btn ${fight.party?.activeId === member.id ? 'selected' : ''}" data-action="zombie-switch-${member.id}" ${fight.finished ? 'disabled' : ''}>${escapeHtml(member.name)}</button>`).join('')}
+      <div class="zombie-combat-grid">
+        <article class="option-card zombie-window zombie-roster-panel">
+          <div>
+            <p class="eyebrow">Survivor Party</p>
+            <h3>${escapeHtml(activeMember?.name ?? 'Survivor')} on point</h3>
+          </div>
+          <div class="zombie-party-row">
+            ${party.map((member) => `
+              <button class="zombie-combatant-card ${fight.party?.activeId === member.id ? 'selected' : ''}" data-action="zombie-switch-${member.id}" ${fight.finished ? 'disabled' : ''}>
+                <strong>${escapeHtml(member.name)}</strong>
+                <span>${escapeHtml(member.role ?? 'Survivor')}</span>
+                <em>HP ${member.health ?? '?'} / STA ${member.stamina ?? '?'}</em>
+              </button>
+            `).join('')}
+          </div>
+        </article>
+        <article class="option-card zombie-window zombie-roster-panel">
+          <div>
+            <p class="eyebrow">Infected Line</p>
+            <h3>${liveZombies.length} active target${liveZombies.length === 1 ? '' : 's'}</h3>
+          </div>
+          <div class="zombie-horde-row">
+            ${allZombies.map((enemy) => `
+              <div class="zombie-enemy-card ${enemy.alive && enemy.health > 0 ? 'alive' : 'down'}">
+                <strong>${escapeHtml(enemy.name)}</strong>
+                <span>${enemy.alive && enemy.health > 0 ? `${enemy.health}/${enemy.maxHealth}` : 'Down'}</span>
+              </div>
+            `).join('')}
+          </div>
+        </article>
       </div>
       ${fight.finished ? renderFightReport(fight) : `<div class="move-grid">${moves.map(([id, label, hint]) => `
         <button class="move-card system-move-card zombie-move-card" data-action="fight-turn-${id}">
