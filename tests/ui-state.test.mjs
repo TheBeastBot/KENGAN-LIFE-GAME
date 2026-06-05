@@ -156,6 +156,19 @@ test('Zombie activity cards use their own responsive action layout', async () =>
   assert.match(cssSource, /\.zombie-card-action button\s*{[\s\S]*min-width:\s*88px;/);
 });
 
+test('Zombie mode navigation hides fighter-life tabs and exposes dedicated activities', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const zombieRenderer = appSource.match(/function renderZombie\(\) \{([\s\S]*?)\nfunction renderZombieActivitiesTab\(\)/)?.[1] ?? '';
+
+  assert.match(appSource, /\['zombie-activities', 'Zombie Activities'\]/);
+  assert.match(appSource, /const ZOMBIE_NAV_SECTION_IDS = new Set\(\['life', 'zombie', 'zombie-activities'\]\);/);
+  assert.match(appSource, /state\.activeWorld === 'zombie'[\s\S]*ZOMBIE_NAV_SECTION_IDS\.has\(id\)/);
+  assert.match(appSource, /if \(!available\.has\(activeTab\)\) activeTab = 'life';/);
+  assert.match(appSource, /activeTab === 'zombie-activities'[\s\S]*renderZombieActivitiesTab\(\)/);
+  assert.match(appSource, /function renderZombieActivitiesTab\(\)/);
+  assert.doesNotMatch(zombieRenderer, /id: 'zombie-activities'/);
+});
+
 test('Hunter System guidance exposes next actions and pending badges', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');

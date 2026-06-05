@@ -409,8 +409,23 @@ const NAV_SECTIONS = [
   ['hunter', 'Hunter'],
   ['sorcerer', 'Sorcerer'],
   ['zombie', 'Zombie'],
+  ['zombie-activities', 'Zombie Activities'],
   ['world', 'World'],
 ];
+const FIGHTER_NAV_SECTION_IDS = new Set([
+  'life',
+  'train',
+  'recover',
+  'body',
+  'money',
+  'fight',
+  'tournament',
+  'rival',
+  'coach',
+  'social',
+  'world',
+]);
+const ZOMBIE_NAV_SECTION_IDS = new Set(['life', 'zombie', 'zombie-activities']);
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1301,9 +1316,12 @@ function renderTabs() {
 
 function availableNavSections() {
   return NAV_SECTIONS.filter(([id]) => {
+    if (state.activeWorld === 'zombie') return ZOMBIE_NAV_SECTION_IDS.has(id) && (id !== 'zombie-activities' || state.zombieWorld?.unlocked);
+    if (state.activeWorld === 'fighter' && !FIGHTER_NAV_SECTION_IDS.has(id)) return false;
     if (id === 'hunter') return state.hunterWorld?.unlocked;
     if (id === 'sorcerer') return state.sorcererWorld?.unlocked;
     if (id === 'zombie') return state.zombieWorld?.unlocked;
+    if (id === 'zombie-activities') return state.zombieWorld?.unlocked;
     return true;
   });
 }
@@ -1371,6 +1389,8 @@ function renderNavMenu() {
 }
 
 function renderActiveTab() {
+  const available = new Set(availableNavSections().map(([id]) => id));
+  if (!available.has(activeTab)) activeTab = 'life';
   if (activeTab === 'train') return renderTrain();
   if (activeTab === 'recover') return renderRecover();
   if (activeTab === 'money') return renderMoney();
@@ -1383,6 +1403,7 @@ function renderActiveTab() {
   if (activeTab === 'hunter') return renderHunter();
   if (activeTab === 'sorcerer') return renderSorcerer();
   if (activeTab === 'zombie') return renderZombie();
+  if (activeTab === 'zombie-activities') return renderZombieActivitiesTab();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -4653,12 +4674,39 @@ function renderZombie() {
     <section class="stack zombie-panel">
       ${renderZombieStatus(zombie)}
       ${renderCollapsibleSection({ id: 'zombie-supplies', title: 'Supplies', subtitle: 'Food, water, medicine, ammo, materials, shelter, and morale.', body: renderZombieSupplies(zombie) })}
-      ${renderCollapsibleSection({ id: 'zombie-activities', title: 'Activities', subtitle: 'Hard survival actions that pay XP and risk wounds.', body: renderZombieActivities(zombie) })}
       ${renderCollapsibleSection({ id: 'zombie-encounters', title: 'Encounters', subtitle: 'Multi-zombie fights with guns, ammo, teammates, and body injuries.', body: renderZombieEncounters() })}
       ${renderCollapsibleSection({ id: 'zombie-team', title: 'Team', subtitle: `${zombie.team.length} survivor${zombie.team.length === 1 ? '' : 's'} in your group`, body: renderZombieTeam(zombie) })}
       ${renderCollapsibleSection({ id: 'zombie-injuries', title: 'Body Injuries', subtitle: `${zombie.bodyInjuries.length} wound${zombie.bodyInjuries.length === 1 ? '' : 's'} recorded`, body: renderZombieInjuries(zombie) })}
       ${renderCollapsibleSection({ id: 'zombie-stats', title: 'Zombie Stat Points', subtitle: `${zombie.statPoints} points available`, body: `<article class="option-card zombie-window"><div>${renderZombieStats(zombie)}</div></article>` })}
       ${renderCollapsibleSection({ id: 'zombie-log', title: 'Zombie Log', subtitle: 'World feed entries for survival activity.', body: renderLog('world') })}
+    </section>
+  `;
+}
+
+function renderZombieActivitiesTab() {
+  const zombie = normalizeZombieWorld(state.zombieWorld);
+  if (!zombie.unlocked) {
+    return '<section class="stack"><article class="option-card"><h2>Zombie Activities Locked</h2><p>This life did not begin in the outbreak.</p></article></section>';
+  }
+  return `
+    <section class="stack zombie-panel zombie-activities-panel">
+      <article class="option-card zombie-window zombie-status-panel">
+        <div>
+          <p class="eyebrow">Survival Actions</p>
+          <h2>Zombie Activities</h2>
+          <p>Scavenge, secure shelter, treat wounds, train drills, recruit survivors, guard, craft, and move through harder locations.</p>
+        </div>
+        <div class="system-chip-row">
+          ${systemChip('Level', zombie.level)}
+          ${systemChip('XP', zombie.xp)}
+          ${systemChip('Stat Pts', zombie.statPoints, zombie.statPoints ? 'ready' : '')}
+          ${systemChip('Food', zombie.resources.food, zombie.resources.food <= 1 ? 'danger' : '')}
+          ${systemChip('Water', zombie.resources.water, zombie.resources.water <= 1 ? 'danger' : '')}
+          ${systemChip('Medicine', zombie.resources.medicine, zombie.resources.medicine <= 0 ? 'danger' : '')}
+          ${systemChip('Morale', zombie.resources.morale, zombie.resources.morale < 35 ? 'danger' : '')}
+        </div>
+      </article>
+      ${renderCollapsibleSection({ id: 'zombie-activities', title: 'Activities', subtitle: 'Hard survival actions that pay XP and risk wounds.', body: renderZombieActivities(zombie) })}
     </section>
   `;
 }
@@ -5251,7 +5299,7 @@ function handleAction(action, source = null) {
     return;
   }
   if (action.startsWith('zombie-activity-')) {
-    activeTab = 'zombie';
+    activeTab = 'zombie-activities';
     setState(runZombieActivity(state, action.replace('zombie-activity-', '')));
     return;
   }
