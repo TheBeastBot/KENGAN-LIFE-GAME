@@ -8,6 +8,7 @@ import {
   SORCERER_INNATE_TECHNIQUES,
   SORCERER_MOVES,
   ZOMBIE_ACTIVITIES,
+  ZOMBIE_ITEM_CATALOG,
   HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
@@ -113,6 +114,8 @@ import {
   spendHunterStatPoints,
   spendZombieStatPoint,
   runZombieActivity,
+  equipZombieItem,
+  useZombieItem,
   startZombieEncounter,
   switchZombieCombatant,
   fightMonarchBoss,
@@ -391,6 +394,10 @@ const dropdownState = createDropdownStateController({
     'zombie-injuries': true,
     'zombie-stats': true,
     'zombie-log': false,
+    'zombie-items-consumables': true,
+    'zombie-items-medicine': true,
+    'zombie-items-melee': true,
+    'zombie-items-range': true,
     'world-rumors': true,
   },
 });
@@ -410,6 +417,7 @@ const NAV_SECTIONS = [
   ['sorcerer', 'Sorcerer'],
   ['zombie', 'Zombie'],
   ['zombie-activities', 'Zombie Activities'],
+  ['zombie-items', 'Zombie Items'],
   ['world', 'World'],
 ];
 const FIGHTER_NAV_SECTION_IDS = new Set([
@@ -425,7 +433,7 @@ const FIGHTER_NAV_SECTION_IDS = new Set([
   'social',
   'world',
 ]);
-const ZOMBIE_NAV_SECTION_IDS = new Set(['life', 'zombie', 'zombie-activities']);
+const ZOMBIE_NAV_SECTION_IDS = new Set(['life', 'zombie', 'zombie-activities', 'zombie-items']);
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1322,6 +1330,7 @@ function availableNavSections() {
     if (id === 'sorcerer') return state.sorcererWorld?.unlocked;
     if (id === 'zombie') return state.zombieWorld?.unlocked;
     if (id === 'zombie-activities') return state.zombieWorld?.unlocked;
+    if (id === 'zombie-items') return state.zombieWorld?.unlocked;
     return true;
   });
 }
@@ -1404,6 +1413,7 @@ function renderActiveTab() {
   if (activeTab === 'sorcerer') return renderSorcerer();
   if (activeTab === 'zombie') return renderZombie();
   if (activeTab === 'zombie-activities') return renderZombieActivitiesTab();
+  if (activeTab === 'zombie-items') return renderZombieItems();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -4616,6 +4626,68 @@ function renderZombieStats(zombie) {
   `;
 }
 
+function renderZombieItems() {
+  const zombie = normalizeZombieWorld(state.zombieWorld);
+  const inventory = new Map(zombie.inventory.map((entry) => [entry.id, entry]));
+  const resourceItems = Object.values(ZOMBIE_ITEM_CATALOG).filter((item) => ['consumable', 'medicine'].includes(item.type));
+  const weaponItems = Object.values(ZOMBIE_ITEM_CATALOG).filter((item) => ['melee', 'range'].includes(item.type) && inventory.has(item.id));
+  const renderResourceItem = (item) => {
+    const quantity = zombie.resources[item.resource] ?? 0;
+    return `
+      <article class="option-card zombie-window zombie-item-card">
+        <div>
+          <p class="eyebrow">${item.type === 'medicine' ? 'Medicine' : 'Consumable'}</p>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p>${escapeHtml(item.effect)}</p>
+        </div>
+        <div class="zombie-item-actions">
+          <span class="lock-pill">x${quantity}</span>
+          ${button('Use', `zombie-item-use-${item.id}`, 'primary', quantity <= 0)}
+        </div>
+      </article>
+    `;
+  };
+  const renderWeaponItem = (item) => {
+    const entry = inventory.get(item.id);
+    const equipped = item.type === 'melee' ? zombie.equippedMelee === item.id : zombie.equippedGun === item.id;
+    const condition = item.type === 'melee'
+      ? `Durability ${entry.durability}/${item.maxDurability}`
+      : `Damage ${item.damage} / Uses ${item.ammoCost ?? 1} ammo`;
+    return `
+      <article class="option-card zombie-window zombie-item-card ${equipped ? 'equipped' : ''}">
+        <div>
+          <p class="eyebrow">${item.type === 'melee' ? 'Melee Weapon' : 'Range Weapon'}</p>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p>${condition} / Quantity ${entry.quantity}</p>
+        </div>
+        <div class="zombie-item-actions">
+          ${equipped ? '<span class="lock-pill">Equipped</span>' : button('Equip', `zombie-item-equip-${item.id}`, 'primary')}
+        </div>
+      </article>
+    `;
+  };
+  return `
+    <section class="stack zombie-panel zombie-items-panel">
+      <article class="option-card zombie-window zombie-status-panel">
+        <div>
+          <p class="eyebrow">Shelter Inventory</p>
+          <h2>Zombie Items</h2>
+          <p>Consumables keep you moving. Medicines keep wounds manageable. Equipped weapons determine your combat actions.</p>
+        </div>
+        <div class="system-chip-row">
+          ${systemChip('Melee', ZOMBIE_ITEM_CATALOG[zombie.equippedMelee]?.name ?? 'None')}
+          ${systemChip('Range', ZOMBIE_ITEM_CATALOG[zombie.equippedGun]?.name ?? 'None')}
+          ${systemChip('Ammo', zombie.resources.ammo, zombie.resources.ammo <= 1 ? 'danger' : '')}
+        </div>
+      </article>
+      ${renderCollapsibleSection({ id: 'zombie-items-consumables', title: 'Consumables', subtitle: 'Food and water carried as survival stacks.', body: `<div class="activity-list">${resourceItems.filter((item) => item.type === 'consumable').map(renderResourceItem).join('')}</div>` })}
+      ${renderCollapsibleSection({ id: 'zombie-items-medicine', title: 'Medicines', subtitle: 'Bandages and treatment supplies.', body: `<div class="activity-list">${resourceItems.filter((item) => item.type === 'medicine').map(renderResourceItem).join('')}</div>` })}
+      ${renderCollapsibleSection({ id: 'zombie-items-melee', title: 'Melee Weapons', subtitle: 'Equipped melee weapons lose durability when used.', body: `<div class="activity-list">${weaponItems.filter((item) => item.type === 'melee').map(renderWeaponItem).join('')}</div>` })}
+      ${renderCollapsibleSection({ id: 'zombie-items-range', title: 'Range Weapons', subtitle: 'Equipped range weapons consume ammo and roll to hit.', body: `<div class="activity-list">${weaponItems.filter((item) => item.type === 'range').map(renderWeaponItem).join('')}</div>` })}
+    </section>
+  `;
+}
+
 function renderZombieCombat() {
   const fight = state.activeFight;
   const zombie = normalizeZombieWorld(state.zombieWorld);
@@ -4623,15 +4695,13 @@ function renderZombieCombat() {
   const activeMember = party.find((member) => member.id === fight.party?.activeId) ?? party[0];
   const allZombies = fight.zombies ?? [];
   const liveZombies = (fight.zombies ?? []).filter((item) => item.alive && item.health > 0);
+  const meleeItem = ZOMBIE_ITEM_CATALOG[zombie.equippedMelee];
+  const meleeEntry = zombie.inventory.find((entry) => entry.id === zombie.equippedMelee);
+  const rangeItem = ZOMBIE_ITEM_CATALOG[zombie.equippedGun];
   const moves = [
-    ['meleeSwing', 'Melee Swing', 'Physical + Fighting'],
-    ['unarmedStrike', 'Unarmed Strike', 'Close risk'],
-    ['shove', 'Shove', 'Space and damage reduction'],
-    ['grappleEscape', 'Grapple Escape', 'Safer under pressure'],
-    ['gunFire', 'Gun Fire', 'Uses 1 ammo and must hit'],
-    ['suppress', 'Suppress', 'Uses 2 ammo, lowers incoming'],
-    ['guard', 'Guard', 'Brace the swarm'],
-    ['retreat', 'Retreat', 'Costs supplies and morale'],
+    ['unarmed', 'Unarmed', 'Fists / Always available / Can injure your hand', false],
+    ['melee', 'Melee', `${meleeItem?.name ?? 'No weapon'} / Durability ${meleeEntry?.durability ?? 0}/${meleeItem?.maxDurability ?? 0}`, !meleeItem || !meleeEntry || meleeEntry.durability <= 0],
+    ['range', 'Range', `${rangeItem?.name ?? 'No weapon'} / Ammo ${zombie.resources.ammo}`, !rangeItem || zombie.resources.ammo < (rangeItem.ammoCost ?? 1)],
   ];
   return `
     <section class="combat stack zombie-combat-shell system-combat">
@@ -4682,9 +4752,9 @@ function renderZombieCombat() {
           </div>
         </article>
       </div>
-      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid">${moves.map(([id, label, hint]) => `
-        <button class="move-card system-move-card zombie-move-card" data-action="fight-turn-${id}">
-          <em>Zombie Move</em>
+      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid zombie-weapon-move-grid">${moves.map(([id, label, hint, disabled]) => `
+        <button class="move-card system-move-card zombie-move-card zombie-${id}-move" data-action="fight-turn-${id}" ${disabled ? 'disabled' : ''}>
+          <em>${id === 'unarmed' ? 'Fists' : id === 'melee' ? 'Equipped Melee' : 'Equipped Range'}</em>
           <strong>${escapeHtml(label)}</strong>
           <span>${escapeHtml(hint)}</span>
         </button>
@@ -5331,6 +5401,16 @@ function handleAction(action, source = null) {
   if (action.startsWith('zombie-activity-')) {
     activeTab = 'zombie-activities';
     setState(runZombieActivity(state, action.replace('zombie-activity-', '')));
+    return;
+  }
+  if (action.startsWith('zombie-item-use-')) {
+    activeTab = 'zombie-items';
+    setState(useZombieItem(state, action.replace('zombie-item-use-', '')));
+    return;
+  }
+  if (action.startsWith('zombie-item-equip-')) {
+    activeTab = 'zombie-items';
+    setState(equipZombieItem(state, action.replace('zombie-item-equip-', '')));
     return;
   }
   if (action.startsWith('zombie-encounter-')) {

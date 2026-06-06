@@ -147,6 +147,16 @@ const DEFAULT_ZOMBIE_STATS = {
   leadership: 0,
   soldier: 0,
 };
+export const ZOMBIE_ITEM_CATALOG = {
+  foodRation: { id: 'foodRation', name: 'Food Ration', type: 'consumable', resource: 'food', effect: 'Restore 8 stamina and 3 morale.' },
+  waterBottle: { id: 'waterBottle', name: 'Water Bottle', type: 'consumable', resource: 'water', effect: 'Restore 12 stamina.' },
+  bandage: { id: 'bandage', name: 'Bandage', type: 'medicine', resource: 'medicine', effect: 'Restore health based on Survivability.' },
+  kitchenKnife: { id: 'kitchenKnife', name: 'Kitchen Knife', type: 'melee', damage: 7, maxDurability: 24 },
+  pipe: { id: 'pipe', name: 'Steel Pipe', type: 'melee', damage: 10, maxDurability: 36 },
+  crowbar: { id: 'crowbar', name: 'Crowbar', type: 'melee', damage: 13, maxDurability: 48 },
+  oldPistol: { id: 'oldPistol', name: 'Old Pistol', type: 'range', damage: 24, ammoCost: 1 },
+  huntingRifle: { id: 'huntingRifle', name: 'Hunting Rifle', type: 'range', damage: 38, ammoCost: 1 },
+};
 const DEFAULT_ZOMBIE_WORLD = {
   unlocked: false,
   xp: 0,
@@ -166,7 +176,10 @@ const DEFAULT_ZOMBIE_WORLD = {
   survivorReputation: 0,
   team: [],
   relationships: {},
-  inventory: [],
+  inventory: [
+    { id: 'kitchenKnife', quantity: 1, durability: 24 },
+    { id: 'oldPistol', quantity: 1 },
+  ],
   equippedMelee: 'kitchenKnife',
   equippedGun: 'oldPistol',
   bodyInjuries: [],
@@ -1355,6 +1368,49 @@ function normalizeZombieResources(resources = {}) {
   };
 }
 
+function normalizeZombieInventory(inventory = [], equippedMelee = null, equippedGun = null) {
+  const entries = new Map();
+  if (Array.isArray(inventory)) {
+    for (const raw of inventory) {
+      const id = typeof raw === 'string' ? raw : raw?.id;
+      const item = ZOMBIE_ITEM_CATALOG[id];
+      if (!item || !['melee', 'range'].includes(item.type)) continue;
+      const previous = entries.get(id);
+      const quantity = Math.max(1, Math.floor((typeof raw === 'object' ? raw.quantity : 1) ?? 1));
+      const durability = item.type === 'melee'
+        ? clamp((typeof raw === 'object' ? raw.durability : item.maxDurability) ?? item.maxDurability, 0, item.maxDurability)
+        : undefined;
+      entries.set(id, {
+        id,
+        quantity: Math.max(quantity, previous?.quantity ?? 0),
+        ...(item.type === 'melee' ? { durability: Math.max(durability, previous?.durability ?? 0) } : {}),
+      });
+    }
+  }
+  for (const id of [equippedMelee, equippedGun]) {
+    const item = ZOMBIE_ITEM_CATALOG[id];
+    if (!item || entries.has(id)) continue;
+    entries.set(id, { id, quantity: 1, ...(item.type === 'melee' ? { durability: item.maxDurability } : {}) });
+  }
+  return [...entries.values()].slice(0, 40);
+}
+
+function zombieInventoryEntry(zombieWorld, itemId) {
+  return zombieWorld.inventory.find((entry) => entry.id === itemId);
+}
+
+function addZombieInventoryItem(zombieWorld, itemId) {
+  const item = ZOMBIE_ITEM_CATALOG[itemId];
+  if (!item || !['melee', 'range'].includes(item.type)) return;
+  const existing = zombieInventoryEntry(zombieWorld, itemId);
+  if (existing) {
+    existing.quantity += 1;
+    if (item.type === 'melee') existing.durability = item.maxDurability;
+    return;
+  }
+  zombieWorld.inventory.push({ id: itemId, quantity: 1, ...(item.type === 'melee' ? { durability: item.maxDurability } : {}) });
+}
+
 function normalizeZombieBodyInjuries(injuries = []) {
   if (!Array.isArray(injuries)) return [];
   return injuries.map((injury, index) => {
@@ -1393,6 +1449,12 @@ function normalizeZombieTeam(team = []) {
 }
 
 export function normalizeZombieWorld(zombieWorld = {}) {
+  const equippedMelee = ZOMBIE_ITEM_CATALOG[zombieWorld.equippedMelee]?.type === 'melee'
+    ? zombieWorld.equippedMelee
+    : DEFAULT_ZOMBIE_WORLD.equippedMelee;
+  const equippedGun = ZOMBIE_ITEM_CATALOG[zombieWorld.equippedGun]?.type === 'range'
+    ? zombieWorld.equippedGun
+    : DEFAULT_ZOMBIE_WORLD.equippedGun;
   return {
     ...defaultZombieWorld(),
     ...zombieWorld,
@@ -1406,9 +1468,9 @@ export function normalizeZombieWorld(zombieWorld = {}) {
     survivorReputation: clamp(zombieWorld.survivorReputation ?? 0, 0, 999),
     team: normalizeZombieTeam(zombieWorld.team),
     relationships: zombieWorld.relationships ?? {},
-    inventory: Array.isArray(zombieWorld.inventory) ? zombieWorld.inventory.slice(0, 40) : [],
-    equippedMelee: zombieWorld.equippedMelee ?? DEFAULT_ZOMBIE_WORLD.equippedMelee,
-    equippedGun: zombieWorld.equippedGun ?? DEFAULT_ZOMBIE_WORLD.equippedGun,
+    inventory: normalizeZombieInventory(zombieWorld.inventory, equippedMelee, equippedGun),
+    equippedMelee,
+    equippedGun,
     bodyInjuries: normalizeZombieBodyInjuries(zombieWorld.bodyInjuries ?? zombieWorld.injuries),
     infections: Array.isArray(zombieWorld.infections) ? zombieWorld.infections.slice(0, 8) : [],
     currentEncounter: zombieWorld.currentEncounter ?? null,
@@ -6688,6 +6750,38 @@ function addZombieBodyInjury(life, part, severity = 'mild') {
   return injury;
 }
 
+export function equipZombieItem(life, itemId) {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  const item = ZOMBIE_ITEM_CATALOG[itemId];
+  const entry = zombieInventoryEntry(next.zombieWorld, itemId);
+  if (worldLocked(next, 'zombie') || !next.zombieWorld.unlocked) return addLog(next, 'Zombie equipment belongs to the Zombie world.', 'world');
+  if (!item || !entry || !['melee', 'range'].includes(item.type)) return addLog(next, 'That weapon is not in your Zombie inventory.', 'world');
+  if (item.type === 'melee') next.zombieWorld.equippedMelee = itemId;
+  if (item.type === 'range') next.zombieWorld.equippedGun = itemId;
+  return addLog(next, `${item.name} equipped as your ${item.type === 'melee' ? 'melee' : 'range'} weapon.`, 'world');
+}
+
+export function useZombieItem(life, itemId) {
+  const next = clone(life);
+  next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
+  const item = ZOMBIE_ITEM_CATALOG[itemId];
+  if (worldLocked(next, 'zombie') || !next.zombieWorld.unlocked) return addLog(next, 'Zombie items belong to the Zombie world.', 'world');
+  if (!item || !['consumable', 'medicine'].includes(item.type)) return addLog(next, 'That item cannot be consumed.', 'world');
+  if ((next.zombieWorld.resources[item.resource] ?? 0) <= 0) return addLog(next, `${item.name} is out of stock.`, 'world');
+  next.zombieWorld.resources[item.resource] = clamp(next.zombieWorld.resources[item.resource] - 1, 0, 999);
+  if (itemId === 'foodRation') {
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + 8);
+    next.zombieWorld.resources.morale = clamp(next.zombieWorld.resources.morale + 3, 0, 100);
+  } else if (itemId === 'waterBottle') {
+    next.resources.energy = clampLifeResource(next, 'energy', next.resources.energy + 12);
+  } else if (itemId === 'bandage') {
+    const heal = 10 + next.zombieWorld.stats.survivability * 6 + (next.zombieWorld.monarchOrigin ? 6 : 0);
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + heal);
+  }
+  return addLog(next, `${item.name} used. ${item.effect}`, 'world');
+}
+
 export function runZombieActivity(life, activityId) {
   const activity = ZOMBIE_ACTIVITIES[activityId];
   const next = clone(life);
@@ -6722,6 +6816,13 @@ export function runZombieActivity(life, activityId) {
       relationship: 'teammate',
     });
     next.zombieWorld.survivorReputation = clamp(next.zombieWorld.survivorReputation + 5 + next.zombieWorld.stats.leadership, 0, 999);
+  }
+  if (activityId === 'craftGear') {
+    const craftedId = zombieInventoryEntry(next.zombieWorld, 'pipe') ? 'crowbar' : 'pipe';
+    addZombieInventoryItem(next.zombieWorld, craftedId);
+  }
+  if (activityId === 'scavenge' && deterministicRoll(next.rngSeed, lifeMonth(next), 'zombie-range-find') < 0.18) {
+    addZombieInventoryItem(next.zombieWorld, 'huntingRifle');
   }
   if (activityId === 'moveLocation') {
     next.zombieWorld.location = next.zombieWorld.location === 'Apartment Block' ? 'Pharmacy District' : 'Highway Shelter';
@@ -6855,11 +6956,24 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
   const fight = next.activeFight;
   if (!fight || fight.finished) return next;
+  const normalizedMoveId = {
+    unarmedStrike: 'unarmed',
+    shove: 'unarmed',
+    grappleEscape: 'unarmed',
+    meleeSwing: 'melee',
+    gunFire: 'range',
+    suppress: 'range',
+    guard: 'unarmed',
+  }[moveId] ?? moveId;
   const stats = next.zombieWorld.stats;
   const activeId = fight.party?.activeId ?? 'player';
   const activeMember = fight.party?.members?.find((member) => member.id === activeId) ?? fight.party?.members?.[0];
   const leadershipBoost = activeId === 'player' ? 0 : stats.leadership * 2;
   const assistingMembers = (fight.party?.members ?? []).filter((member) => member.present !== false && member.id !== activeId);
+  const meleeItem = ZOMBIE_ITEM_CATALOG[next.zombieWorld.equippedMelee];
+  const meleeEntry = zombieInventoryEntry(next.zombieWorld, next.zombieWorld.equippedMelee);
+  const rangeItem = ZOMBIE_ITEM_CATALOG[next.zombieWorld.equippedGun];
+  const rangeEntry = zombieInventoryEntry(next.zombieWorld, next.zombieWorld.equippedGun);
   const target = liveZombies(fight)[0];
   if (!target) {
     finishActiveFight(next);
@@ -6871,27 +6985,35 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   let spentAmmo = 0;
   let staminaCost = 8;
   let incomingReduction = stats.leadership + (moveId === 'guard' ? 10 : 0);
-  if (moveId === 'gunFire' || moveId === 'suppress') {
-    spentAmmo = moveId === 'suppress' ? 2 : 1;
+  let selfInjury = null;
+  let weaponLabel = 'Fists';
+  if (normalizedMoveId === 'range') {
+    if (!rangeItem || rangeItem.type !== 'range' || !rangeEntry) return addLog(next, 'No range weapon is equipped.', 'world');
+    spentAmmo = rangeItem.ammoCost ?? 1;
     if (next.zombieWorld.resources.ammo < spentAmmo) return addLog(next, 'No ammo left for that gun action.', 'world');
     next.zombieWorld.resources.ammo = clamp(next.zombieWorld.resources.ammo - spentAmmo, 0, 999);
-    const hitChance = clampFloat(0.28 + stats.soldier * 0.055 + fight.meters.momentum * 0.002 - liveZombies(fight).length * 0.018, 0.12, 0.88);
-    hit = deterministicRoll(next.rngSeed, fight.round, moveId, activeId, 'zombie-gun-hit') < hitChance;
-    playerDamage = hit ? Math.round(22 + stats.soldier * 6 + stats.physical * 1.5 + leadershipBoost) : 0;
+    const hitChance = clampFloat(0.3 + stats.soldier * 0.055 + fight.meters.momentum * 0.002 - liveZombies(fight).length * 0.018, 0.12, 0.9);
+    hit = deterministicRoll(next.rngSeed, fight.round, normalizedMoveId, activeId, 'zombie-gun-hit') < hitChance;
+    playerDamage = hit ? Math.round(rangeItem.damage + stats.soldier * 6 + stats.physical + leadershipBoost) : 0;
     staminaCost = 5;
-    incomingReduction += moveId === 'suppress' ? 8 + stats.soldier : 0;
-  } else if (moveId === 'shove') {
-    playerDamage = Math.round(5 + stats.physical * 2 + stats.fighting + leadershipBoost);
-    incomingReduction += 10 + stats.physical;
-    staminaCost = 12;
-  } else if (moveId === 'grappleEscape') {
-    playerDamage = Math.round(4 + stats.fighting * 2 + leadershipBoost);
-    incomingReduction += 14 + stats.fighting;
-    staminaCost = 14;
-  } else if (moveId === 'unarmedStrike') {
-    playerDamage = Math.round(8 + stats.physical * 2 + stats.fighting * 3 + leadershipBoost);
+    weaponLabel = rangeItem.name;
+  } else if (normalizedMoveId === 'melee') {
+    if (!meleeItem || meleeItem.type !== 'melee' || !meleeEntry) return addLog(next, 'No melee weapon is equipped.', 'world');
+    if ((meleeEntry.durability ?? 0) <= 0) return addLog(next, `${meleeItem.name} is broken. Equip another melee weapon.`, 'world');
+    playerDamage = Math.round(meleeItem.damage + stats.physical * 3 + stats.fighting * 4 + stats.soldier + leadershipBoost + (next.zombieWorld.monarchOrigin ? 8 : 0));
+    meleeEntry.durability = Math.max(0, meleeEntry.durability - 1);
+    staminaCost = 11;
+    weaponLabel = meleeItem.name;
+  } else if (normalizedMoveId === 'unarmed') {
+    playerDamage = Math.round(7 + stats.physical * 2 + stats.fighting * 3 + leadershipBoost);
     staminaCost = 10;
-  } else if (moveId === 'retreat') {
+    const selfInjuryChance = clampFloat(0.2 - stats.fighting * 0.012 - stats.survivability * 0.008, 0.04, 0.2);
+    if (deterministicRoll(next.rngSeed, fight.round, activeId, 'zombie-unarmed-self-injury') < selfInjuryChance) {
+      selfInjury = addZombieBodyInjury(next, 'hand', 'mild');
+      fight.meters.playerHealth = clamp(fight.meters.playerHealth - 4, 0, fight.meters.maxPlayerHealth ?? 100);
+      next.resources.health = clampLifeResource(next, 'health', next.resources.health - 4);
+    }
+  } else if (normalizedMoveId === 'retreat') {
     const retreatChance = clampFloat(0.38 + stats.survivability * 0.045 + stats.leadership * 0.025 - liveZombies(fight).length * 0.03, 0.12, 0.86);
     const escaped = deterministicRoll(next.rngSeed, fight.round, activeId, 'zombie-retreat') < retreatChance;
     next.zombieWorld.resources.morale = clamp(next.zombieWorld.resources.morale - 8, 0, 100);
@@ -6905,11 +7027,10 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     playerDamage = 0;
     incomingReduction -= 4;
   } else {
-    playerDamage = Math.round(12 + stats.physical * 3 + stats.fighting * 4 + stats.soldier + leadershipBoost + (next.zombieWorld.monarchOrigin ? 8 : 0));
-    staminaCost = 11;
+    return addLog(next, 'Choose Unarmed, Melee, or Range during a zombie encounter.', 'world');
   }
 
-  const assistDamage = moveId === 'retreat'
+  const assistDamage = normalizedMoveId === 'retreat'
     ? 0
     : assistingMembers.reduce((sum, member) => {
       const memberHealth = Number.isFinite(member.health) ? member.health : 0;
@@ -6927,23 +7048,26 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   fight.meters.momentum = clamp(fight.meters.momentum + (hit ? Math.round(playerDamage / 8) : -6) - Math.max(0, enemyDamage - 8), -50, 50);
   fight.meters.injuryRisk = clamp((ZOMBIE_ENCOUNTERS[fight.opponentId]?.risk ?? 35) + swarm * 4 + Math.max(0, enemyDamage - 6) - stats.survivability * 2 - (next.zombieWorld.monarchOrigin ? 10 : 0), 0, 100);
   if (enemyDamage > 0 || fight.meters.injuryRisk > 25) {
-    const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, fight.round, moveId, 'body-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
+    const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, fight.round, normalizedMoveId, 'body-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
     const severity = fight.meters.injuryRisk > 58 ? 'severe' : fight.meters.injuryRisk > 34 ? 'moderate' : 'mild';
     const injury = addZombieBodyInjury(next, part, severity);
     if (fight.result?.injuries) fight.result.injuries.push(injury.label);
   }
   fight.exchanges.unshift({
     round: fight.round,
-    tactic: moveId,
-    moveId,
-    tacticLabel: labelFromId(moveId),
+    tactic: normalizedMoveId,
+    moveId: normalizedMoveId,
+    tacticLabel: labelFromId(normalizedMoveId),
     opponentTactic: 'swarm',
     opponentTacticLabel: 'Swarm',
-    text: `Exchange ${fight.round} - ${labelFromId(moveId)}: ${activeMember?.name ?? 'You'} ${hit ? `dealt ${playerDamage}` : 'missed under pressure'}${assistDamage ? ` and the team added ${assistDamage}` : ''} against ${damagedZombies.length ? damagedZombies.join(', ') : 'the horde'} while ${swarm} infected pressed in for ${enemyDamage} damage.${spentAmmo ? ` Ammo spent: ${spentAmmo}.` : ''}`,
+    text: `Exchange ${fight.round} - ${labelFromId(normalizedMoveId)} with ${weaponLabel}: ${activeMember?.name ?? 'You'} ${hit ? `dealt ${playerDamage}` : 'missed under pressure'}${assistDamage ? ` and the team added ${assistDamage}` : ''} against ${damagedZombies.length ? damagedZombies.join(', ') : 'the horde'} while ${swarm} infected pressed in for ${enemyDamage} damage.${spentAmmo ? ` Ammo spent: ${spentAmmo}.` : ''}${meleeEntry && normalizedMoveId === 'melee' ? ` Durability: ${meleeEntry.durability}/${meleeItem.maxDurability}.` : ''}${selfInjury ? ` Self-injury: ${selfInjury.label}.` : ''}`,
     playerDamage: totalDamage,
     enemyDamage,
     hit,
     spentAmmo,
+    weaponId: normalizedMoveId === 'melee' ? meleeItem?.id : normalizedMoveId === 'range' ? rangeItem?.id : null,
+    weaponLabel,
+    selfInjury: selfInjury?.label ?? null,
     assistDamage,
     damagedZombies,
     zombieCount: swarm,

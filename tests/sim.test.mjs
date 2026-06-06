@@ -96,6 +96,8 @@ import {
   spendHunterStatPoints,
   spendZombieStatPoint,
   runZombieActivity,
+  equipZombieItem,
+  useZombieItem,
   startZombieEncounter,
   switchZombieCombatant,
   fightMonarchBoss,
@@ -285,11 +287,31 @@ test('zombie encounters support multiple zombies guns ammo body injuries and tea
   assert.equal(started.activeFight.zombies.length > 1, true);
   assert.equal(shot.zombieWorld.resources.ammo, 1);
   assert.equal(shot.activeFight.exchanges[0].hit, false);
+  assert.equal(shot.activeFight.exchanges[0].moveId, 'range');
   assert.equal(shot.activeFight.exchanges[0].assistDamage > 0, true);
   assert.equal(shot.activeFight.exchanges[0].damagedZombies.length > 0, true);
   assert.equal(switched.activeFight.party.activeId, 'maya');
   assert.equal(bitten.activeFight.exchanges[0].assistDamage > 0, true);
+  assert.equal(bitten.activeFight.exchanges[0].moveId, 'melee');
+  assert.equal(bitten.zombieWorld.inventory.find((item) => item.id === 'kitchenKnife').durability, 23);
   assert.ok(bitten.zombieWorld.bodyInjuries.some((injury) => ['arm', 'hand', 'torso', 'leg', 'eye', 'head'].includes(injury.part)));
+});
+
+test('zombie items support consumables medicines and equippable weapons', () => {
+  let life = createNewLife({ seed: 508, world: 'zombie' });
+  life.zombieWorld.inventory.push({ id: 'crowbar', quantity: 1, durability: 48 });
+  life.resources.health = 40;
+  const foodBefore = life.zombieWorld.resources.food;
+  const medicineBefore = life.zombieWorld.resources.medicine;
+
+  life = useZombieItem(life, 'foodRation');
+  life = useZombieItem(life, 'bandage');
+  life = equipZombieItem(life, 'crowbar');
+
+  assert.equal(life.zombieWorld.resources.food, foodBefore - 1);
+  assert.equal(life.zombieWorld.resources.medicine, medicineBefore - 1);
+  assert.equal(life.resources.health > 40, true);
+  assert.equal(life.zombieWorld.equippedMelee, 'crowbar');
 });
 
 test('choosing curses after the Monarchs assigns an innate technique and universal basics', () => {

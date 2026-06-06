@@ -161,7 +161,8 @@ test('Zombie mode navigation hides fighter-life tabs and exposes dedicated activ
   const zombieRenderer = appSource.match(/function renderZombie\(\) \{([\s\S]*?)\nfunction renderZombieActivitiesTab\(\)/)?.[1] ?? '';
 
   assert.match(appSource, /\['zombie-activities', 'Zombie Activities'\]/);
-  assert.match(appSource, /const ZOMBIE_NAV_SECTION_IDS = new Set\(\['life', 'zombie', 'zombie-activities'\]\);/);
+  assert.match(appSource, /\['zombie-items', 'Zombie Items'\]/);
+  assert.match(appSource, /const ZOMBIE_NAV_SECTION_IDS = new Set\(\['life', 'zombie', 'zombie-activities', 'zombie-items'\]\);/);
   assert.match(appSource, /state\.activeWorld === 'zombie'[\s\S]*ZOMBIE_NAV_SECTION_IDS\.has\(id\)/);
   assert.match(appSource, /if \(!available\.has\(activeTab\)\) activeTab = 'life';/);
   assert.match(appSource, /activeTab === 'zombie-activities'[\s\S]*renderZombieActivitiesTab\(\)/);
@@ -178,8 +179,28 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(appSource, /Infected Line/);
   assert.match(appSource, /class="zombie-combatant-card/);
   assert.match(appSource, /class="zombie-enemy-card/);
+  assert.match(appSource, /\['unarmed', 'Unarmed'/);
+  assert.match(appSource, /\['melee', 'Melee'/);
+  assert.match(appSource, /\['range', 'Range'/);
+  assert.doesNotMatch(appSource, /\['shove', 'Shove'/);
+  assert.doesNotMatch(appSource, /\['suppress', 'Suppress'/);
   assert.match(cssSource, /\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(cssSource, /@media \(max-width:\s*560px\)\s*{[\s\S]*\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+});
+
+test('Zombie items UI groups resources and equippable weapon types', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+
+  assert.match(appSource, /function renderZombieItems\(\)/);
+  assert.match(appSource, /title: 'Consumables'/);
+  assert.match(appSource, /title: 'Medicines'/);
+  assert.match(appSource, /title: 'Melee Weapons'/);
+  assert.match(appSource, /title: 'Range Weapons'/);
+  assert.match(appSource, /zombie-item-use-/);
+  assert.match(appSource, /zombie-item-equip-/);
+  assert.match(cssSource, /\.zombie-item-card\.option-card\s*{/);
+  assert.match(cssSource, /\.zombie-weapon-move-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
 });
 
 test('Hunter System guidance exposes next actions and pending badges', async () => {

@@ -4586,6 +4586,33 @@ select:focus {
   text-decoration: line-through;
 }
 
+.zombie-item-card.option-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.zombie-item-card.equipped {
+  border-color: rgba(123, 166, 106, 0.72);
+  box-shadow: inset 4px 0 0 rgba(123, 166, 106, 0.72);
+}
+
+.zombie-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.zombie-weapon-move-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.zombie-weapon-move-grid .zombie-move-card {
+  min-height: 138px;
+  align-content: center;
+}
+
 .zombie-move-card {
   border-color: rgba(123, 166, 106, 0.3);
 }
@@ -4598,6 +4625,26 @@ select:focus {
   .zombie-party-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zombie-item-card.option-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zombie-item-actions {
+    justify-content: stretch;
+  }
+
+  .zombie-item-actions button {
+    width: 100%;
+  }
+
+  .zombie-weapon-move-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .zombie-weapon-move-grid .zombie-move-card {
+    min-height: 112px;
   }
 
   .zombie-activity-card.option-card {
