@@ -203,6 +203,15 @@ test('Zombie items UI groups resources and equippable weapon types', async () =>
   assert.match(cssSource, /\.zombie-weapon-move-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
 });
 
+test('Zombie scavenging uses the choice popup UI with outcome previews', async () => {
+  const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+
+  assert.match(appSource, /event\.id\.startsWith\('zombie-scavenge-'\) \? 'Scavenging Event' : 'Triggered Event'/);
+  assert.match(appSource, /effects\.zombieScavenge\?\.leaveEmpty/);
+  assert.match(appSource, /effects\.zombieScavenge\?\.itemId/);
+  assert.match(appSource, /Opens a scavenging event\. Your choice decides the loot/);
+});
+
 test('Hunter System guidance exposes next actions and pending badges', async () => {
   const appSource = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const cssSource = await readFile(new URL('../styles.css', import.meta.url), 'utf8');

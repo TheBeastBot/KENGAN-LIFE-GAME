@@ -190,7 +190,7 @@ const DEFAULT_ZOMBIE_WORLD = {
   monarchBonus: null,
 };
 export const ZOMBIE_ACTIVITIES = {
-  scavenge: { label: 'Scavenge Supplies', xp: 65, risk: 24, costs: {}, gains: { food: 2, water: 1, medicine: 1, materials: 2 } },
+  scavenge: { label: 'Scavenge Supplies', xp: 65, risk: 24, costs: {}, gains: {}, choiceEvent: true },
   secureShelter: { label: 'Secure Shelter', xp: 45, risk: 8, costs: { materials: 2 }, gains: { shelter: 12, morale: 2 } },
   treatWounds: { label: 'Treat Wounds', xp: 38, risk: 4, costs: { medicine: 1 }, gains: { morale: 1 } },
   trainDrills: { label: 'Train Drills', xp: 90, risk: 10, costs: { food: 1, water: 1 }, gains: { morale: 1 } },
@@ -199,6 +199,48 @@ export const ZOMBIE_ACTIVITIES = {
   craftGear: { label: 'Craft Gear', xp: 50, risk: 6, costs: { materials: 2 }, gains: { ammo: 1 } },
   moveLocation: { label: 'Move Location', xp: 80, risk: 32, costs: { food: 1, water: 1 }, gains: { food: 1, medicine: 1, materials: 2 } },
 };
+const ZOMBIE_SCAVENGE_EVENTS = [
+  {
+    id: 'corner-market',
+    title: 'The Corner Market',
+    body: 'The front windows are shattered. A dry clicking sound comes from behind the pharmacy counter, but several aisles still look untouched.',
+    choices: [
+      { id: 'search-open-aisles', label: 'Search the open aisles', result: 'You keep an exit in sight and fill a bag with basic supplies.', effects: { zombieScavenge: { resources: { food: 2, water: 1 }, xp: 55 } } },
+      { id: 'force-pharmacy-cage', label: 'Force the pharmacy cage', result: 'The lock gives, but broken wire tears your hand while you reach for medicine.', effects: { zombieScavenge: { resources: { medicine: 3 }, xp: 85, injury: { part: 'hand', severity: 'mild' } } } },
+      { id: 'leave-market', label: 'Leave before the noise grows', result: 'You walk away with an empty bag and your breathing under control.', effects: { zombieScavenge: { leaveEmpty: true, xp: 20, morale: 2 } } },
+    ],
+  },
+  {
+    id: 'abandoned-ambulance',
+    title: 'The Abandoned Ambulance',
+    body: 'An ambulance rests against a concrete divider. The cab is open. The rear doors are chained, and something has been striking them from inside.',
+    choices: [
+      { id: 'search-ambulance-cab', label: 'Search the cab', result: 'The glove box holds a small trauma pouch and loose ammunition.', effects: { zombieScavenge: { resources: { medicine: 1, ammo: 2 }, xp: 50 } } },
+      { id: 'open-ambulance-rear', label: 'Cut the rear chain', result: 'You clear the trapped infected and recover the sealed medical case, but take a hard hit.', effects: { zombieScavenge: { resources: { medicine: 4 }, xp: 95, health: -8, injury: { part: 'torso', severity: 'moderate' } } } },
+      { id: 'leave-ambulance', label: 'Do not open it', result: 'You decide the pounding is not worth gambling the group.', effects: { zombieScavenge: { leaveEmpty: true, xp: 22, morale: 1 } } },
+    ],
+  },
+  {
+    id: 'hardware-store',
+    title: 'The Hardware Store',
+    body: 'The loading bay is half collapsed. Loose building supplies are near the entrance, while a locked tool cage sits deeper in the dark.',
+    choices: [
+      { id: 'take-building-supplies', label: 'Take nearby materials', result: 'You stay near daylight and drag useful barricade material home.', effects: { zombieScavenge: { resources: { materials: 4 }, xp: 55 } } },
+      { id: 'raid-tool-cage', label: 'Raid the tool cage', result: 'You pry the cage open and claim a crowbar, but the metal edge bites into your hand.', effects: { zombieScavenge: { itemId: 'crowbar', xp: 90, injury: { part: 'hand', severity: 'mild' } } } },
+      { id: 'leave-hardware-store', label: 'Back out quietly', result: 'The roof shifts above you. You leave before it comes down.', effects: { zombieScavenge: { leaveEmpty: true, xp: 18, morale: 2 } } },
+    ],
+  },
+  {
+    id: 'evacuated-apartment',
+    title: 'The Evacuated Apartment',
+    body: 'A family left in a hurry. The kitchen cupboards are closed, but a blood trail runs toward a locked bedroom.',
+    choices: [
+      { id: 'search-apartment-kitchen', label: 'Search the kitchen only', result: 'You collect sealed food and water without following the trail.', effects: { zombieScavenge: { resources: { food: 2, water: 2 }, xp: 55 } } },
+      { id: 'open-apartment-bedroom', label: 'Open the bedroom', result: 'You put down the infected owner and recover a pistol with ammunition.', effects: { zombieScavenge: { itemId: 'oldPistol', resources: { ammo: 3 }, xp: 88, injury: { part: 'arm', severity: 'mild' } } } },
+      { id: 'leave-apartment', label: 'Respect the warning signs', result: 'You close the apartment door and return with nothing.', effects: { zombieScavenge: { leaveEmpty: true, xp: 20, morale: 1 } } },
+    ],
+  },
+];
 const ZOMBIE_ENCOUNTERS = {
   streetHorde: {
     id: 'streetHorde',
@@ -6782,12 +6824,27 @@ export function useZombieItem(life, itemId) {
   return addLog(next, `${item.name} used. ${item.effect}`, 'world');
 }
 
+function zombieScavengeEvent(life) {
+  const roll = deterministicRoll(life.rngSeed, lifeMonth(life), life.log?.length ?? 0, life.zombieWorld?.xp ?? 0, 'zombie-scavenge-event');
+  const template = ZOMBIE_SCAVENGE_EVENTS[Math.floor(roll * ZOMBIE_SCAVENGE_EVENTS.length) % ZOMBIE_SCAVENGE_EVENTS.length];
+  return {
+    ...clone(template),
+    id: `zombie-scavenge-${template.id}`,
+    flag: `zombieScavenge-${lifeMonth(life)}-${life.log?.length ?? 0}`,
+  };
+}
+
 export function runZombieActivity(life, activityId) {
   const activity = ZOMBIE_ACTIVITIES[activityId];
   const next = clone(life);
   next.zombieWorld = normalizeZombieWorld(next.zombieWorld);
   if (worldLocked(next, 'zombie') || !next.zombieWorld.unlocked) return addLog(next, 'Zombie survival actions belong to the Zombie world.', 'world');
   if (!activity) return addLog(next, 'Unknown zombie survival activity.', 'world');
+  if (activityId === 'scavenge') {
+    if (next.pendingEvent) return addLog(next, 'Finish the current event before scavenging again.', 'world');
+    next.pendingEvent = zombieScavengeEvent(next);
+    return addLog(next, `Scavenging event: ${next.pendingEvent.title}. Choose how to search the location.`, 'world');
+  }
   const blocked = zombieResourceCostBlocked(next.zombieWorld, activity.costs);
   if (blocked) return addLog(next, `${activity.label} blocked: not enough ${blocked[0]}.`, 'world');
 
@@ -13121,6 +13178,24 @@ function applyEventEffects(life, effects = {}) {
     life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
     if (effects.zombieWorld.monarchOrigin) applyZombieMonarchOrigin(life);
     if (effects.zombieWorld.morale) life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale + effects.zombieWorld.morale, 0, 100);
+  }
+  if (effects.zombieScavenge) {
+    life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+    const outcome = effects.zombieScavenge;
+    for (const [resource, amount] of Object.entries(outcome.resources ?? {})) {
+      life.zombieWorld.resources[resource] = clamp(
+        life.zombieWorld.resources[resource] + amount,
+        0,
+        resource === 'shelter' || resource === 'morale' ? 100 : 999
+      );
+    }
+    if (outcome.itemId) addZombieInventoryItem(life.zombieWorld, outcome.itemId);
+    if (outcome.injury) addZombieBodyInjury(life, outcome.injury.part, outcome.injury.severity);
+    if (outcome.health) life.resources.health = clampLifeResource(life, 'health', life.resources.health + outcome.health);
+    if (outcome.morale) life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale + outcome.morale, 0, 100);
+    grantZombieXp(life, outcome.xp ?? 20);
+    life.zombieWorld.resources.food = clamp(life.zombieWorld.resources.food - 1, 0, 999);
+    life.zombieWorld.resources.water = clamp(life.zombieWorld.resources.water - 1, 0, 999);
   }
   if (effects.injury) {
     addOrUpgradeInjury(life, withInjuryTier({ name: effects.injury, text: `${effects.injury} needs recovery before harder fights.` }, 'Mild'));

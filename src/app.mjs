@@ -4564,9 +4564,11 @@ function renderZombieActivities(zombie) {
         <article class="option-card zombie-window zombie-activity-card">
           <div class="activity-icon zombie-activity-icon">${escapeHtml(id.slice(0, 2).toUpperCase())}</div>
           <div class="zombie-card-main">
-            <p class="eyebrow">Risk ${activity.risk}% / +${activity.xp} XP</p>
+            <p class="eyebrow">${activity.choiceEvent ? 'Choice Event / Variable Outcome' : `Risk ${activity.risk}% / +${activity.xp} XP`}</p>
             <h3>${escapeHtml(activity.label)}</h3>
-            <p>Costs: ${Object.entries(activity.costs ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'None'} / Gains: ${Object.entries(activity.gains ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'XP only'}</p>
+            <p>${activity.choiceEvent
+              ? 'Opens a scavenging event. Your choice decides the loot, danger, injuries, and whether you return empty-handed.'
+              : `Costs: ${Object.entries(activity.costs ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'None'} / Gains: ${Object.entries(activity.gains ?? {}).map(([key, value]) => `${value} ${labelize(key)}`).join(', ') || 'XP only'}`}</p>
           </div>
           <div class="activity-actions zombie-card-action">${button('Do', `zombie-activity-${id}`, 'primary')}</div>
         </article>
@@ -4862,7 +4864,7 @@ function renderPendingEvent() {
   return `
     <section class="event-backdrop" role="dialog" aria-modal="true">
       <article class="event-modal">
-        <p class="eyebrow">Triggered Event</p>
+        <p class="eyebrow">${event.id.startsWith('zombie-scavenge-') ? 'Scavenging Event' : 'Triggered Event'}</p>
         <h2>${event.title}</h2>
         <p>${event.body}</p>
         ${event.password ? `
@@ -4930,6 +4932,11 @@ function previewEffects(effects = {}) {
   if (effects.hunterWorld?.delayMonths) parts.push(`Delay ${effects.hunterWorld.delayMonths} months`);
   if (effects.zombieWorld?.monarchOrigin) parts.push('Monarch origin');
   if (effects.zombieWorld?.morale) parts.push(`${effects.zombieWorld.morale > 0 ? '+' : ''}${effects.zombieWorld.morale} morale`);
+  for (const [name, value] of Object.entries(effects.zombieScavenge?.resources ?? {})) parts.push(`${value > 0 ? '+' : ''}${value} ${labelize(name)}`);
+  if (effects.zombieScavenge?.itemId) parts.push(`Find ${ZOMBIE_ITEM_CATALOG[effects.zombieScavenge.itemId]?.name ?? labelize(effects.zombieScavenge.itemId)}`);
+  if (effects.zombieScavenge?.injury) parts.push(`${labelize(effects.zombieScavenge.injury.severity)} ${labelize(effects.zombieScavenge.injury.part)} injury risk`);
+  if (effects.zombieScavenge?.leaveEmpty) parts.push('No loot');
+  if (effects.zombieScavenge?.xp) parts.push(`+${effects.zombieScavenge.xp} Zombie XP`);
   return parts.slice(0, 4).join(' / ') || 'Story choice';
 }
 

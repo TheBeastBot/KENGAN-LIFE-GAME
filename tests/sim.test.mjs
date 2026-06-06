@@ -264,6 +264,28 @@ test('zombie activities grant XP levels stat points and survivability improves t
   assert.equal(treated.zombieWorld.resources.medicine, life.zombieWorld.resources.medicine - 1);
 });
 
+test('zombie scavenging opens a choice event before granting any loot', () => {
+  const life = { ...createNewLife({ seed: 509, world: 'zombie' }), pendingEvent: null };
+  const resourcesBefore = { ...life.zombieWorld.resources };
+  const xpBefore = life.zombieWorld.xp;
+
+  const scavenging = runZombieActivity(life, 'scavenge');
+
+  assert.match(scavenging.pendingEvent.id, /^zombie-scavenge-/);
+  assert.equal(scavenging.pendingEvent.choices.length >= 3, true);
+  assert.deepEqual(scavenging.zombieWorld.resources, resourcesBefore);
+  assert.equal(scavenging.zombieWorld.xp, xpBefore);
+
+  const leaveChoice = scavenging.pendingEvent.choices.find((choice) => choice.effects?.zombieScavenge?.leaveEmpty);
+  assert.ok(leaveChoice);
+  const leftEmpty = resolveEventChoice(scavenging, leaveChoice.id);
+
+  assert.equal(leftEmpty.pendingEvent, null);
+  assert.equal(leftEmpty.zombieWorld.resources.food, resourcesBefore.food - 1);
+  assert.equal(leftEmpty.zombieWorld.resources.water, resourcesBefore.water - 1);
+  assert.equal(leftEmpty.zombieWorld.xp > xpBefore, true);
+});
+
 test('zombie encounters support multiple zombies guns ammo body injuries and teammate switching', () => {
   let life = createNewLife({ seed: 507, world: 'zombie' });
   life = {
