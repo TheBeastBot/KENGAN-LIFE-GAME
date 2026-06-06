@@ -319,6 +319,28 @@ test('zombie encounters support multiple zombies guns ammo body injuries and tea
   assert.ok(bitten.zombieWorld.bodyInjuries.some((injury) => ['arm', 'hand', 'torso', 'leg', 'eye', 'head'].includes(injury.part)));
 });
 
+test('zombie attacks hit one target while the full swarm makes combat brutal', () => {
+  let life = createNewLife({ seed: 510, world: 'zombie' });
+  life = {
+    ...life,
+    pendingEvent: null,
+    zombieWorld: {
+      ...life.zombieWorld,
+      stats: { physical: 20, fighting: 20, survivability: 0, leadership: 0, soldier: 0 },
+      team: [],
+    },
+  };
+
+  const started = startZombieEncounter(life, 'streetHorde');
+  const next = takeFightTurn(started, 'melee');
+  const damaged = next.activeFight.zombies.filter((enemy) => enemy.health < enemy.maxHealth);
+
+  assert.equal(damaged.length, 1);
+  assert.equal(next.activeFight.zombies.filter((enemy) => enemy.alive).length, 3);
+  assert.equal(next.activeFight.exchanges[0].damagedZombies.length, 1);
+  assert.equal(next.activeFight.exchanges[0].enemyDamage >= 35, true);
+});
+
 test('zombie items support consumables medicines and equippable weapons', () => {
   let life = createNewLife({ seed: 508, world: 'zombie' });
   life.zombieWorld.inventory.push({ id: 'crowbar', quantity: 1, durability: 48 });

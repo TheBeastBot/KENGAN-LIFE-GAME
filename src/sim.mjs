@@ -6979,18 +6979,12 @@ function liveZombies(fight) {
   return (fight.zombies ?? []).filter((zombie) => zombie.alive && zombie.health > 0);
 }
 
-function applyZombieLineDamage(fight, damage = 0) {
-  let remaining = Math.max(0, Math.round(damage));
-  const hitNames = [];
-  for (const zombie of liveZombies(fight)) {
-    if (remaining <= 0) break;
-    const dealt = Math.min(zombie.health, remaining);
-    zombie.health = Math.max(0, zombie.health - dealt);
-    remaining -= dealt;
-    if (dealt > 0) hitNames.push(zombie.name);
-    if (zombie.health <= 0) zombie.alive = false;
-  }
-  return hitNames;
+function applyZombieTargetDamage(target, damage = 0) {
+  if (!target || !target.alive || target.health <= 0) return [];
+  const dealt = Math.min(target.health, Math.max(0, Math.round(damage)));
+  target.health = Math.max(0, target.health - dealt);
+  if (target.health <= 0) target.alive = false;
+  return dealt > 0 ? [target.name] : [];
 }
 
 function applyZombieFightResult(life, fight, won) {
@@ -7031,6 +7025,7 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   const meleeEntry = zombieInventoryEntry(next.zombieWorld, next.zombieWorld.equippedMelee);
   const rangeItem = ZOMBIE_ITEM_CATALOG[next.zombieWorld.equippedGun];
   const rangeEntry = zombieInventoryEntry(next.zombieWorld, next.zombieWorld.equippedGun);
+  const swarmAtStart = liveZombies(fight).length;
   const target = liveZombies(fight)[0];
   if (!target) {
     finishActiveFight(next);
@@ -7095,10 +7090,11 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
       return sum + Math.max(1, Math.round(3 + stats.leadership * 1.6 + stats.fighting * 0.6));
     }, 0);
   const totalDamage = playerDamage + assistDamage;
-  const damagedZombies = applyZombieLineDamage(fight, totalDamage);
+  const damagedZombies = applyZombieTargetDamage(target, totalDamage);
   fight.meters.opponentHealth = liveZombies(fight).reduce((sum, zombie) => sum + zombie.health, 0);
   const swarm = liveZombies(fight).length;
-  const baseIncoming = Math.max(0, swarm * 8 + (ZOMBIE_ENCOUNTERS[fight.opponentId]?.damage ?? 12) - incomingReduction);
+  const encounterDamage = ZOMBIE_ENCOUNTERS[fight.opponentId]?.damage ?? 12;
+  const baseIncoming = Math.max(0, swarmAtStart * 11 + Math.round(encounterDamage * 1.25) - incomingReduction);
   const enemyDamage = Math.max(0, Math.round(baseIncoming * (activeId === 'player' ? 1 : Math.max(0.55, 1 - stats.leadership * 0.025))));
   fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
