@@ -182,6 +182,12 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(appSource, /\['unarmed', 'Unarmed'/);
   assert.match(appSource, /\['melee', 'Melee'/);
   assert.match(appSource, /\['range', 'Range'/);
+  assert.match(appSource, /const ZOMBIE_COMBAT_ASSETS = \{/);
+  assert.match(appSource, /assets\/zombie\/combat\/unarmed\.png/);
+  assert.match(appSource, /ZOMBIE_ITEM_ASSETS\[meleeItem\?\.id\]/);
+  assert.match(appSource, /ZOMBIE_ITEM_ASSETS\[rangeItem\?\.id\]/);
+  assert.match(appSource, /<img src="\$\{image\}"/);
+  assert.doesNotMatch(appSource, /class="zombie-move-status"/);
   assert.doesNotMatch(appSource, /\['shove', 'Shove'/);
   assert.doesNotMatch(appSource, /\['suppress', 'Suppress'/);
   assert.match(cssSource, /\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
@@ -199,8 +205,18 @@ test('Zombie items UI groups resources and equippable weapon types', async () =>
   assert.match(appSource, /title: 'Range Weapons'/);
   assert.match(appSource, /zombie-item-use-/);
   assert.match(appSource, /zombie-item-equip-/);
+  assert.match(appSource, /const ZOMBIE_ITEM_ASSETS = \{/);
+  assert.match(appSource, /assets\/zombie\/items\/bandage\.png/);
+  assert.match(appSource, /assets\/zombie\/items\/kitchen-knife\.png/);
+  assert.match(appSource, /assets\/zombie\/items\/old-pistol\.png/);
+  assert.match(appSource, /assets\/zombie\/items\/shotgun\.png/);
+  assert.match(appSource, /assets\/zombie\/items\/bow-and-arrow\.png/);
+  assert.match(appSource, /class="zombie-item-image"/);
   assert.match(cssSource, /\.zombie-item-card\.option-card\s*{/);
+  assert.match(cssSource, /\.zombie-item-image\s*{/);
   assert.match(cssSource, /\.zombie-weapon-move-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(cssSource, /\.zombie-move-card img\s*{/);
+  assert.doesNotMatch(cssSource, /\.zombie-move-status\s*{/);
 });
 
 test('Zombie scavenging uses the choice popup UI with outcome previews', async () => {

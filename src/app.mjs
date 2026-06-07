@@ -257,6 +257,21 @@ const MOVE_ICON_ASSETS = {
   butterflyFrames: 'assets/icons/butterfly-frames.png',
   lockdownStall: 'assets/icons/lockdown-stall.png',
 };
+const ZOMBIE_COMBAT_ASSETS = {
+  unarmed: 'assets/zombie/combat/unarmed.png',
+  melee: 'assets/zombie/combat/melee.png',
+  range: 'assets/zombie/combat/range.png',
+};
+const ZOMBIE_ITEM_ASSETS = {
+  bandage: 'assets/zombie/items/bandage.png',
+  kitchenKnife: 'assets/zombie/items/kitchen-knife.png',
+  pipe: 'assets/zombie/items/steel-pipe.png',
+  crowbar: 'assets/zombie/items/crowbar.png',
+  oldPistol: 'assets/zombie/items/old-pistol.png',
+  huntingRifle: 'assets/zombie/items/hunting-rifle.png',
+  shotgun: 'assets/zombie/items/shotgun.png',
+  bowAndArrow: 'assets/zombie/items/bow-and-arrow.png',
+};
 const moveIconPreloadCache = [];
 const TRAINING_IMAGES = {
   sparTrainingPartner: 'assets/training/spar-training-partner.png',
@@ -446,7 +461,7 @@ function clearStoredGameData() {
 }
 
 function preloadMoveIcons() {
-  for (const src of Object.values(MOVE_ICON_ASSETS)) {
+  for (const src of [...Object.values(MOVE_ICON_ASSETS), ...Object.values(ZOMBIE_COMBAT_ASSETS), ...Object.values(ZOMBIE_ITEM_ASSETS)]) {
     const image = new Image();
     image.decoding = 'async';
     image.src = src;
@@ -4564,7 +4579,7 @@ function renderZombieActivities(zombie) {
         <article class="option-card zombie-window zombie-activity-card">
           <div class="activity-icon zombie-activity-icon">${escapeHtml(id.slice(0, 2).toUpperCase())}</div>
           <div class="zombie-card-main">
-            <p class="eyebrow">${activity.choiceEvent ? 'Choice Event / Variable Outcome' : `Risk ${activity.risk}% / +${activity.xp} XP`}</p>
+            <p class="eyebrow">${activity.choiceEvent ? 'Choice Event / Variable Outcome' : activity.injuryRisk ? `Injury Risk ${activity.injuryRisk}% / +${activity.xp} XP` : `No Injury Risk / +${activity.xp} XP`}</p>
             <h3>${escapeHtml(activity.label)}</h3>
             <p>${activity.choiceEvent
               ? 'Opens a scavenging event. Your choice decides the loot, danger, injuries, and whether you return empty-handed.'
@@ -4635,9 +4650,11 @@ function renderZombieItems() {
   const weaponItems = Object.values(ZOMBIE_ITEM_CATALOG).filter((item) => ['melee', 'range'].includes(item.type) && inventory.has(item.id));
   const renderResourceItem = (item) => {
     const quantity = zombie.resources[item.resource] ?? 0;
+    const image = ZOMBIE_ITEM_ASSETS[item.id];
     return `
       <article class="option-card zombie-window zombie-item-card">
-        <div>
+        ${image ? `<img class="zombie-item-image" src="${image}" alt="" aria-hidden="true">` : ''}
+        <div class="zombie-item-copy">
           <p class="eyebrow">${item.type === 'medicine' ? 'Medicine' : 'Consumable'}</p>
           <h3>${escapeHtml(item.name)}</h3>
           <p>${escapeHtml(item.effect)}</p>
@@ -4657,7 +4674,8 @@ function renderZombieItems() {
       : `Damage ${item.damage} / Uses ${item.ammoCost ?? 1} ammo`;
     return `
       <article class="option-card zombie-window zombie-item-card ${equipped ? 'equipped' : ''}">
-        <div>
+        <img class="zombie-item-image" src="${ZOMBIE_ITEM_ASSETS[item.id]}" alt="" aria-hidden="true">
+        <div class="zombie-item-copy">
           <p class="eyebrow">${item.type === 'melee' ? 'Melee Weapon' : 'Range Weapon'}</p>
           <h3>${escapeHtml(item.name)}</h3>
           <p>${condition} / Quantity ${entry.quantity}</p>
@@ -4701,9 +4719,9 @@ function renderZombieCombat() {
   const meleeEntry = zombie.inventory.find((entry) => entry.id === zombie.equippedMelee);
   const rangeItem = ZOMBIE_ITEM_CATALOG[zombie.equippedGun];
   const moves = [
-    ['unarmed', 'Unarmed', 'Fists / Always available / Can injure your hand', false],
-    ['melee', 'Melee', `${meleeItem?.name ?? 'No weapon'} / Durability ${meleeEntry?.durability ?? 0}/${meleeItem?.maxDurability ?? 0}`, !meleeItem || !meleeEntry || meleeEntry.durability <= 0],
-    ['range', 'Range', `${rangeItem?.name ?? 'No weapon'} / Ammo ${zombie.resources.ammo}`, !rangeItem || zombie.resources.ammo < (rangeItem.ammoCost ?? 1)],
+    ['unarmed', 'Unarmed', 'Fists / Always available / Can injure your hand', false, ZOMBIE_COMBAT_ASSETS.unarmed],
+    ['melee', 'Melee', `${meleeItem?.name ?? 'No weapon'} / Durability ${meleeEntry?.durability ?? 0}/${meleeItem?.maxDurability ?? 0}`, !meleeItem || !meleeEntry || meleeEntry.durability <= 0, ZOMBIE_ITEM_ASSETS[meleeItem?.id] ?? ZOMBIE_COMBAT_ASSETS.melee],
+    ['range', 'Range', `${rangeItem?.name ?? 'No weapon'} / Ammo ${zombie.resources.ammo}`, !rangeItem || zombie.resources.ammo < (rangeItem.ammoCost ?? 1), ZOMBIE_ITEM_ASSETS[rangeItem?.id] ?? ZOMBIE_COMBAT_ASSETS.range],
   ];
   return `
     <section class="combat stack zombie-combat-shell system-combat">
@@ -4754,11 +4772,9 @@ function renderZombieCombat() {
           </div>
         </article>
       </div>
-      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid zombie-weapon-move-grid">${moves.map(([id, label, hint, disabled]) => `
-        <button class="move-card system-move-card zombie-move-card zombie-${id}-move" data-action="fight-turn-${id}" ${disabled ? 'disabled' : ''}>
-          <em>${id === 'unarmed' ? 'Fists' : id === 'melee' ? 'Equipped Melee' : 'Equipped Range'}</em>
-          <strong>${escapeHtml(label)}</strong>
-          <span>${escapeHtml(hint)}</span>
+      ${fight.finished ? renderFightReport(fight) : `<div class="move-grid zombie-weapon-move-grid">${moves.map(([id, label, hint, disabled, image]) => `
+        <button class="move-card system-move-card zombie-move-card zombie-${id}-move" data-action="fight-turn-${id}" aria-label="${escapeHtml(`${label}: ${hint}`)}" ${disabled ? 'disabled' : ''}>
+          <img src="${image}" alt="" aria-hidden="true">
         </button>
       `).join('')}</div>`}
       ${renderExchanges(fight)}
@@ -4937,6 +4953,7 @@ function previewEffects(effects = {}) {
   if (effects.zombieScavenge?.injury) parts.push(`${labelize(effects.zombieScavenge.injury.severity)} ${labelize(effects.zombieScavenge.injury.part)} injury risk`);
   if (effects.zombieScavenge?.leaveEmpty) parts.push('No loot');
   if (effects.zombieScavenge?.xp) parts.push(`+${effects.zombieScavenge.xp} Zombie XP`);
+  if (effects.startZombieEncounter) parts.push(`Starts ${labelize(effects.startZombieEncounter)}`);
   return parts.slice(0, 4).join(' / ') || 'Story choice';
 }
 

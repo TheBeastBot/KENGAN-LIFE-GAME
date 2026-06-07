@@ -156,6 +156,8 @@ export const ZOMBIE_ITEM_CATALOG = {
   crowbar: { id: 'crowbar', name: 'Crowbar', type: 'melee', damage: 13, maxDurability: 48 },
   oldPistol: { id: 'oldPistol', name: 'Old Pistol', type: 'range', damage: 24, ammoCost: 1 },
   huntingRifle: { id: 'huntingRifle', name: 'Hunting Rifle', type: 'range', damage: 38, ammoCost: 1 },
+  shotgun: { id: 'shotgun', name: 'Pump Shotgun', type: 'range', damage: 52, ammoCost: 2 },
+  bowAndArrow: { id: 'bowAndArrow', name: 'Bow and Arrow', type: 'range', damage: 31, ammoCost: 1 },
 };
 const DEFAULT_ZOMBIE_WORLD = {
   unlocked: false,
@@ -191,13 +193,13 @@ const DEFAULT_ZOMBIE_WORLD = {
 };
 export const ZOMBIE_ACTIVITIES = {
   scavenge: { label: 'Scavenge Supplies', xp: 65, risk: 24, costs: {}, gains: {}, choiceEvent: true },
-  secureShelter: { label: 'Secure Shelter', xp: 45, risk: 8, costs: { materials: 2 }, gains: { shelter: 12, morale: 2 } },
-  treatWounds: { label: 'Treat Wounds', xp: 38, risk: 4, costs: { medicine: 1 }, gains: { morale: 1 } },
-  trainDrills: { label: 'Train Drills', xp: 90, risk: 10, costs: { food: 1, water: 1 }, gains: { morale: 1 } },
-  recruitSurvivor: { label: 'Recruit Survivor', xp: 70, risk: 18, costs: { food: 1 }, gains: { morale: 4 } },
-  guardShift: { label: 'Guard Shift', xp: 55, risk: 14, costs: { water: 1 }, gains: { shelter: 3, morale: 1 } },
-  craftGear: { label: 'Craft Gear', xp: 50, risk: 6, costs: { materials: 2 }, gains: { ammo: 1 } },
-  moveLocation: { label: 'Move Location', xp: 80, risk: 32, costs: { food: 1, water: 1 }, gains: { food: 1, medicine: 1, materials: 2 } },
+  secureShelter: { label: 'Secure Shelter', xp: 45, risk: 0, costs: { materials: 2 }, gains: { shelter: 12, morale: 2 } },
+  treatWounds: { label: 'Treat Wounds', xp: 38, risk: 0, costs: { medicine: 1 }, gains: { morale: 1 } },
+  trainDrills: { label: 'Train Drills', xp: 90, risk: 10, injuryRisk: 10, costs: { food: 1, water: 1 }, gains: { morale: 1 } },
+  recruitSurvivor: { label: 'Recruit Survivor', xp: 70, risk: 0, costs: { food: 1 }, gains: { morale: 4 } },
+  guardShift: { label: 'Guard Shift', xp: 55, risk: 14, injuryRisk: 14, costs: { water: 1 }, gains: { shelter: 3, morale: 1 } },
+  craftGear: { label: 'Craft Gear', xp: 50, risk: 0, costs: { materials: 2 }, gains: { ammo: 1 } },
+  moveLocation: { label: 'Move Location', xp: 80, risk: 32, injuryRisk: 32, costs: { food: 1, water: 1 }, gains: { food: 1, medicine: 1, materials: 2 } },
 };
 const ZOMBIE_SCAVENGE_EVENTS = [
   {
@@ -206,7 +208,7 @@ const ZOMBIE_SCAVENGE_EVENTS = [
     body: 'The front windows are shattered. A dry clicking sound comes from behind the pharmacy counter, but several aisles still look untouched.',
     choices: [
       { id: 'search-open-aisles', label: 'Search the open aisles', result: 'You keep an exit in sight and fill a bag with basic supplies.', effects: { zombieScavenge: { resources: { food: 2, water: 1 }, xp: 55 } } },
-      { id: 'force-pharmacy-cage', label: 'Force the pharmacy cage', result: 'The lock gives, but broken wire tears your hand while you reach for medicine.', effects: { zombieScavenge: { resources: { medicine: 3 }, xp: 85, injury: { part: 'hand', severity: 'mild' } } } },
+      { id: 'force-pharmacy-cage', label: 'Force the pharmacy cage', result: 'The lock gives, but the noise pulls infected through the stockroom doors.', effects: { zombieScavenge: { resources: { medicine: 3 }, xp: 85, injury: { part: 'hand', severity: 'mild' } }, startZombieEncounter: 'pharmacyRush' } },
       { id: 'leave-market', label: 'Leave before the noise grows', result: 'You walk away with an empty bag and your breathing under control.', effects: { zombieScavenge: { leaveEmpty: true, xp: 20, morale: 2 } } },
     ],
   },
@@ -216,7 +218,7 @@ const ZOMBIE_SCAVENGE_EVENTS = [
     body: 'An ambulance rests against a concrete divider. The cab is open. The rear doors are chained, and something has been striking them from inside.',
     choices: [
       { id: 'search-ambulance-cab', label: 'Search the cab', result: 'The glove box holds a small trauma pouch and loose ammunition.', effects: { zombieScavenge: { resources: { medicine: 1, ammo: 2 }, xp: 50 } } },
-      { id: 'open-ambulance-rear', label: 'Cut the rear chain', result: 'You clear the trapped infected and recover the sealed medical case, but take a hard hit.', effects: { zombieScavenge: { resources: { medicine: 4 }, xp: 95, health: -8, injury: { part: 'torso', severity: 'moderate' } } } },
+      { id: 'open-ambulance-rear', label: 'Cut the rear chain', result: 'The doors burst open. You grab the medical case as several infected spill onto the road.', effects: { zombieScavenge: { resources: { medicine: 4 }, xp: 95, injury: { part: 'torso', severity: 'moderate' } }, startZombieEncounter: 'pharmacyRush' } },
       { id: 'leave-ambulance', label: 'Do not open it', result: 'You decide the pounding is not worth gambling the group.', effects: { zombieScavenge: { leaveEmpty: true, xp: 22, morale: 1 } } },
     ],
   },
@@ -226,7 +228,7 @@ const ZOMBIE_SCAVENGE_EVENTS = [
     body: 'The loading bay is half collapsed. Loose building supplies are near the entrance, while a locked tool cage sits deeper in the dark.',
     choices: [
       { id: 'take-building-supplies', label: 'Take nearby materials', result: 'You stay near daylight and drag useful barricade material home.', effects: { zombieScavenge: { resources: { materials: 4 }, xp: 55 } } },
-      { id: 'raid-tool-cage', label: 'Raid the tool cage', result: 'You pry the cage open and claim a crowbar, but the metal edge bites into your hand.', effects: { zombieScavenge: { itemId: 'crowbar', xp: 90, injury: { part: 'hand', severity: 'mild' } } } },
+      { id: 'raid-tool-cage', label: 'Raid the tool cage', result: 'You claim the crowbar, but the collapsing cage alerts a pack moving through the loading bay.', effects: { zombieScavenge: { itemId: 'crowbar', xp: 90, injury: { part: 'hand', severity: 'mild' } }, startZombieEncounter: 'barricadeRaid' } },
       { id: 'leave-hardware-store', label: 'Back out quietly', result: 'The roof shifts above you. You leave before it comes down.', effects: { zombieScavenge: { leaveEmpty: true, xp: 18, morale: 2 } } },
     ],
   },
@@ -236,7 +238,7 @@ const ZOMBIE_SCAVENGE_EVENTS = [
     body: 'A family left in a hurry. The kitchen cupboards are closed, but a blood trail runs toward a locked bedroom.',
     choices: [
       { id: 'search-apartment-kitchen', label: 'Search the kitchen only', result: 'You collect sealed food and water without following the trail.', effects: { zombieScavenge: { resources: { food: 2, water: 2 }, xp: 55 } } },
-      { id: 'open-apartment-bedroom', label: 'Open the bedroom', result: 'You put down the infected owner and recover a pistol with ammunition.', effects: { zombieScavenge: { itemId: 'oldPistol', resources: { ammo: 3 }, xp: 88, injury: { part: 'arm', severity: 'mild' } } } },
+      { id: 'open-apartment-bedroom', label: 'Open the bedroom', result: 'You recover a pistol, but the struggle draws infected into the apartment stairwell.', effects: { zombieScavenge: { itemId: 'oldPistol', resources: { ammo: 3 }, xp: 88, injury: { part: 'arm', severity: 'mild' } }, startZombieEncounter: 'streetHorde' } },
       { id: 'leave-apartment', label: 'Respect the warning signs', result: 'You close the apartment door and return with nothing.', effects: { zombieScavenge: { leaveEmpty: true, xp: 20, morale: 1 } } },
     ],
   },
@@ -4765,6 +4767,8 @@ export const OPPONENTS = {
 };
 
 const FIRST_NAMES = ['Ren', 'Mika', 'Arlo', 'Sena', 'Niko', 'Juno', 'Vale', 'Kira'];
+const BROTHER_NAMES = ['Ren', 'Arlo', 'Niko', 'Vale', 'Toma', 'Kade'];
+const SISTER_NAMES = ['Mika', 'Sena', 'Juno', 'Kira', 'Maya', 'Yui'];
 const LAST_NAMES = ['Cross', 'Morrow', 'Stone', 'Reyes', 'Ashford', 'Kade', 'Santos', 'Noir'];
 const WEALTH = ['poor', 'working class', 'stable', 'comfortable', 'wealthy'];
 const TEMPERAMENTS = ['calm', 'reckless', 'focused', 'charming', 'stubborn', 'hungry'];
@@ -5038,7 +5042,7 @@ export function maxLifeHealth(life) {
   const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
   const zombie = normalizeZombieWorld(life.zombieWorld);
   if (life?.activeWorld === 'zombie' && zombie.unlocked) {
-    return 95 + zombie.stats.physical * 18 + zombie.stats.survivability * 8 + (zombie.monarchOrigin ? 45 : 0);
+    return Math.min(280, 95 + zombie.stats.physical * 4 + zombie.stats.survivability * 2 + (zombie.monarchOrigin ? 15 : 0));
   }
   const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
@@ -6878,18 +6882,28 @@ export function runZombieActivity(life, activityId) {
     const craftedId = zombieInventoryEntry(next.zombieWorld, 'pipe') ? 'crowbar' : 'pipe';
     addZombieInventoryItem(next.zombieWorld, craftedId);
   }
-  if (activityId === 'scavenge' && deterministicRoll(next.rngSeed, lifeMonth(next), 'zombie-range-find') < 0.18) {
-    addZombieInventoryItem(next.zombieWorld, 'huntingRifle');
+  if (activityId === 'scavenge') {
+    const rangeFindRoll = deterministicRoll(next.rngSeed, lifeMonth(next), 'zombie-range-find');
+    if (rangeFindRoll < 0.06) addZombieInventoryItem(next.zombieWorld, 'shotgun');
+    else if (rangeFindRoll < 0.12) addZombieInventoryItem(next.zombieWorld, 'huntingRifle');
+    else if (rangeFindRoll < 0.18) addZombieInventoryItem(next.zombieWorld, 'bowAndArrow');
   }
   if (activityId === 'moveLocation') {
     next.zombieWorld.location = next.zombieWorld.location === 'Apartment Block' ? 'Pharmacy District' : 'Highway Shelter';
   }
-  const dangerRoll = deterministicRoll(next.rngSeed, lifeMonth(next), activityId, next.zombieWorld.level, 'zombie-activity-danger') * 100;
-  const safety = next.zombieWorld.resources.shelter * 0.12 + next.zombieWorld.stats.survivability * 2 + (next.zombieWorld.monarchOrigin ? 12 : 0);
-  if (dangerRoll + safety < activity.risk) {
+  const injuryRisk = Math.max(0, activity.injuryRisk ?? 0);
+  const dangerRoll = deterministicRoll(next.rngSeed, lifeMonth(next), activityId, next.zombieWorld.level, 'zombie-activity-danger');
+  const injuryAvoidance = clampFloat(
+    next.zombieWorld.stats.survivability * 0.035 +
+      next.zombieWorld.resources.shelter * 0.002 +
+      (next.zombieWorld.monarchOrigin ? 0.1 : 0),
+    0,
+    0.8
+  );
+  if (injuryRisk > 0 && dangerRoll < (injuryRisk / 100) * (1 - injuryAvoidance)) {
     const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, activityId, 'injury-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
-    addZombieBodyInjury(next, part, activity.risk >= 28 ? 'moderate' : 'mild');
-    next.resources.health = clampLifeResource(next, 'health', next.resources.health - Math.max(4, Math.round(activity.risk / 2)));
+    addZombieBodyInjury(next, part, injuryRisk >= 28 ? 'moderate' : 'mild');
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health - Math.max(4, Math.round(injuryRisk / 2)));
   }
   grantZombieXp(next, activity.xp);
   next.zombieWorld.resources.food = clamp(next.zombieWorld.resources.food - 1, 0, 999);
@@ -7000,6 +7014,21 @@ function applyZombieFightResult(life, fight, won) {
     life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale - 12, 0, 100);
     fight.result.rewards.push('Morale cracked by the failed encounter');
   }
+}
+
+function endFatalZombieFight(life, fight) {
+  const encounterName = ZOMBIE_ENCOUNTERS[fight.opponentId]?.name ?? 'the infected';
+  life.resources.health = 0;
+  return endLife(life, {
+    eyebrow: 'Zombie Fatality',
+    title: 'Killed by the Infected',
+    lines: [
+      `${life.identity.name} was killed during ${encounterName}.`,
+      `Location: ${life.zombieWorld?.location ?? 'Unknown'}.`,
+      `Infected remaining: ${liveZombies(fight).length}.`,
+    ],
+    logText: `Killed during a zombie encounter: ${encounterName} overwhelmed ${life.identity.name}.`,
+  });
 }
 
 function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
@@ -7125,6 +7154,9 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     damagedZombies,
     zombieCount: swarm,
   });
+  if (fight.meters.playerHealth <= 0) {
+    return endFatalZombieFight(next, fight);
+  }
   const finished = fight.meters.playerHealth <= 0 || liveZombies(fight).length === 0 || fight.round >= fight.maxRounds;
   if (finished) {
     finishActiveFight(next);
@@ -7168,6 +7200,19 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
   const fallbackFirstName = pick(FIRST_NAMES, rng);
   pick(LAST_NAMES, rng);
   const identity = identityFor(cleanFirstName(firstName) || fallbackFirstName, clan);
+  const siblingRng = createRng(Number(seed) + 73091);
+  const siblingRelationship = siblingRng() < 0.5 ? 'brother' : 'sister';
+  const siblingFirstName = pick(siblingRelationship === 'brother' ? BROTHER_NAMES : SISTER_NAMES, siblingRng);
+  const sibling = {
+    id: `sibling-${siblingRelationship}`,
+    firstName: siblingFirstName,
+    name: `${siblingFirstName} ${identity.lastName}`,
+    relationship: siblingRelationship,
+    gender: siblingRelationship === 'brother' ? 'Male' : 'Female',
+    age: 10 + Math.floor(siblingRng() * 6),
+    trust: 72 + Math.floor(siblingRng() * 19),
+    alive: true,
+  };
 
   const life = {
     version: 1,
@@ -7214,6 +7259,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
       rival: 0,
       sponsor: 0,
     },
+    sibling,
     rival: null,
     coach: {
       fighters: [],
@@ -7277,6 +7323,18 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     life.sorcererWorld.missionOffers = createSorcererMissionBoard(life);
   } else if (activeWorld === 'zombie') {
     life.zombieWorld = { ...normalizeZombieWorld(life.zombieWorld), unlocked: true };
+    life.zombieWorld.team = [{
+      id: sibling.id,
+      name: sibling.name,
+      role: siblingRelationship === 'brother' ? 'Brother' : 'Sister',
+      trust: sibling.trust,
+      health: 76,
+      stamina: 70,
+      weapon: 'pipe',
+      present: true,
+      relationship: siblingRelationship,
+      injuries: [],
+    }];
     life.pendingEvent = zombieMonarchOriginEvent(life);
     life.eventFlags = { ...life.eventFlags, [life.pendingEvent.flag]: true };
     life.world.rumors = ['The city fell before anyone agreed on what to call the infected.'];
@@ -13117,6 +13175,11 @@ export function resolveEventChoice(life, choiceId) {
     next.activeFight = createActiveFight(next, challengeOpponentFor(next));
     next.nextFightPrep = {};
   }
+  if (choice.effects?.startZombieEncounter) {
+    const started = startZombieEncounter(next, choice.effects.startZombieEncounter);
+    next.activeFight = started.activeFight;
+    next.log = started.log;
+  }
   next.pendingEvent = null;
   return addLog(next, choice.result, 'event');
 }
@@ -13186,7 +13249,23 @@ function applyEventEffects(life, effects = {}) {
       );
     }
     if (outcome.itemId) addZombieInventoryItem(life.zombieWorld, outcome.itemId);
-    if (outcome.injury) addZombieBodyInjury(life, outcome.injury.part, outcome.injury.severity);
+    if (outcome.injury) {
+      const injuryRoll = deterministicRoll(
+        life.rngSeed,
+        lifeMonth(life),
+        outcome.injury.part,
+        outcome.xp ?? 0,
+        'zombie-scavenge-injury'
+      );
+      const injuryChance = clampFloat(
+        (outcome.injury.chance ?? 0.65) -
+          life.zombieWorld.stats.survivability * 0.04 -
+          (life.zombieWorld.monarchOrigin ? 0.1 : 0),
+        0.05,
+        0.9
+      );
+      if (injuryRoll < injuryChance) addZombieBodyInjury(life, outcome.injury.part, outcome.injury.severity);
+    }
     if (outcome.health) life.resources.health = clampLifeResource(life, 'health', life.resources.health + outcome.health);
     if (outcome.morale) life.zombieWorld.resources.morale = clamp(life.zombieWorld.resources.morale + outcome.morale, 0, 100);
     grantZombieXp(life, outcome.xp ?? 20);

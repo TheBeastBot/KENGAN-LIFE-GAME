@@ -19,6 +19,7 @@ import {
   HUNTER_MOVES,
   SORCERER_INNATE_TECHNIQUES,
   SORCERER_MOVES,
+  ZOMBIE_ITEM_CATALOG,
   HUNTER_LEVEL_REWARD_OPTIONS,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
@@ -143,6 +144,18 @@ test('new life uses the chosen first name and current clan as last name', () => 
   assert.equal(life.identity.firstName, 'Kazuo');
   assert.equal(life.identity.lastName, life.clan.name);
   assert.equal(life.identity.name, `Kazuo ${life.clan.name}`);
+});
+
+test('new lives start with exactly one brother or sister', () => {
+  for (let seed = 1; seed <= 20; seed += 1) {
+    const life = createNewLife({ seed, world: 'zombie' });
+
+    assert.ok(['brother', 'sister'].includes(life.sibling.relationship));
+    assert.equal(life.sibling.name.endsWith(` ${life.identity.lastName}`), true);
+    assert.equal(life.zombieWorld.team.length, 1);
+    assert.equal(life.zombieWorld.team[0].id, life.sibling.id);
+    assert.equal(life.zombieWorld.team[0].relationship, life.sibling.relationship);
+  }
 });
 
 test('favorite trainings are persisted separately from training progress and can be toggled off', () => {
@@ -286,6 +299,101 @@ test('zombie scavenging opens a choice event before granting any loot', () => {
   assert.equal(leftEmpty.zombieWorld.xp > xpBefore, true);
 });
 
+test('scavenging choices can trigger a zombie encounter', () => {
+  let fightChoiceLife = null;
+  let fightChoice = null;
+
+  for (let seed = 1; seed <= 100 && !fightChoice; seed += 1) {
+    const life = { ...createNewLife({ seed, world: 'zombie' }), pendingEvent: null };
+    const scavenging = runZombieActivity(life, 'scavenge');
+    const choice = scavenging.pendingEvent.choices.find((item) => item.effects?.startZombieEncounter);
+    if (choice) {
+      fightChoiceLife = scavenging;
+      fightChoice = choice;
+    }
+  }
+
+  assert.ok(fightChoice);
+  const result = resolveEventChoice(fightChoiceLife, fightChoice.id);
+  assert.equal(result.pendingEvent, null);
+  assert.equal(result.activeFight.source, 'zombieEncounter');
+  assert.equal(result.activeFight.zombies.length > 1, true);
+});
+
+test('safe zombie activities do not cause body injuries', () => {
+  const safeActivities = ['secureShelter', 'treatWounds', 'recruitSurvivor', 'craftGear'];
+
+  for (let seed = 1; seed <= 40; seed += 1) {
+    for (const activityId of safeActivities) {
+      const life = createNewLife({ seed, world: 'zombie' });
+      life.pendingEvent = null;
+      life.zombieWorld.resources = {
+        ...life.zombieWorld.resources,
+        food: 20,
+        water: 20,
+        medicine: 20,
+        materials: 20,
+      };
+
+      const result = runZombieActivity(life, activityId);
+      assert.equal(result.zombieWorld.bodyInjuries.length, 0, `${activityId} injured the player at seed ${seed}`);
+    }
+  }
+});
+
+test('survivability improves the chance to evade scavenging injuries', () => {
+  let lowSurvivabilityInjuries = 0;
+  let highSurvivabilityInjuries = 0;
+
+  for (let seed = 1; seed <= 120; seed += 1) {
+    const base = { ...createNewLife({ seed, world: 'zombie' }), pendingEvent: null };
+    const low = runZombieActivity(base, 'scavenge');
+    const riskyChoice = low.pendingEvent.choices.find((choice) => choice.effects?.zombieScavenge?.injury);
+    assert.ok(riskyChoice);
+
+    const high = {
+      ...low,
+      zombieWorld: {
+        ...low.zombieWorld,
+        stats: { ...low.zombieWorld.stats, survivability: 15 },
+      },
+    };
+    const lowResult = resolveEventChoice(low, riskyChoice.id);
+    const highResult = resolveEventChoice(high, riskyChoice.id);
+    lowSurvivabilityInjuries += lowResult.zombieWorld.bodyInjuries.length;
+    highSurvivabilityInjuries += highResult.zombieWorld.bodyInjuries.length;
+  }
+
+  assert.ok(lowSurvivabilityInjuries > 40);
+  assert.ok(highSurvivabilityInjuries < lowSurvivabilityInjuries / 2);
+});
+
+test('zombie health scaling stays grounded including monarch benefits', () => {
+  const base = createNewLife({ seed: 510, world: 'zombie' });
+  const trained = {
+    ...base,
+    zombieWorld: {
+      ...base.zombieWorld,
+      stats: { ...base.zombieWorld.stats, physical: 10, survivability: 10 },
+    },
+  };
+  const monarch = {
+    ...trained,
+    zombieWorld: { ...trained.zombieWorld, monarchOrigin: true },
+  };
+  const extreme = {
+    ...monarch,
+    zombieWorld: {
+      ...monarch.zombieWorld,
+      stats: { ...monarch.zombieWorld.stats, physical: 100, survivability: 100 },
+    },
+  };
+
+  assert.equal(maxLifeHealth(trained), 155);
+  assert.equal(maxLifeHealth(monarch), 170);
+  assert.equal(maxLifeHealth(extreme), 280);
+});
+
 test('zombie encounters support multiple zombies guns ammo body injuries and teammate switching', () => {
   let life = createNewLife({ seed: 507, world: 'zombie' });
   life = {
@@ -301,6 +409,8 @@ test('zombie encounters support multiple zombies guns ammo body injuries and tea
   };
 
   const started = startZombieEncounter(life, 'streetHorde');
+  started.activeFight.meters.playerHealth = 200;
+  started.activeFight.meters.maxPlayerHealth = 200;
   const shot = takeFightTurn(started, 'gunFire');
   const switched = switchZombieCombatant(shot, 'maya');
   const bitten = takeFightTurn(switched, 'meleeSwing');
@@ -341,6 +451,21 @@ test('zombie attacks hit one target while the full swarm makes combat brutal', (
   assert.equal(next.activeFight.exchanges[0].enemyDamage >= 35, true);
 });
 
+test('reaching zero health in a zombie encounter permanently ends the life', () => {
+  const life = { ...createNewLife({ seed: 511, world: 'zombie' }), pendingEvent: null };
+  const started = startZombieEncounter(life, 'streetHorde');
+  started.activeFight.meters.playerHealth = 1;
+  started.resources.health = 1;
+
+  const dead = takeFightTurn(started, 'unarmed');
+
+  assert.equal(dead.ended, true);
+  assert.equal(dead.resources.health, 0);
+  assert.equal(dead.activeFight, null);
+  assert.equal(dead.legacySummary.eyebrow, 'Zombie Fatality');
+  assert.match(dead.legacySummary.title, /Killed by the Infected/);
+});
+
 test('zombie items support consumables medicines and equippable weapons', () => {
   let life = createNewLife({ seed: 508, world: 'zombie' });
   life.zombieWorld.inventory.push({ id: 'crowbar', quantity: 1, durability: 48 });
@@ -356,6 +481,13 @@ test('zombie items support consumables medicines and equippable weapons', () => 
   assert.equal(life.zombieWorld.resources.medicine, medicineBefore - 1);
   assert.equal(life.resources.health > 40, true);
   assert.equal(life.zombieWorld.equippedMelee, 'crowbar');
+});
+
+test('zombie weapon catalog includes shotgun and bow ranged options', () => {
+  assert.equal(ZOMBIE_ITEM_CATALOG.shotgun.type, 'range');
+  assert.equal(ZOMBIE_ITEM_CATALOG.shotgun.ammoCost, 2);
+  assert.equal(ZOMBIE_ITEM_CATALOG.bowAndArrow.type, 'range');
+  assert.equal(ZOMBIE_ITEM_CATALOG.bowAndArrow.ammoCost, 1);
 });
 
 test('choosing curses after the Monarchs assigns an innate technique and universal basics', () => {
