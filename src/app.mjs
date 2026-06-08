@@ -9,6 +9,8 @@ import {
   SORCERER_MOVES,
   ZOMBIE_ACTIVITIES,
   ZOMBIE_ITEM_CATALOG,
+  AGENT_GEAR_CATALOG,
+  AGENT_TRAINING_ACTIONS,
   HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
   SYSTEM_SHOP_ITEMS,
@@ -63,6 +65,7 @@ import {
   getUnlockedFightMoves,
   getUnlockedHunterMoves,
   getUnlockedSorcererMoves,
+  normalizeAgentWorld,
   normalizeSorcererWorld,
   normalizeZombieWorld,
   joinTournament,
@@ -113,6 +116,11 @@ import {
   spendHunterStatPoint,
   spendHunterStatPoints,
   spendZombieStatPoint,
+  spendAgentStatPoint,
+  runAgentTraining,
+  generateAgentMissions,
+  startAgentMission,
+  equipAgentGear,
   runZombieActivity,
   equipZombieItem,
   useZombieItem,
@@ -413,6 +421,14 @@ const dropdownState = createDropdownStateController({
     'zombie-items-medicine': true,
     'zombie-items-melee': true,
     'zombie-items-range': true,
+    'agent-dossier': true,
+    'agent-stats': true,
+    'agent-academy': true,
+    'agent-missions': true,
+    'agent-loadout-weapons': true,
+    'agent-loadout-gadgets': true,
+    'agent-injuries': true,
+    'agent-log': false,
     'world-rumors': true,
   },
 });
@@ -433,6 +449,10 @@ const NAV_SECTIONS = [
   ['zombie', 'Zombie'],
   ['zombie-activities', 'Zombie Activities'],
   ['zombie-items', 'Zombie Items'],
+  ['agent', 'AGENT'],
+  ['agent-academy', 'Academy'],
+  ['agent-missions', 'Missions'],
+  ['agent-loadout', 'Loadout'],
   ['world', 'World'],
 ];
 const FIGHTER_NAV_SECTION_IDS = new Set([
@@ -449,6 +469,7 @@ const FIGHTER_NAV_SECTION_IDS = new Set([
   'world',
 ]);
 const ZOMBIE_NAV_SECTION_IDS = new Set(['life', 'zombie', 'zombie-activities', 'zombie-items']);
+const AGENT_NAV_SECTION_IDS = new Set(['life', 'agent', 'agent-academy', 'agent-missions', 'agent-loadout']);
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -484,15 +505,17 @@ function loadGame() {
 function normalizeSave(save) {
   const migratedClan = migrateClan(save.clan);
   const identity = normalizeIdentity(save.identity, migratedClan);
-  const activeWorld = ['fighter', 'hunter', 'sorcerer', 'zombie'].includes(save.activeWorld)
+  const activeWorld = ['fighter', 'hunter', 'sorcerer', 'zombie', 'agent'].includes(save.activeWorld)
     ? save.activeWorld
-    : save.zombieWorld?.unlocked
-      ? 'zombie'
-      : save.sorcererWorld?.unlocked
-        ? 'sorcerer'
-        : save.hunterWorld?.unlocked
-          ? 'hunter'
-          : null;
+    : save.agentWorld?.unlocked
+      ? 'agent'
+      : save.zombieWorld?.unlocked
+        ? 'zombie'
+        : save.sorcererWorld?.unlocked
+          ? 'sorcerer'
+          : save.hunterWorld?.unlocked
+            ? 'hunter'
+            : null;
   return {
     ...save,
     identity: {
@@ -507,6 +530,7 @@ function normalizeSave(save) {
     hunterWorld: normalizeHunterWorld(save.hunterWorld),
     sorcererWorld: normalizeSorcererWorld(save.sorcererWorld),
     zombieWorld: normalizeZombieWorld(save.zombieWorld),
+    agentWorld: normalizeAgentWorld(save.agentWorld),
     pendingEvent: save.pendingEvent ?? null,
     trainingPopup: save.trainingPopup ?? null,
     trainingSessionCount: save.trainingSessionCount ?? 0,
@@ -1120,6 +1144,7 @@ function renderCollapsibleSection({ id, title, subtitle = '', count = '', body =
 
 function renderStart() {
   const worlds = [
+    ['agent', 'AGENT', 'Agency career, cover identity, mission dossiers, weapons, gadgets, and extraction pressure.'],
     ['zombie', 'Zombie', 'Rooted survival, scarce supplies, teammates, guns, and permanent wounds.'],
     ['hunter', 'Hunter', 'System gates, stat points, shadows, and Monarch world recreation.'],
     ['sorcerer', 'Sorcerer', 'Cursed energy, missions, innate techniques, and domain pressure.'],
@@ -1340,12 +1365,17 @@ function renderTabs() {
 function availableNavSections() {
   return NAV_SECTIONS.filter(([id]) => {
     if (state.activeWorld === 'zombie') return ZOMBIE_NAV_SECTION_IDS.has(id) && (id !== 'zombie-activities' || state.zombieWorld?.unlocked);
+    if (state.activeWorld === 'agent') return AGENT_NAV_SECTION_IDS.has(id) && (id === 'life' || state.agentWorld?.unlocked);
     if (state.activeWorld === 'fighter' && !FIGHTER_NAV_SECTION_IDS.has(id)) return false;
     if (id === 'hunter') return state.hunterWorld?.unlocked;
     if (id === 'sorcerer') return state.sorcererWorld?.unlocked;
     if (id === 'zombie') return state.zombieWorld?.unlocked;
     if (id === 'zombie-activities') return state.zombieWorld?.unlocked;
     if (id === 'zombie-items') return state.zombieWorld?.unlocked;
+    if (id === 'agent') return state.agentWorld?.unlocked;
+    if (id === 'agent-academy') return state.agentWorld?.unlocked;
+    if (id === 'agent-missions') return state.agentWorld?.unlocked;
+    if (id === 'agent-loadout') return state.agentWorld?.unlocked;
     return true;
   });
 }
@@ -1415,6 +1445,7 @@ function renderNavMenu() {
 function renderActiveTab() {
   const available = new Set(availableNavSections().map(([id]) => id));
   if (state.activeFight?.source === 'zombieEncounter' && !state.activeFight.finished) activeTab = 'zombie';
+  if (state.activeFight?.source === 'agentMission' && !state.activeFight.finished) activeTab = 'agent';
   if (!available.has(activeTab)) activeTab = 'life';
   if (activeTab === 'train') return renderTrain();
   if (activeTab === 'recover') return renderRecover();
@@ -1430,6 +1461,10 @@ function renderActiveTab() {
   if (activeTab === 'zombie') return renderZombie();
   if (activeTab === 'zombie-activities') return renderZombieActivitiesTab();
   if (activeTab === 'zombie-items') return renderZombieItems();
+  if (activeTab === 'agent') return renderAgent();
+  if (activeTab === 'agent-academy') return renderAgentAcademyTab();
+  if (activeTab === 'agent-missions') return renderAgentMissionsTab();
+  if (activeTab === 'agent-loadout') return renderAgentLoadout();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -1533,7 +1568,7 @@ function renderLife() {
           <div>
             <p class="eyebrow">RESET THE WORLD</p>
             <h3>Choose the recreated world</h3>
-            <p>Hunter Monarch authority can restart reality as Hunter, Zombie, Sorcerer, or Fighter.</p>
+            <p>Hunter Monarch authority can restart reality as Hunter, Zombie, Sorcerer, Fighter, or AGENT.</p>
           </div>
           <div class="action-grid">
             <button class="primary" data-action="world-reset">Default Hunter Reset</button>
@@ -1541,6 +1576,7 @@ function renderLife() {
             ${button('Zombie', 'world-reset-zombie', 'danger')}
             ${button('Sorcerer', 'world-reset-sorcerer')}
             ${button('Fighter', 'world-reset-fighter')}
+            ${button('AGENT', 'world-reset-agent')}
           </div>
         </article>
       ` : ''}
@@ -2251,7 +2287,7 @@ function renderFightReport(fight) {
           ${fight.result.injuries.map((injury) => `<p>${formatInjury(injury)}</p>`).join('')}
         </div>
       </div>
-      <button class="primary wide" data-action="close-fight">${fight.source === 'hunterQuest' ? 'Back to System Quest' : 'Back to Fight List'}</button>
+      <button class="primary wide" data-action="close-fight">${fight.source === 'hunterQuest' ? 'Back to System Quest' : fight.source === 'agentMission' ? 'Back to AGENT Dossier' : 'Back to Fight List'}</button>
     </article>
   `;
 }
@@ -4517,6 +4553,202 @@ function renderSorcerer() {
   `;
 }
 
+function renderAgentStatus(agent) {
+  return `
+    <article class="option-card zombie-window">
+      <div>
+        <p class="eyebrow">AGENT Dossier</p>
+        <h2>${agent.rank} · Level ${agent.level}</h2>
+        <p class="muted">${agent.completedMissions.length} completed operation${agent.completedMissions.length === 1 ? '' : 's'} / Safehouse Level ${agent.safehouseLevel} / ${agent.statPoints} stat point${agent.statPoints === 1 ? '' : 's'} available</p>
+        <div class="resource-grid">
+          ${metric('Cover', agent.resources.cover)}
+          ${metric('Heat', agent.resources.heat)}
+          ${metric('Intel', agent.resources.intel)}
+          ${metric('Cash', `$${agent.resources.cash}`)}
+          ${metric('Trust', agent.resources.agencyTrust)}
+          ${metric('Nemesis', agent.nemesisAlert ? 'Alert' : 'Quiet')}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentStats(agent) {
+  return `
+    <div class="stat-list">
+      ${Object.entries(agent.stats).map(([stat, value]) => `
+        <div class="stat-row">
+          <span>${labelize(stat)}</span>
+          <strong>${value}</strong>
+          <button data-action="agent-stat-${stat}" ${agent.statPoints <= 0 ? 'disabled' : ''}>+</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderAgentAcademy(agent) {
+  return `
+    <div class="activity-list">
+      ${Object.values(AGENT_TRAINING_ACTIONS).map((drill) => `
+        <article class="option-card">
+          <div>
+            <h3>${drill.label}</h3>
+            <p>${labelize(drill.stat)} drill · +${drill.xp} XP · +${drill.intel} Intel · $${drill.cashCost} agency cash</p>
+          </div>
+          <button class="primary" data-action="agent-training-${drill.id}" ${agent.resources.cash < drill.cashCost ? 'disabled' : ''}>Run Drill</button>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderAgentMissions(agent) {
+  const missions = agent.missionOffers ?? [];
+  return `
+    <div class="activity-list">
+      ${missions.length ? missions.map((mission) => `
+        <article class="option-card">
+          <div>
+            <p class="eyebrow">${mission.label} · Risk ${mission.risk}</p>
+            <h3>${labelize(mission.enemyId)}</h3>
+            <p>${escapeHtml(mission.objective)} Required prep: ${labelize(mission.requiredPrep)}.</p>
+            <p class="muted">Rewards: +${mission.reward.xp} XP / $${mission.reward.cash} / +${mission.reward.intel} intel / +${mission.reward.trust} trust</p>
+          </div>
+          <button class="primary" data-action="agent-mission-start-${mission.id}">Start</button>
+        </article>
+      `).join('') : '<article class="option-card"><div><h3>No decrypted dossiers</h3><p>Generate a fresh board when your handler sends the next packet.</p></div></article>'}
+    </div>
+  `;
+}
+
+function renderAgentLoadout() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  if (!agent.unlocked) {
+    return '<section class="stack"><article class="option-card"><h2>AGENT Loadout Locked</h2><p>This life did not enter the agency.</p></article></section>';
+  }
+  const inventory = agent.inventory.map((entry) => ({ ...entry, gear: AGENT_GEAR_CATALOG[entry.id] })).filter((entry) => entry.gear);
+  const renderGear = (entry) => {
+    const selected = agent.equippedWeapon === entry.id || agent.equippedGadget === entry.id;
+    return `
+      <article class="option-card">
+        <div>
+          <h3>${entry.gear.name} ${entry.quantity > 1 ? `x${entry.quantity}` : ''}</h3>
+          <p>${entry.gear.effect}</p>
+          <p class="muted">${labelize(entry.gear.type)}${entry.gear.damage ? ` / Damage ${entry.gear.damage}` : ''}${entry.gear.heat !== undefined ? ` / Heat ${entry.gear.heat}` : ''}</p>
+        </div>
+        <button class="primary" data-action="agent-gear-equip-${entry.id}" ${selected ? 'disabled' : ''}>${selected ? 'Equipped' : 'Equip'}</button>
+      </article>
+    `;
+  };
+  return `
+    <section class="stack zombie-panel">
+      <article class="option-card zombie-window">
+        <div>
+          <p class="eyebrow">AGENT Loadout</p>
+          <h2>${AGENT_GEAR_CATALOG[agent.equippedWeapon]?.name ?? 'No Weapon'} + ${AGENT_GEAR_CATALOG[agent.equippedGadget]?.name ?? 'No Gadget'}</h2>
+          <p class="muted">Weapons solve contact. Gadgets solve the parts of a mission that bullets make worse.</p>
+        </div>
+      </article>
+      ${renderCollapsibleSection({ id: 'agent-loadout-weapons', title: 'Weapons', subtitle: 'Sidearms, blades, and loud breach options.', body: `<div class="activity-list">${inventory.filter((entry) => entry.gear.type === 'weapon').map(renderGear).join('')}</div>` })}
+      ${renderCollapsibleSection({ id: 'agent-loadout-gadgets', title: 'Gadgets', subtitle: 'Tools that alter stealth, intel, extraction, and survival.', body: `<div class="activity-list">${inventory.filter((entry) => entry.gear.type === 'gadget').map(renderGear).join('')}</div>` })}
+    </section>
+  `;
+}
+
+function renderAgentCombat() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  const fight = state.activeFight;
+  const enemy = fight.enemy ?? {};
+  const mission = fight.mission ?? agent.activeMission ?? {};
+  const actions = [
+    ['silentTakedown', 'Silent Takedown', 'Quiet burst damage; best with stealth and blades.'],
+    ['controlledShot', 'Controlled Shot', 'Reliable weapon attack using marksmanship.'],
+    ['disarm', 'Disarm', 'Lower the enemy counter and create control.'],
+    ['gadget', AGENT_GEAR_CATALOG[agent.equippedGadget]?.name ?? 'Gadget', AGENT_GEAR_CATALOG[agent.equippedGadget]?.effect ?? 'Use equipped field tech.'],
+    ['reposition', 'Reposition', 'Recover cover and momentum.'],
+    ['extract', 'Extract', 'Leave once the objective route is clean.'],
+  ];
+  return `
+    <section class="screen-view fight-screen">
+      <article class="screen-panel fight-panel" data-scroll-key="agent-combat">
+        <div class="fight-popup-header">
+          <div>
+            <p class="eyebrow">${fight.finished ? 'Operation Report' : `AGENT Field Combat · Exchange ${fight.round}`}</p>
+            <h2>${mission.label ?? 'Field Operation'} vs ${enemy.name ?? labelize(fight.opponentId ?? 'Enemy')}</h2>
+            <p class="muted">Cover ${fight.meters.cover} / Heat ${fight.meters.heat} / Momentum ${fight.meters.momentum} / ${enemy.revealed ? 'Weakness revealed' : 'Enemy unread'}</p>
+          </div>
+          <button class="small-btn" data-action="close-fight">Close</button>
+        </div>
+        ${renderCombatMeters(fight)}
+        ${fight.finished ? renderFightReport(fight) : `
+          <div class="move-grid zombie-move-grid">
+            ${actions.map(([id, label, hint]) => `
+              <button class="move-card system-move-card zombie-move-card" data-action="fight-turn-${id}" title="${escapeHtml(hint)}">
+                <strong>${label}</strong>
+                <span>${hint}</span>
+              </button>
+            `).join('')}
+          </div>
+        `}
+        ${renderExchanges(fight)}
+      </article>
+    </section>
+  `;
+}
+
+function renderAgent() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  if (!agent.unlocked) {
+    return '<section class="stack"><article class="option-card"><h2>AGENT World Locked</h2><p>This life did not enter the agency.</p></article></section>';
+  }
+  if (state.activeFight?.source === 'agentMission') return renderAgentCombat();
+  return `
+    <section class="stack zombie-panel">
+      ${renderAgentStatus(agent)}
+      ${renderCollapsibleSection({ id: 'agent-dossier', title: 'Dossier', subtitle: 'Cover identity, heat, intel, trust, rank, and safehouse readiness.', body: renderAgentStatus(agent) })}
+      ${renderCollapsibleSection({ id: 'agent-stats', title: 'AGENT Stats', subtitle: `${agent.statPoints} points available`, body: `<article class="option-card zombie-window"><div>${renderAgentStats(agent)}</div></article>` })}
+      ${renderCollapsibleSection({ id: 'agent-injuries', title: 'Field Injuries', subtitle: `${agent.injuries.length} injury record${agent.injuries.length === 1 ? '' : 's'}`, body: `<div class="activity-list">${agent.injuries.length ? agent.injuries.map((injury) => `<article class="option-card"><div><h3>${labelize(injury.severity)} ${labelize(injury.part)}</h3><p>${injury.label}</p></div></article>`).join('') : '<article class="option-card"><div><h3>No field injuries</h3><p>Your cover story is cleaner when you are not limping through it.</p></div></article>'}</div>` })}
+      ${renderCollapsibleSection({ id: 'agent-log', title: 'AGENT Log', subtitle: 'Handler and operation updates.', body: renderLog('world') })}
+    </section>
+  `;
+}
+
+function renderAgentAcademyTab() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  if (!agent.unlocked) return '<section class="stack"><article class="option-card"><h2>Academy Locked</h2><p>This life did not enter the agency.</p></article></section>';
+  return `
+    <section class="stack zombie-panel">
+      <article class="option-card zombie-window">
+        <div>
+          <p class="eyebrow">Agency Academy</p>
+          <h2>Train the parts of a mission nobody claps for.</h2>
+          <p class="muted">Academy drills spend agency cash, build AGENT stats, and feed intel, trust, cover, and rank progression.</p>
+        </div>
+      </article>
+      ${renderCollapsibleSection({ id: 'agent-academy', title: 'Academy Drills', subtitle: 'Shooting, surveillance, bypass, cover, and protection circuits.', body: renderAgentAcademy(agent) })}
+    </section>
+  `;
+}
+
+function renderAgentMissionsTab() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  if (!agent.unlocked) return '<section class="stack"><article class="option-card"><h2>Missions Locked</h2><p>This life did not enter the agency.</p></article></section>';
+  return `
+    <section class="stack zombie-panel">
+      <article class="option-card zombie-window">
+        <div>
+          <p class="eyebrow">Mission Dossiers</p>
+          <h2>${agent.missionOffers.length} decrypted operation${agent.missionOffers.length === 1 ? '' : 's'}</h2>
+          <p class="muted">Intel improves approach odds. Heat makes every exit louder.</p>
+        </div>
+        <button class="primary" data-action="agent-missions-generate">Generate Dossiers</button>
+      </article>
+      ${renderCollapsibleSection({ id: 'agent-missions', title: 'Available Missions', subtitle: 'Infiltration, extraction, protection, sabotage, capture, and escape work.', body: renderAgentMissions(agent) })}
+    </section>
+  `;
+}
+
 function renderZombieStatus(zombie) {
   const supplies = zombie.resources;
   return `
@@ -5136,7 +5368,7 @@ function handleAction(action, source = null) {
   if (action.startsWith('world-reset-')) {
     const destination = action.replace('world-reset-', '');
     setState(resetWorld(state, { destination }));
-    activeTab = destination === 'zombie' ? 'zombie' : destination === 'sorcerer' ? 'sorcerer' : destination === 'hunter' ? 'hunter' : 'life';
+    activeTab = destination === 'zombie' ? 'zombie' : destination === 'sorcerer' ? 'sorcerer' : destination === 'hunter' ? 'hunter' : destination === 'agent' ? 'agent' : 'life';
     return;
   }
   if (action === 'end-life') setState(endLife(state));
@@ -5430,6 +5662,31 @@ function handleAction(action, source = null) {
     setState(spendSorcererStatPoint(state, action.replace('sorcerer-stat-', '')));
     return;
   }
+  if (action.startsWith('agent-training-')) {
+    activeTab = 'agent-academy';
+    setState(runAgentTraining(state, action.replace('agent-training-', '')));
+    return;
+  }
+  if (action === 'agent-missions-generate') {
+    activeTab = 'agent-missions';
+    setState(generateAgentMissions(state));
+    return;
+  }
+  if (action.startsWith('agent-mission-start-')) {
+    activeTab = 'agent';
+    fightInfoOpen = false;
+    setState(startAgentMission(state, action.replace('agent-mission-start-', '')));
+    return;
+  }
+  if (action.startsWith('agent-gear-equip-')) {
+    activeTab = 'agent-loadout';
+    setState(equipAgentGear(state, action.replace('agent-gear-equip-', '')));
+    return;
+  }
+  if (action.startsWith('agent-stat-')) {
+    setState(spendAgentStatPoint(state, action.replace('agent-stat-', '')));
+    return;
+  }
   if (action.startsWith('zombie-activity-')) {
     activeTab = 'zombie-activities';
     setState(runZombieActivity(state, action.replace('zombie-activity-', '')));
@@ -5548,6 +5805,7 @@ function handleAction(action, source = null) {
     const previousExchangeCount = state.activeFight?.exchanges?.length ?? 0;
     const nextFightState = takeFightTurn(state, moveId);
     if (nextFightState.activeFight?.source === 'zombieEncounter' && !nextFightState.activeFight.finished) activeTab = 'zombie';
+    if (nextFightState.activeFight?.source === 'agentMission' && !nextFightState.activeFight.finished) activeTab = 'agent';
     const nextExchangeCount = nextFightState.activeFight?.exchanges?.length ?? 0;
     const latestExchangeLabel = nextFightState.activeFight?.exchanges?.[0]?.tacticLabel;
     if (nextExchangeCount > previousExchangeCount) triggerMoveIconBurst(moveId, latestExchangeLabel);

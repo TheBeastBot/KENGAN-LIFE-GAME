@@ -20,6 +20,8 @@ import {
   SORCERER_INNATE_TECHNIQUES,
   SORCERER_MOVES,
   ZOMBIE_ITEM_CATALOG,
+  AGENT_GEAR_CATALOG,
+  AGENT_TRAINING_ACTIONS,
   HUNTER_LEVEL_REWARD_OPTIONS,
   SYSTEM_SHOP_ITEMS,
   MENTORS,
@@ -60,6 +62,7 @@ import {
   getSorcererRankReview,
   maxLifeEnergy,
   maxLifeHealth,
+  normalizeAgentWorld,
   normalizeZombieWorld,
   getStatCap,
   getUnlockedFightMoves,
@@ -97,6 +100,12 @@ import {
   spendHunterStatPoint,
   spendHunterStatPoints,
   spendZombieStatPoint,
+  spendAgentStatPoint,
+  runAgentTraining,
+  generateAgentMissions,
+  startAgentMission,
+  takeAgentTurn,
+  equipAgentGear,
   runZombieActivity,
   equipZombieItem,
   useZombieItem,
@@ -220,23 +229,132 @@ test('new life chooses exactly one active world', () => {
   const hunter = createNewLife({ seed: 501, world: 'hunter' });
   const sorcerer = createNewLife({ seed: 502, world: 'sorcerer' });
   const zombie = createNewLife({ seed: 503, world: 'zombie' });
+  const agent = createNewLife({ seed: 504, world: 'agent' });
 
   assert.equal(fighter.activeWorld, 'fighter');
   assert.equal(fighter.hunterWorld.unlocked, false);
   assert.equal(fighter.sorcererWorld.unlocked, false);
   assert.equal(fighter.zombieWorld.unlocked, false);
+  assert.equal(fighter.agentWorld.unlocked, false);
   assert.equal(hunter.activeWorld, 'hunter');
   assert.equal(hunter.hunterWorld.unlocked, true);
   assert.equal(hunter.sorcererWorld.unlocked, false);
   assert.equal(hunter.zombieWorld.unlocked, false);
+  assert.equal(hunter.agentWorld.unlocked, false);
   assert.equal(sorcerer.activeWorld, 'sorcerer');
   assert.equal(sorcerer.hunterWorld.unlocked, false);
   assert.equal(sorcerer.sorcererWorld.unlocked, true);
   assert.equal(sorcerer.zombieWorld.unlocked, false);
+  assert.equal(sorcerer.agentWorld.unlocked, false);
   assert.equal(zombie.activeWorld, 'zombie');
   assert.equal(zombie.hunterWorld.unlocked, false);
   assert.equal(zombie.sorcererWorld.unlocked, false);
   assert.equal(zombie.zombieWorld.unlocked, true);
+  assert.equal(zombie.agentWorld.unlocked, false);
+  assert.equal(agent.activeWorld, 'agent');
+  assert.equal(agent.hunterWorld.unlocked, false);
+  assert.equal(agent.sorcererWorld.unlocked, false);
+  assert.equal(agent.zombieWorld.unlocked, false);
+  assert.equal(agent.agentWorld.unlocked, true);
+  assert.equal(agent.agentWorld.rank, 'Trainee');
+  assert.deepEqual(agent.agentWorld.stats, { marksmanship: 0, stealth: 0, tradecraft: 0, tech: 0, conditioning: 0 });
+});
+
+test('agent world normalization preserves valid gear resources and clamps bad saves', () => {
+  const agent = normalizeAgentWorld({
+    unlocked: true,
+    rank: 'Field Agent',
+    xp: 190.8,
+    level: 3.2,
+    statPoints: 4.9,
+    stats: { marksmanship: 2, stealth: -5, tradecraft: 3, tech: 1, conditioning: 6 },
+    resources: { cover: 120, heat: -10, intel: 7.7, cash: 320.2, agencyTrust: 101 },
+    inventory: [{ id: 'carbine', quantity: 2 }, 'smokeCapsule', { id: 'unknown', quantity: 10 }],
+    equippedWeapon: 'carbine',
+    equippedGadget: 'smokeCapsule',
+    safehouseLevel: 4.2,
+    completedMissions: ['one', 'two'],
+    injuries: [{ part: 'shoulder', severity: 'moderate' }],
+    handlerNotes: ['Keep the cover clean.'],
+    nemesisAlert: true,
+  });
+
+  assert.equal(agent.unlocked, true);
+  assert.equal(agent.rank, 'Field Agent');
+  assert.equal(agent.xp, 190);
+  assert.equal(agent.level, 3);
+  assert.equal(agent.statPoints, 4);
+  assert.deepEqual(agent.stats, { marksmanship: 2, stealth: 0, tradecraft: 3, tech: 1, conditioning: 6 });
+  assert.deepEqual(agent.resources, { cover: 100, heat: 0, intel: 7, cash: 320, agencyTrust: 100 });
+  assert.equal(agent.inventory.find((item) => item.id === 'carbine').quantity, 2);
+  assert.equal(agent.inventory.find((item) => item.id === 'smokeCapsule').quantity, 1);
+  assert.equal(agent.equippedWeapon, 'carbine');
+  assert.equal(agent.equippedGadget, 'smokeCapsule');
+  assert.equal(agent.safehouseLevel, 4);
+  assert.equal(agent.completedMissions.length, 2);
+  assert.equal(agent.injuries[0].part, 'shoulder');
+  assert.equal(agent.nemesisAlert, true);
+});
+
+test('agent stat spending and academy training progress the dossier only', () => {
+  let life = createNewLife({ seed: 520, world: 'agent' });
+  const fighterStats = { ...life.stats };
+
+  life = spendAgentStatPoint({ ...life, agentWorld: { ...life.agentWorld, statPoints: 2 } }, 'stealth');
+  life = spendAgentStatPoint(life, 'tech');
+  const trained = runAgentTraining(life, 'lockBypassLab');
+
+  assert.equal(life.agentWorld.stats.stealth, 1);
+  assert.equal(life.agentWorld.stats.tech, 1);
+  assert.equal(life.agentWorld.statPoints, 0);
+  assert.equal(trained.agentWorld.xp > life.agentWorld.xp, true);
+  assert.equal(trained.agentWorld.resources.intel > life.agentWorld.resources.intel, true);
+  assert.deepEqual(trained.stats, fighterStats);
+  assert.ok(AGENT_TRAINING_ACTIONS.lockBypassLab);
+});
+
+test('agent missions generate valid dossiers and start tactical combat', () => {
+  let life = createNewLife({ seed: 521, world: 'agent' });
+  life = generateAgentMissions(life);
+  const mission = life.agentWorld.missionOffers[0];
+
+  const started = startAgentMission(life, mission.id);
+
+  assert.equal(life.agentWorld.missionOffers.length, 3);
+  assert.ok(mission.type);
+  assert.ok(mission.enemyId);
+  assert.equal(started.agentWorld.activeMission.id, mission.id);
+  assert.equal(started.activeFight.source, 'agentMission');
+  assert.equal(started.activeFight.enemy.health > 0, true);
+  assert.equal(started.activeFight.meters.cover, started.agentWorld.resources.cover);
+});
+
+test('agent loadout and tactical actions resolve gadgets damage extraction and heat', () => {
+  let life = createNewLife({ seed: 522, world: 'agent' });
+  life.agentWorld.stats = { marksmanship: 8, stealth: 8, tradecraft: 5, tech: 5, conditioning: 5 };
+  life.agentWorld.resources = { ...life.agentWorld.resources, intel: 5, heat: 8, cover: 90 };
+  life.agentWorld.inventory = [
+    { id: 'suppressedPistol', quantity: 1 },
+    { id: 'microdrone', quantity: 1 },
+  ];
+  life = equipAgentGear(life, 'suppressedPistol');
+  life = equipAgentGear(life, 'microdrone');
+  life = generateAgentMissions(life);
+  life = startAgentMission(life, life.agentWorld.missionOffers[0].id);
+
+  const scanned = takeAgentTurn(life, 'gadget');
+  const shot = takeAgentTurn(scanned, 'controlledShot');
+  const extracted = takeAgentTurn({ ...shot, activeFight: { ...shot.activeFight, enemy: { ...shot.activeFight.enemy, health: 0 } } }, 'extract');
+
+  assert.equal(AGENT_GEAR_CATALOG.suppressedPistol.type, 'weapon');
+  assert.equal(scanned.activeFight.exchanges[0].moveId, 'gadget');
+  assert.equal(scanned.activeFight.enemy.revealed, true);
+  assert.equal(shot.activeFight.enemy.health < scanned.activeFight.enemy.health, true);
+  assert.equal(extracted.activeFight.finished, true);
+  assert.equal(extracted.agentWorld.activeMission, null);
+  assert.equal(extracted.agentWorld.completedMissions.length, 1);
+  assert.equal(extracted.agentWorld.resources.heat >= life.agentWorld.resources.heat, true);
+  assert.equal(extracted.agentWorld.resources.cash > life.agentWorld.resources.cash, true);
 });
 
 test('hard-separated worlds block normal cross-world unlocks', () => {

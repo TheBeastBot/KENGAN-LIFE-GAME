@@ -139,7 +139,79 @@ const DEFAULT_SORCERER_WORLD = {
   lastMissionMonth: null,
   rejectedUntilMonth: null,
 };
-export const PLAYABLE_WORLDS = ['fighter', 'hunter', 'sorcerer', 'zombie'];
+export const AGENT_RANKS = ['Trainee', 'Junior Agent', 'Field Agent', 'Senior Agent', 'Black Card', 'Ghost Operative'];
+const DEFAULT_AGENT_STATS = {
+  marksmanship: 0,
+  stealth: 0,
+  tradecraft: 0,
+  tech: 0,
+  conditioning: 0,
+};
+const DEFAULT_AGENT_WORLD = {
+  unlocked: false,
+  rank: 'Trainee',
+  xp: 0,
+  level: 1,
+  statPoints: 0,
+  stats: DEFAULT_AGENT_STATS,
+  resources: {
+    cover: 85,
+    heat: 0,
+    intel: 2,
+    cash: 250,
+    agencyTrust: 55,
+  },
+  missionOffers: [],
+  activeMission: null,
+  completedMissions: [],
+  inventory: [
+    { id: 'compactPistol', quantity: 1 },
+    { id: 'ceramicKnife', quantity: 1 },
+    { id: 'smokeCapsule', quantity: 1 },
+  ],
+  equippedWeapon: 'compactPistol',
+  equippedGadget: 'smokeCapsule',
+  safehouseLevel: 1,
+  injuries: [],
+  handlerNotes: [],
+  nemesisAlert: false,
+};
+export const AGENT_GEAR_CATALOG = {
+  compactPistol: { id: 'compactPistol', name: 'Compact Pistol', type: 'weapon', damage: 24, stealth: 0, heat: 3, accuracy: 0.08, effect: 'Reliable sidearm with modest heat.' },
+  suppressedPistol: { id: 'suppressedPistol', name: 'Suppressed Pistol', type: 'weapon', damage: 21, stealth: 8, heat: 1, accuracy: 0.1, effect: 'Quiet precision weapon with lower burst.' },
+  carbine: { id: 'carbine', name: 'Carbine', type: 'weapon', damage: 35, stealth: -8, heat: 8, accuracy: 0.04, effect: 'High damage, high heat field rifle.' },
+  tacticalShotgun: { id: 'tacticalShotgun', name: 'Tactical Shotgun', type: 'weapon', damage: 42, stealth: -12, heat: 10, accuracy: -0.03, effect: 'Brutal close-range breach weapon.' },
+  ceramicKnife: { id: 'ceramicKnife', name: 'Ceramic Knife', type: 'weapon', damage: 18, stealth: 12, heat: 0, accuracy: 0.06, silent: true, effect: 'Silent takedown tool that keeps cover cleaner.' },
+  smokeCapsule: { id: 'smokeCapsule', name: 'Smoke Capsule', type: 'gadget', effect: 'Reduces incoming fire and improves extraction.' },
+  microdrone: { id: 'microdrone', name: 'Microdrone', type: 'gadget', effect: 'Reveals enemy weakness and grants intel.' },
+  empCoin: { id: 'empCoin', name: 'EMP Coin', type: 'gadget', effect: 'Disables armored and tech-heavy enemies.' },
+  grappleWatch: { id: 'grappleWatch', name: 'Grapple Watch', type: 'gadget', effect: 'Improves repositioning and extraction.' },
+  medFoam: { id: 'medFoam', name: 'Med Foam', type: 'gadget', effect: 'Restores field health during a mission.' },
+};
+export const AGENT_TRAINING_ACTIONS = {
+  firingRange: { id: 'firingRange', label: 'Firing Range', stat: 'marksmanship', xp: 72, intel: 0, cashCost: 20, trust: 1, cover: 0 },
+  shadowTail: { id: 'shadowTail', label: 'Shadow Tail', stat: 'stealth', xp: 68, intel: 1, cashCost: 15, trust: 1, cover: 2 },
+  lockBypassLab: { id: 'lockBypassLab', label: 'Lock Bypass Lab', stat: 'tech', xp: 74, intel: 2, cashCost: 30, trust: 1, cover: 0 },
+  coverStoryRehearsal: { id: 'coverStoryRehearsal', label: 'Cover Story Rehearsal', stat: 'tradecraft', xp: 64, intel: 1, cashCost: 10, trust: 2, cover: 5 },
+  closeProtectionCircuit: { id: 'closeProtectionCircuit', label: 'Close Protection Circuit', stat: 'conditioning', xp: 78, intel: 0, cashCost: 25, trust: 1, cover: 0 },
+};
+const AGENT_MISSION_TYPES = [
+  { id: 'infiltration', label: 'Infiltration', primary: 'stealth', objective: 'enter a secure venue and recover a dead-drop key' },
+  { id: 'extraction', label: 'Extraction', primary: 'tradecraft', objective: 'pull an exposed asset through hostile streets' },
+  { id: 'assetProtection', label: 'Asset Protection', primary: 'conditioning', objective: 'guard a witness until the agency convoy arrives' },
+  { id: 'sabotage', label: 'Sabotage', primary: 'tech', objective: 'plant a signal worm inside a private server room' },
+  { id: 'highValueCapture', label: 'High-Value Capture', primary: 'marksmanship', objective: 'capture a broker before their security rotates' },
+  { id: 'embassyEscape', label: 'Embassy Escape', primary: 'tradecraft', objective: 'escape a burned diplomatic cover without starting a public incident' },
+];
+const AGENT_ENEMIES = {
+  securityDetail: { id: 'securityDetail', name: 'Security Detail', health: 70, damage: 13, armor: 4, heat: 5, weakness: 'stealth' },
+  syndicateCleaner: { id: 'syndicateCleaner', name: 'Syndicate Cleaner', health: 86, damage: 17, armor: 7, heat: 8, weakness: 'marksmanship' },
+  armoredGuard: { id: 'armoredGuard', name: 'Armored Guard', health: 104, damage: 18, armor: 16, heat: 9, weakness: 'tech' },
+  counterAgent: { id: 'counterAgent', name: 'Counter-Agent', health: 96, damage: 20, armor: 9, heat: 10, weakness: 'tradecraft' },
+  handlerBetrayer: { id: 'handlerBetrayer', name: 'Handler Betrayer', health: 112, damage: 22, armor: 8, heat: 12, weakness: 'stealth' },
+  eliteNemesis: { id: 'eliteNemesis', name: 'Elite Nemesis', health: 138, damage: 25, armor: 12, heat: 15, weakness: 'conditioning' },
+};
+export const PLAYABLE_WORLDS = ['fighter', 'hunter', 'sorcerer', 'zombie', 'agent'];
 const DEFAULT_ZOMBIE_STATS = {
   physical: 0,
   fighting: 0,
@@ -1374,6 +1446,10 @@ function defaultZombieWorld() {
   return clone(DEFAULT_ZOMBIE_WORLD);
 }
 
+function defaultAgentWorld() {
+  return clone(DEFAULT_AGENT_WORLD);
+}
+
 function normalizeActiveWorld(world) {
   return PLAYABLE_WORLDS.includes(world) ? world : null;
 }
@@ -1386,6 +1462,46 @@ function normalizeHunterStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
   );
+}
+
+function normalizeAgentStats(stats = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_AGENT_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_AGENT_STATS[stat]))])
+  );
+}
+
+function normalizeAgentResources(resources = {}) {
+  return {
+    cover: clamp(resources?.cover ?? DEFAULT_AGENT_WORLD.resources.cover, 0, 100),
+    heat: clamp(resources?.heat ?? DEFAULT_AGENT_WORLD.resources.heat, 0, 100),
+    intel: Math.max(0, Math.min(999, Math.floor(resources?.intel ?? DEFAULT_AGENT_WORLD.resources.intel))),
+    cash: Math.max(0, Math.floor(resources?.cash ?? DEFAULT_AGENT_WORLD.resources.cash)),
+    agencyTrust: clamp(resources?.agencyTrust ?? DEFAULT_AGENT_WORLD.resources.agencyTrust, 0, 100),
+  };
+}
+
+function normalizeAgentInventory(inventory = []) {
+  const stacks = new Map();
+  const source = Array.isArray(inventory) ? inventory : [];
+  for (const entry of source) {
+    const id = typeof entry === 'string' ? entry : entry?.id;
+    if (!AGENT_GEAR_CATALOG[id]) continue;
+    const quantity = typeof entry === 'string' ? 1 : Math.max(1, Math.floor(entry.quantity ?? 1));
+    stacks.set(id, (stacks.get(id) ?? 0) + quantity);
+  }
+  return [...stacks.entries()].map(([id, quantity]) => ({ id, quantity }));
+}
+
+function normalizeAgentInjuries(injuries = []) {
+  if (!Array.isArray(injuries)) return [];
+  return injuries
+    .map((injury, index) => ({
+      id: injury?.id ?? `agent-injury-${index}`,
+      part: String(injury?.part ?? 'torso').slice(0, 32),
+      severity: ['mild', 'moderate', 'severe'].includes(injury?.severity) ? injury.severity : 'mild',
+      label: injury?.label ?? `${injury?.severity ?? 'mild'} ${injury?.part ?? 'torso'} injury`,
+    }))
+    .slice(0, 10);
 }
 
 function normalizeSorcererStats(stats = {}) {
@@ -1557,6 +1673,38 @@ export function normalizeZombieWorld(zombieWorld = {}) {
     encountersCleared: Math.max(0, Math.floor(zombieWorld.encountersCleared ?? 0)),
     monarchOrigin: Boolean(zombieWorld.monarchOrigin),
     monarchBonus: zombieWorld.monarchBonus ?? null,
+  };
+}
+
+export function normalizeAgentWorld(agentWorld = {}) {
+  const inventory = normalizeAgentInventory(agentWorld.inventory ?? DEFAULT_AGENT_WORLD.inventory);
+  const hasGear = (id) => inventory.some((item) => item.id === id);
+  const equippedWeapon = AGENT_GEAR_CATALOG[agentWorld.equippedWeapon]?.type === 'weapon' && hasGear(agentWorld.equippedWeapon)
+    ? agentWorld.equippedWeapon
+    : DEFAULT_AGENT_WORLD.equippedWeapon;
+  const equippedGadget = AGENT_GEAR_CATALOG[agentWorld.equippedGadget]?.type === 'gadget' && hasGear(agentWorld.equippedGadget)
+    ? agentWorld.equippedGadget
+    : DEFAULT_AGENT_WORLD.equippedGadget;
+  return {
+    ...defaultAgentWorld(),
+    ...agentWorld,
+    unlocked: Boolean(agentWorld.unlocked),
+    rank: AGENT_RANKS.includes(agentWorld.rank) ? agentWorld.rank : DEFAULT_AGENT_WORLD.rank,
+    xp: Math.max(0, Math.floor(agentWorld.xp ?? 0)),
+    level: Math.max(1, Math.floor(agentWorld.level ?? 1)),
+    statPoints: Math.max(0, Math.floor(agentWorld.statPoints ?? 0)),
+    stats: normalizeAgentStats(agentWorld.stats),
+    resources: normalizeAgentResources(agentWorld.resources),
+    missionOffers: Array.isArray(agentWorld.missionOffers) ? agentWorld.missionOffers.filter(Boolean).slice(0, 3) : [],
+    activeMission: agentWorld.activeMission ?? null,
+    completedMissions: Array.isArray(agentWorld.completedMissions) ? agentWorld.completedMissions.filter(Boolean).slice(0, 50) : [],
+    inventory,
+    equippedWeapon,
+    equippedGadget,
+    safehouseLevel: clamp(agentWorld.safehouseLevel ?? DEFAULT_AGENT_WORLD.safehouseLevel, 1, 10),
+    injuries: normalizeAgentInjuries(agentWorld.injuries),
+    handlerNotes: Array.isArray(agentWorld.handlerNotes) ? agentWorld.handlerNotes.map(String).slice(0, 8) : [],
+    nemesisAlert: Boolean(agentWorld.nemesisAlert),
   };
 }
 
@@ -6745,6 +6893,333 @@ function zombieXpForNextLevel(level) {
   return 85 + Math.max(1, level) * 30;
 }
 
+function agentXpForNextLevel(level) {
+  return 90 + Math.max(1, level) * 36;
+}
+
+function grantAgentXp(life, amount) {
+  life.agentWorld = normalizeAgentWorld(life.agentWorld);
+  life.agentWorld.xp += Math.max(0, Math.floor(amount));
+  while (life.agentWorld.xp >= agentXpForNextLevel(life.agentWorld.level)) {
+    life.agentWorld.xp -= agentXpForNextLevel(life.agentWorld.level);
+    life.agentWorld.level += 1;
+    life.agentWorld.statPoints += 3;
+    const rankIndex = Math.min(AGENT_RANKS.length - 1, Math.floor((life.agentWorld.level - 1) / 2));
+    life.agentWorld.rank = AGENT_RANKS[rankIndex];
+  }
+}
+
+function agentInventoryEntry(agent, itemId) {
+  return agent.inventory.find((item) => item.id === itemId);
+}
+
+function addAgentGear(agent, itemId, quantity = 1) {
+  if (!AGENT_GEAR_CATALOG[itemId]) return;
+  const existing = agentInventoryEntry(agent, itemId);
+  if (existing) existing.quantity = Math.max(1, existing.quantity + quantity);
+  else agent.inventory.push({ id: itemId, quantity: Math.max(1, quantity) });
+}
+
+function agentMissionPower(life) {
+  const agent = normalizeAgentWorld(life.agentWorld);
+  return Object.values(agent.stats).reduce((sum, value) => sum + value, 0) + agent.level * 4 + Math.floor(agent.resources.agencyTrust / 10);
+}
+
+function createAgentMissionBoard(life) {
+  const agent = normalizeAgentWorld(life.agentWorld);
+  const power = agentMissionPower({ ...life, agentWorld: agent });
+  const seedBase = life.rngSeed ?? Date.now();
+  return Array.from({ length: 3 }, (_, index) => {
+    const type = AGENT_MISSION_TYPES[Math.floor(deterministicRoll(seedBase, lifeMonth(life), index, 'agent-type') * AGENT_MISSION_TYPES.length) % AGENT_MISSION_TYPES.length];
+    const enemyIds = Object.keys(AGENT_ENEMIES);
+    const enemyOffset = Math.min(enemyIds.length - 1, Math.floor((agent.level + index + (agent.nemesisAlert ? 2 : 0)) / 2));
+    const enemyId = enemyIds[(enemyOffset + Math.floor(deterministicRoll(seedBase, index, 'agent-enemy') * 3)) % enemyIds.length];
+    const tier = Math.max(1, agent.level + index);
+    const risk = clamp(22 + tier * 5 + AGENT_ENEMIES[enemyId].heat - Math.floor(power / 8), 12, 86);
+    return {
+      id: `agent-${lifeMonth(life)}-${agent.completedMissions.length}-${index}-${type.id}`,
+      type: type.id,
+      label: type.label,
+      objective: type.objective,
+      primaryStat: type.primary,
+      enemyId,
+      risk,
+      difficulty: tier,
+      reward: {
+        xp: 95 + tier * 32,
+        cash: 160 + tier * 85,
+        intel: index === 0 ? 1 : 2,
+        trust: 2 + Math.floor(tier / 2),
+      },
+      requiredPrep: type.primary,
+    };
+  });
+}
+
+export function spendAgentStatPoint(life, stat) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked || next.agentWorld.statPoints <= 0 || !(stat in DEFAULT_AGENT_STATS)) {
+    return addLog(next, 'No AGENT stat point can be spent there.', 'world');
+  }
+  next.agentWorld.statPoints -= 1;
+  next.agentWorld.stats[stat] += 1;
+  return addLog(next, `AGENT stat point spent: ${labelFromId(stat)} increased.`, 'world');
+}
+
+export function runAgentTraining(life, trainingId) {
+  const drill = AGENT_TRAINING_ACTIONS[trainingId];
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'Academy drills belong to the AGENT world.', 'world');
+  if (!drill) return addLog(next, 'Unknown AGENT academy drill.', 'world');
+  if (next.agentWorld.resources.cash < drill.cashCost) return addLog(next, `${drill.label} blocked: not enough agency cash.`, 'world');
+  next.agentWorld.resources.cash = Math.max(0, next.agentWorld.resources.cash - drill.cashCost);
+  next.agentWorld.stats[drill.stat] += 1;
+  next.agentWorld.resources.intel = clamp(next.agentWorld.resources.intel + drill.intel, 0, 999);
+  next.agentWorld.resources.agencyTrust = clamp(next.agentWorld.resources.agencyTrust + drill.trust, 0, 100);
+  next.agentWorld.resources.cover = clamp(next.agentWorld.resources.cover + drill.cover, 0, 100);
+  grantAgentXp(next, drill.xp);
+  return addLog(next, `${drill.label}: ${labelFromId(drill.stat)} improved, dossier XP gained, and handler trust adjusted.`, 'world');
+}
+
+export function generateAgentMissions(life) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'Mission dossiers belong to the AGENT world.', 'world');
+  next.agentWorld.missionOffers = createAgentMissionBoard(next);
+  return addLog(next, 'New AGENT mission dossiers decrypted.', 'world');
+}
+
+export function equipAgentGear(life, itemId) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  const item = AGENT_GEAR_CATALOG[itemId];
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'AGENT loadouts belong to the AGENT world.', 'world');
+  if (!item || !agentInventoryEntry(next.agentWorld, itemId)) return addLog(next, 'That AGENT gear is not in your inventory.', 'world');
+  if (item.type === 'weapon') next.agentWorld.equippedWeapon = itemId;
+  if (item.type === 'gadget') next.agentWorld.equippedGadget = itemId;
+  return addLog(next, `${item.name} equipped in your AGENT loadout.`, 'world');
+}
+
+export function startAgentMission(life, missionId) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'AGENT missions belong to the AGENT world.', 'world');
+  if (next.activeFight) return addLog(next, 'Finish the active field operation first.', 'world');
+  const mission = next.agentWorld.missionOffers.find((item) => item.id === missionId);
+  if (!mission) return addLog(next, 'Mission dossier not found. Generate a fresh board.', 'world');
+  const weapon = AGENT_GEAR_CATALOG[next.agentWorld.equippedWeapon] ?? AGENT_GEAR_CATALOG.compactPistol;
+  const enemyTemplate = AGENT_ENEMIES[mission.enemyId] ?? AGENT_ENEMIES.securityDetail;
+  const enemyHealth = enemyTemplate.health + mission.difficulty * 8;
+  const approachRoll = deterministicRoll(next.rngSeed, mission.id, next.agentWorld.resources.intel, 'agent-approach');
+  const approachBonus = next.agentWorld.stats[mission.primaryStat] * 0.035 + (weapon.stealth ?? 0) * 0.006 + next.agentWorld.resources.intel * 0.012;
+  const approachClean = approachRoll < clampFloat(0.42 + approachBonus - mission.risk * 0.003, 0.12, 0.9);
+  next.agentWorld.activeMission = mission;
+  next.agentWorld.resources.intel = clamp(next.agentWorld.resources.intel - Math.min(2, next.agentWorld.resources.intel), 0, 999);
+  next.activeFight = {
+    opponentId: enemyTemplate.id,
+    source: 'agentMission',
+    mission,
+    round: 1,
+    maxRounds: 12,
+    exchanges: [],
+    enemy: {
+      ...enemyTemplate,
+      health: enemyHealth,
+      maxHealth: enemyHealth,
+      revealed: approachClean,
+      disabled: false,
+    },
+    meters: {
+      playerHealth: combatResourceValue(next.resources.health, maxLifeHealth(next), 1),
+      maxPlayerHealth: maxLifeHealth(next),
+      playerStamina: combatResourceValue(next.resources.energy, maxLifeEnergy(next), 10),
+      maxPlayerStamina: maxLifeEnergy(next),
+      opponentHealth: enemyHealth,
+      maxOpponentHealth: enemyHealth,
+      cover: next.agentWorld.resources.cover,
+      heat: next.agentWorld.resources.heat,
+      momentum: approachClean ? 12 : -6,
+      injuryRisk: mission.risk,
+    },
+    breakdown: [`${mission.label}: ${mission.objective}. Approach ${approachClean ? 'clean' : 'compromised'}.`],
+    finished: false,
+    result: null,
+  };
+  return addLog(next, `AGENT mission started: ${mission.label} against ${enemyTemplate.name}.`, 'world');
+}
+
+function agentAddInjury(life, severity = 'mild') {
+  const part = ['shoulder', 'ribs', 'hand', 'leg', 'jaw'][Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), life.log?.length ?? 0, 'agent-injury') * 5) % 5];
+  const injury = { id: `${part}-${lifeMonth(life)}-${life.agentWorld.injuries.length}`, part, severity, label: `${severity} ${part} field injury` };
+  life.agentWorld.injuries = [injury, ...life.agentWorld.injuries].slice(0, 10);
+  return injury;
+}
+
+function finishAgentMission(life, fight, extracted = false) {
+  const mission = fight.mission ?? life.agentWorld.activeMission;
+  const won = extracted || fight.enemy.health <= 0;
+  fight.finished = true;
+  fight.meters.opponentHealth = Math.max(0, fight.enemy.health);
+  fight.result = {
+    won,
+    summary: won ? `Operation complete: ${mission.label}.` : `Operation failed: ${mission.label}.`,
+    reasons: won ? ['Objective secured and extraction route confirmed.'] : ['Cover was damaged before the objective cleared.'],
+    rewards: [],
+    injuries: [],
+  };
+  life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth);
+  life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
+  life.agentWorld.resources.cover = clamp(fight.meters.cover + (won ? 3 : -12), 0, 100);
+  life.agentWorld.resources.heat = clamp(fight.meters.heat + (won ? Math.ceil(mission.risk / 18) : 12), 0, 100);
+  if (won) {
+    life.agentWorld.completedMissions = [mission.id, ...life.agentWorld.completedMissions].slice(0, 50);
+    life.agentWorld.resources.cash = Math.max(0, life.agentWorld.resources.cash + mission.reward.cash);
+    life.agentWorld.resources.intel = clamp(life.agentWorld.resources.intel + mission.reward.intel, 0, 999);
+    life.agentWorld.resources.agencyTrust = clamp(life.agentWorld.resources.agencyTrust + mission.reward.trust, 0, 100);
+    grantAgentXp(life, mission.reward.xp);
+    fight.result.rewards.push(`+${mission.reward.xp} AGENT XP`, `+$${mission.reward.cash} agency cash`, `+${mission.reward.intel} intel`);
+    const gearUnlocks = ['suppressedPistol', 'microdrone', 'empCoin', 'grappleWatch', 'medFoam', 'carbine', 'tacticalShotgun'];
+    const unlockId = gearUnlocks[Math.min(gearUnlocks.length - 1, life.agentWorld.completedMissions.length - 1)];
+    if (unlockId && !agentInventoryEntry(life.agentWorld, unlockId)) {
+      addAgentGear(life.agentWorld, unlockId);
+      fight.result.rewards.push(`Gear unlocked: ${AGENT_GEAR_CATALOG[unlockId].name}`);
+    }
+  } else {
+    life.agentWorld.resources.agencyTrust = clamp(life.agentWorld.resources.agencyTrust - 8, 0, 100);
+  }
+  if (fight.meters.injuryRisk >= 50 || fight.meters.playerHealth < fight.meters.maxPlayerHealth * 0.35) {
+    const injury = agentAddInjury(life, fight.meters.injuryRisk >= 70 ? 'moderate' : 'mild');
+    fight.result.injuries.push(injury.label);
+  }
+  life.agentWorld.nemesisAlert = life.agentWorld.resources.heat >= 70 || (life.agentWorld.completedMissions.length >= 6 && life.agentWorld.resources.agencyTrust >= 70);
+  life.agentWorld.activeMission = null;
+  life.agentWorld.missionOffers = life.agentWorld.missionOffers.filter((item) => item.id !== mission.id);
+  life.log = [createLog(fight.result.summary, 'world'), ...life.log].slice(0, 60);
+}
+
+export function takeAgentTurn(life, moveId = 'controlledShot') {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  const fight = next.activeFight;
+  if (!fight || fight.source !== 'agentMission' || fight.finished) return next;
+  const agent = next.agentWorld;
+  const weapon = AGENT_GEAR_CATALOG[agent.equippedWeapon] ?? AGENT_GEAR_CATALOG.compactPistol;
+  const gadget = AGENT_GEAR_CATALOG[agent.equippedGadget] ?? null;
+  const enemy = fight.enemy;
+  const stats = agent.stats;
+  let damage = 0;
+  let incomingReduction = 0;
+  let heatGain = weapon.heat ?? 2;
+  let staminaCost = 7;
+  let text = '';
+
+  if (moveId === 'silentTakedown') {
+    const chance = clampFloat(0.28 + stats.stealth * 0.045 + stats.tradecraft * 0.02 + (weapon.silent ? 0.16 : 0) + fight.meters.momentum * 0.003, 0.08, 0.88);
+    const hit = deterministicRoll(next.rngSeed, fight.round, moveId, enemy.id) < chance;
+    damage = hit ? Math.round(weapon.damage + stats.stealth * 6 + stats.conditioning * 2) : 0;
+    heatGain = weapon.silent ? 0 : 2;
+    staminaCost = 11;
+    text = hit ? 'Silent takedown lands before the room understands the threat.' : 'Silent takedown fails and the room snaps alert.';
+  } else if (moveId === 'controlledShot') {
+    const hitChance = clampFloat(0.52 + stats.marksmanship * 0.035 + (weapon.accuracy ?? 0) + fight.meters.momentum * 0.002, 0.16, 0.95);
+    const hit = deterministicRoll(next.rngSeed, fight.round, moveId, weapon.id) < hitChance;
+    damage = hit ? Math.round(weapon.damage + stats.marksmanship * 5 + (enemy.revealed ? 8 : 0) - enemy.armor * 0.45) : 0;
+    text = hit ? `${weapon.name} controlled shot hits center mass.` : `${weapon.name} shot misses under pressure.`;
+  } else if (moveId === 'disarm') {
+    damage = Math.round(10 + stats.tradecraft * 4 + stats.conditioning * 2);
+    enemy.disabled = true;
+    incomingReduction = 12 + stats.tradecraft;
+    staminaCost = 10;
+    heatGain = 1;
+    text = 'Disarm strips the enemy rhythm and blunts the next counterattack.';
+  } else if (moveId === 'gadget') {
+    if (!gadget) return addLog(next, 'No AGENT gadget is equipped.', 'world');
+    heatGain = 1;
+    if (gadget.id === 'microdrone') {
+      enemy.revealed = true;
+      agent.resources.intel = clamp(agent.resources.intel + 1, 0, 999);
+      incomingReduction = 6 + stats.tech;
+      text = 'Microdrone maps the room and marks the enemy weakness.';
+    } else if (gadget.id === 'smokeCapsule') {
+      fight.meters.cover = clamp(fight.meters.cover + 14, 0, 100);
+      incomingReduction = 18 + stats.stealth;
+      text = 'Smoke capsule breaks sightlines and buys a cleaner angle.';
+    } else if (gadget.id === 'empCoin') {
+      enemy.disabled = true;
+      damage = enemy.id === 'armoredGuard' || enemy.id === 'counterAgent' ? 24 + stats.tech * 5 : 10 + stats.tech * 2;
+      incomingReduction = 14;
+      text = 'EMP coin kills hostile electronics in a hard blue blink.';
+    } else if (gadget.id === 'grappleWatch') {
+      fight.meters.momentum = clamp(fight.meters.momentum + 16, -50, 50);
+      fight.meters.cover = clamp(fight.meters.cover + 8, 0, 100);
+      incomingReduction = 10;
+      text = 'Grapple watch changes elevation and opens the extraction line.';
+    } else if (gadget.id === 'medFoam') {
+      fight.meters.playerHealth = clamp(fight.meters.playerHealth + 24 + stats.tech * 3, 0, fight.meters.maxPlayerHealth);
+      incomingReduction = 4;
+      text = 'Med foam seals field damage enough to keep moving.';
+    }
+  } else if (moveId === 'reposition') {
+    fight.meters.cover = clamp(fight.meters.cover + 8 + stats.stealth, 0, 100);
+    fight.meters.momentum = clamp(fight.meters.momentum + 6 + Math.floor(stats.tradecraft / 2), -50, 50);
+    incomingReduction = 10 + stats.stealth;
+    heatGain = 0;
+    staminaCost = 8;
+    text = 'Reposition resets the angle and protects the cover story.';
+  } else if (moveId === 'extract') {
+    const canExtract = enemy.health <= 0 || fight.round >= 3;
+    const chance = clampFloat(0.34 + stats.tradecraft * 0.045 + stats.stealth * 0.02 + (gadget?.id === 'grappleWatch' ? 0.18 : 0) + fight.meters.momentum * 0.004 - enemy.health / enemy.maxHealth * 0.16, 0.08, 0.92);
+    const escaped = canExtract && deterministicRoll(next.rngSeed, fight.round, moveId, agent.resources.cover) < chance;
+    if (escaped || enemy.health <= 0) {
+      finishAgentMission(next, fight, true);
+      return addLog(next, 'Extraction complete. The dossier closes before the sirens find your name.', 'world');
+    }
+    incomingReduction = 2;
+    heatGain = 4;
+    text = 'Extraction route is not clean yet; the enemy keeps contact.';
+  } else {
+    return addLog(next, 'Choose Silent Takedown, Controlled Shot, Disarm, Gadget, Reposition, or Extract during an AGENT mission.', 'world');
+  }
+
+  enemy.health = Math.max(0, enemy.health - Math.max(0, Math.round(damage)));
+  fight.meters.opponentHealth = enemy.health;
+  fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina);
+  fight.meters.heat = clamp(fight.meters.heat + heatGain, 0, 100);
+  const enemyDamage = enemy.health <= 0
+    ? 0
+    : Math.max(0, Math.round(enemy.damage + fight.meters.heat * 0.08 + fight.round * 0.8 - incomingReduction - (enemy.disabled ? 9 : 0) - fight.meters.cover * 0.06));
+  fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth);
+  fight.meters.cover = clamp(fight.meters.cover - Math.max(0, enemyDamage - stats.tradecraft), 0, 100);
+  fight.meters.momentum = clamp(fight.meters.momentum + Math.round(damage / 9) - Math.round(enemyDamage / 5), -50, 50);
+  fight.meters.injuryRisk = clamp(fight.mission.risk + fight.meters.heat - stats.conditioning * 2 - fight.meters.cover * 0.12, 0, 100);
+  fight.exchanges.unshift({
+    round: fight.round,
+    moveId,
+    tactic: moveId,
+    tacticLabel: labelFromId(moveId),
+    opponentTactic: enemy.disabled ? 'disabled counter' : 'hostile counter',
+    opponentTacticLabel: enemy.disabled ? 'Disabled Counter' : 'Hostile Counter',
+    text: `Exchange ${fight.round} - ${text} Damage ${Math.max(0, Math.round(damage))}. Incoming ${enemyDamage}. Heat +${heatGain}.`,
+    playerDamage: Math.max(0, Math.round(damage)),
+    enemyDamage,
+    heatGain,
+    weaponId: weapon.id,
+    gadgetId: moveId === 'gadget' ? gadget?.id : null,
+  });
+  if (enemy.health <= 0) {
+    finishAgentMission(next, fight, false);
+    return next;
+  }
+  if (fight.meters.playerHealth <= 0 || fight.round >= fight.maxRounds || fight.meters.cover <= 0) {
+    finishAgentMission(next, fight, false);
+    return next;
+  }
+  fight.round += 1;
+  return next;
+}
+
 function grantZombieXp(life, amount) {
   life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
   life.zombieWorld.xp += Math.max(0, Math.floor(amount));
@@ -7461,6 +7936,7 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     hunterWorld: defaultHunterWorld(),
     sorcererWorld: defaultSorcererWorld(),
     zombieWorld: defaultZombieWorld(),
+    agentWorld: defaultAgentWorld(),
     world: {
       hiddenWorld: false,
       league: 'None',
@@ -7511,6 +7987,11 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     life.pendingEvent = zombieMonarchOriginEvent(life);
     life.eventFlags = { ...life.eventFlags, [life.pendingEvent.flag]: true };
     life.world.rumors = ['The city fell before anyone agreed on what to call the infected.'];
+  } else if (activeWorld === 'agent') {
+    life.agentWorld = { ...normalizeAgentWorld(life.agentWorld), unlocked: true };
+    life.agentWorld.missionOffers = createAgentMissionBoard(life);
+    life.world.rumors = ['A sealed academy envelope arrives with no return address. Your cover identity is already active.'];
+    life.log.unshift(createLog('AGENT dossier opened: academy access, cover resources, and mission board unlocked.', 'world'));
   }
   life.resources.health = maxLifeHealth(life);
   life.resources.energy = maxLifeEnergy(life);
@@ -7573,6 +8054,13 @@ export function resetWorld(life, { debug = false, destination = 'hunter' } = {})
     fresh.sorcererWorld.statPoints += 12;
     fresh.sorcererWorld.techniqueMastery = Math.max(fresh.sorcererWorld.techniqueMastery, 18);
     fresh.sorcererWorld.missionOffers = createSorcererMissionBoard(fresh);
+  } else if (resetWorldTarget === 'agent') {
+    fresh.agentWorld = { ...normalizeAgentWorld(fresh.agentWorld), unlocked: true };
+    fresh.agentWorld.statPoints += 12;
+    fresh.agentWorld.resources.intel += 5;
+    fresh.agentWorld.resources.cash += 1200;
+    fresh.agentWorld.resources.agencyTrust = clamp(fresh.agentWorld.resources.agencyTrust + 15, 0, 100);
+    fresh.agentWorld.missionOffers = createAgentMissionBoard(fresh);
   }
   fresh.resources.health = maxLifeHealth(fresh);
   fresh.resources.energy = maxLifeEnergy(fresh);
@@ -11298,6 +11786,7 @@ function takeSorcererFightTurn(life, moveId = 'reinforcedStrike') {
 export function takeFightTurn(life, tactic = 'pressure') {
   if (!life.activeFight || life.activeFight.finished) return life;
   if (life.activeFight.source === 'zombieEncounter') return takeZombieEncounterTurn(life, tactic);
+  if (life.activeFight.source === 'agentMission') return takeAgentTurn(life, tactic);
   if (life.activeFight.source === 'hunterQuest' || life.activeFight.source === 'hunterDungeon') return takeHunterQuestTurn(life, tactic);
   if (life.activeFight.source === 'sorcererMission' || life.activeFight.source === 'curseIncident' || life.activeFight.source === 'domainClash') return takeSorcererFightTurn(life, tactic);
   life = withNormalizedClanAwakening(life);
