@@ -5309,15 +5309,16 @@ export function maxLifeHealth(life) {
   if (life?.activeWorld === 'zombie' && zombie.unlocked) {
     return Math.min(280, 95 + zombie.stats.physical * 4 + zombie.stats.survivability * 2 + (zombie.monarchOrigin ? 15 : 0));
   }
+  const agent = normalizeAgentWorld(life.agentWorld);
+  if (life?.activeWorld === 'agent' && agent.unlocked) {
+    const agentBaseHealth = clamp(100 + agent.stats.conditioning * 10, 100, 600);
+    return Math.max(45, agentBaseHealth - agentHealthPenaltyTotal(agent));
+  }
   const usesSorcererStats = usesSorcererCombatOverlay(life);
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
   const armorHealth = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(hunter).health ?? 0)) : 0;
   const baseHealth = fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + (usesSorcererStats ? sorcerer.stats.body * 22 + sorcerer.stats.cursedEnergy * 12 : 0) + armorHealth;
-  const agent = normalizeAgentWorld(life.agentWorld);
-  if (life?.activeWorld === 'agent' && agent.unlocked) {
-    return Math.max(45, baseHealth - agentHealthPenaltyTotal(agent));
-  }
   return baseHealth;
 }
 
@@ -7048,8 +7049,12 @@ export function spendAgentStatPoint(life, stat) {
   if (worldLocked(next, 'agent') || !next.agentWorld.unlocked || next.agentWorld.statPoints <= 0 || !(stat in DEFAULT_AGENT_STATS)) {
     return addLog(next, 'No AGENT stat point can be spent there.', 'world');
   }
+  const previousMaxHealth = maxLifeHealth(next);
   next.agentWorld.statPoints -= 1;
   next.agentWorld.stats[stat] += 1;
+  if (stat === 'conditioning') {
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + maxLifeHealth(next) - previousMaxHealth);
+  }
   return addLog(next, `AGENT stat point spent: ${labelFromId(stat)} increased.`, 'world');
 }
 
@@ -7060,8 +7065,12 @@ export function runAgentTraining(life, trainingId) {
   if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'Academy drills belong to the AGENT world.', 'world');
   if (!drill) return addLog(next, 'Unknown AGENT academy drill.', 'world');
   if (next.agentWorld.resources.cash < drill.cashCost) return addLog(next, `${drill.label} blocked: not enough agency cash.`, 'world');
+  const previousMaxHealth = maxLifeHealth(next);
   next.agentWorld.resources.cash = Math.max(0, next.agentWorld.resources.cash - drill.cashCost);
   next.agentWorld.stats[drill.stat] += 1;
+  if (drill.stat === 'conditioning') {
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health + maxLifeHealth(next) - previousMaxHealth);
+  }
   next.agentWorld.resources.intel = clamp(next.agentWorld.resources.intel + drill.intel, 0, 999);
   next.agentWorld.resources.agencyTrust = clamp(next.agentWorld.resources.agencyTrust + drill.trust, 0, 100);
   next.agentWorld.resources.cover = clamp(next.agentWorld.resources.cover + drill.cover, 0, 100);
@@ -7156,9 +7165,9 @@ export function treatAgentInjury(life, injuryId, optionId) {
   if (!option) return addLog(next, 'That treatment option is not in the field medical card.', 'world');
   injury.treatmentAttempts = [option.id, ...injury.treatmentAttempts.filter((id) => id !== option.id)].slice(0, 8);
   if (option.correct) {
-    injury.treated = true;
-    next.resources.health = clampLifeResource(next, 'health', next.resources.health);
-    return addLog(next, `${treatment.name}: ${option.explanation}`, 'world');
+    next.agentWorld.injuries = next.agentWorld.injuries.filter((item) => item.id !== injury.id);
+    next.resources.health = maxLifeHealth(next);
+    return addLog(next, `${treatment.name}: ${option.explanation} Injury cleared without a doctor fee.`, 'world');
   }
   return addLog(next, `${treatment.name}: ${option.explanation}`, 'world');
 }

@@ -111,7 +111,6 @@ import {
   takeAgentTurn,
   equipAgentGear,
   agentDoctorCost,
-  agentInjuryHealthPenalty,
   treatAgentInjury,
   healAgentInjuryWithDoctor,
   runZombieActivity,
@@ -306,7 +305,7 @@ test('agent world normalization preserves valid gear resources and clamps bad sa
   assert.equal(agent.nemesisAlert, true);
 });
 
-test('agent injury treatment quiz stabilizes medically correct answers and preserves wrong attempts', () => {
+test('agent injury treatment quiz clears medically correct answers for free and preserves wrong attempts', () => {
   const base = createNewLife({ seed: 524, world: 'agent' });
   const life = {
     ...base,
@@ -325,10 +324,12 @@ test('agent injury treatment quiz stabilizes medically correct answers and prese
   assert.equal(wrong.agentWorld.injuries[0].treated, false);
   assert.deepEqual(wrong.agentWorld.injuries[0].treatmentAttempts, ['tight-wrap']);
   assert.match(wrong.log[0].text, /restrict breathing/i);
-  assert.equal(treated.agentWorld.injuries[0].treated, true);
-  assert.equal(maxLifeHealth(treated), healthyMax - 8);
-  assert.equal(agentInjuryHealthPenalty(treated.agentWorld.injuries[0]), 8);
+  assert.equal(treated.agentWorld.injuries.length, 0);
+  assert.equal(treated.agentWorld.resources.cash, base.agentWorld.resources.cash);
+  assert.equal(maxLifeHealth(treated), healthyMax);
+  assert.equal(treated.resources.health, healthyMax);
   assert.match(treated.log[0].text, /deep breathing/i);
+  assert.match(treated.log[0].text, /without a doctor fee/i);
 });
 
 test('agent doctor healing charges cash removes injury and restores capped health', () => {
@@ -374,6 +375,34 @@ test('agent injury health caps do not affect non-agent worlds', () => {
 
   assert.equal(maxLifeHealth(withAgentInjury), maxLifeHealth(fighter));
   assert.equal(maxLifeHealth(injuredAgent), maxLifeHealth(agent) - 28);
+});
+
+test('agent max health uses Conditioning and ignores retired fighter durability and willpower', () => {
+  const base = createNewLife({ seed: 528, world: 'agent' });
+  const conditioned = {
+    ...base,
+    agentWorld: {
+      ...base.agentWorld,
+      stats: { ...base.agentWorld.stats, conditioning: 7 },
+    },
+  };
+  const fighterStatsChanged = {
+    ...base,
+    stats: { ...base.stats, durability: 500, willpower: 500 },
+  };
+  const spentPoint = spendAgentStatPoint({
+    ...base,
+    agentWorld: { ...base.agentWorld, statPoints: 1 },
+  }, 'conditioning');
+  const trained = runAgentTraining(base, 'closeProtectionCircuit');
+
+  assert.equal(maxLifeHealth(base), 100);
+  assert.equal(maxLifeHealth(conditioned), 170);
+  assert.equal(maxLifeHealth(fighterStatsChanged), 100);
+  assert.equal(maxLifeHealth(spentPoint), 110);
+  assert.equal(spentPoint.resources.health, 110);
+  assert.equal(maxLifeHealth(trained), 110);
+  assert.equal(trained.resources.health, 110);
 });
 
 test('agent stat spending and academy training progress the dossier only', () => {

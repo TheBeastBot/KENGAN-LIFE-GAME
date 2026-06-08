@@ -368,6 +368,7 @@ let hunterDungeonPopupOpen = false;
 let systemShopPopupOpen = false;
 let hunterItemsPopupOpen = false;
 let navMenuOpen = false;
+let selectedAgentInjuryId = null;
 let uiFeedback = { changed: {}, toast: null, latestExchangeKey: null };
 let moveIconBurst = null;
 let pendingCoachScrollY = null;
@@ -1215,6 +1216,7 @@ function render() {
     ${state.trainingPopup ? renderTrainingPopup() : ''}
     ${state.social?.lastPost ? renderSocialPostPopup() : ''}
     ${state.pendingEvent ? renderPendingEvent() : ''}
+    ${selectedAgentInjuryId ? renderAgentTreatmentPopup() : ''}
   `;
   syncBodyScrollLock();
 }
@@ -1271,7 +1273,8 @@ function hasOpenModal() {
   return Boolean(
     state.trainingPopup ||
     state.social?.lastPost ||
-    state.pendingEvent
+    state.pendingEvent ||
+    selectedAgentInjuryId
   );
 }
 
@@ -4654,19 +4657,12 @@ function renderAgentInjuries(agent) {
         const doctorCost = agentDoctorCost(injury);
         return `
           <article class="option-card">
-            <div>
-              <p class="eyebrow">${injury.treated ? 'Stabilized' : 'Untreated'} · -${penalty} max health</p>
-              <h3>${labelize(injury.severity)} ${labelize(injury.part)}</h3>
-              <p>${injury.label}</p>
-              <p class="muted">${treatment.name}</p>
-              ${injury.treated ? '<p class="muted">Field treatment complete. Doctor care removes the remaining health cap.</p>' : `
-                <div class="action-row">
-                  ${treatment.options.map((option) => `
-                    <button data-action="agent-injury-treat-${injury.id}__${option.id}" ${injury.treatmentAttempts.includes(option.id) ? 'disabled' : ''}>${option.label}</button>
-                  `).join('')}
-                </div>
-              `}
-            </div>
+            <button data-action="agent-injury-open-${injury.id}">
+              <span class="eyebrow">Untreated · -${penalty} max health</span>
+              <strong>${labelize(injury.severity)} ${labelize(injury.part)}</strong>
+              <span>${injury.label}</span>
+              <span class="muted">${treatment.name} · Click to diagnose and treat</span>
+            </button>
             <button class="primary" data-action="agent-injury-doctor-${injury.id}" ${agent.resources.cash < doctorCost ? 'disabled' : ''}>Pay Doctor $${doctorCost}</button>
           </article>
         `;
@@ -5282,6 +5278,36 @@ function renderTrainingPopup() {
   `;
 }
 
+function renderAgentTreatmentPopup() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  const injury = agent.injuries.find((item) => item.id === selectedAgentInjuryId);
+  if (!injury) {
+    selectedAgentInjuryId = null;
+    return '';
+  }
+  const treatment = AGENT_INJURY_TREATMENTS[injury.part] ?? AGENT_INJURY_TREATMENTS.ribs;
+  const lastAttemptId = injury.treatmentAttempts[0];
+  const lastAttempt = treatment.options.find((option) => option.id === lastAttemptId);
+  return `
+    <section class="event-backdrop" role="dialog" aria-modal="true" aria-label="${treatment.name}">
+      <article class="event-modal">
+        <p class="eyebrow">AGENT Field Medical</p>
+        <h2>${labelize(injury.severity)} ${labelize(injury.part)}</h2>
+        <p>${injury.label}. Choose the medically correct field treatment.</p>
+        ${lastAttempt && !lastAttempt.correct ? `<p class="muted">${lastAttempt.explanation}</p>` : ''}
+        <div class="event-choice-grid">
+          ${treatment.options.map((option) => `
+            <button data-action="agent-injury-treat-${injury.id}__${option.id}" ${injury.treatmentAttempts.includes(option.id) ? 'disabled' : ''}>
+              <strong>${option.label}</strong>
+            </button>
+          `).join('')}
+        </div>
+        <button class="wide" data-action="agent-injury-popup-close">Close</button>
+      </article>
+    </section>
+  `;
+}
+
 function previewEffects(effects = {}) {
   const parts = [];
   for (const [name, value] of Object.entries(effects.resources ?? {})) parts.push(`${value > 0 ? '+' : ''}${value} ${labelize(name)}`);
@@ -5789,14 +5815,28 @@ function handleAction(action, source = null) {
     setState(equipAgentGear(state, action.replace('agent-gear-equip-', '')));
     return;
   }
+  if (action.startsWith('agent-injury-open-')) {
+    activeTab = 'agent-medical';
+    selectedAgentInjuryId = action.replace('agent-injury-open-', '');
+    render();
+    return;
+  }
+  if (action === 'agent-injury-popup-close') {
+    selectedAgentInjuryId = null;
+    render();
+    return;
+  }
   if (action.startsWith('agent-injury-treat-')) {
     activeTab = 'agent-medical';
     const [injuryId, optionId] = action.replace('agent-injury-treat-', '').split('__');
-    setState(treatAgentInjury(state, injuryId, optionId));
+    const next = treatAgentInjury(state, injuryId, optionId);
+    if (!next.agentWorld.injuries.some((injury) => injury.id === injuryId)) selectedAgentInjuryId = null;
+    setState(next);
     return;
   }
   if (action.startsWith('agent-injury-doctor-')) {
     activeTab = 'agent-medical';
+    selectedAgentInjuryId = null;
     setState(healAgentInjuryWithDoctor(state, action.replace('agent-injury-doctor-', '')));
     return;
   }
