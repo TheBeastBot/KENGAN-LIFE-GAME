@@ -191,6 +191,7 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(appSource, /assets\/zombie\/combat\/unarmed\.png/);
   assert.match(appSource, /ZOMBIE_ITEM_ASSETS\[meleeItem\?\.id\]/);
   assert.match(appSource, /ZOMBIE_ITEM_ASSETS\[rangeItem\?\.id\]/);
+  assert.match(appSource, /style="background-image: url\('\$\{image\}'\)"/);
   assert.match(appSource, /<img src="\$\{image\}"/);
   assert.doesNotMatch(appSource, /class="zombie-move-status"/);
   assert.doesNotMatch(appSource, /\['shove', 'Shove'/);
@@ -199,6 +200,8 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(cssSource, /\.zombie-combatant-card small\s*{/);
   assert.match(cssSource, /\.zombie-combatant-card\.down\s*{/);
   assert.match(cssSource, /\.zombie-combatant-card\.dead/);
+  assert.match(cssSource, /\.zombie-move-card::before\s*{[\s\S]*display:\s*none;/);
+  assert.match(cssSource, /\.zombie-weapon-move-grid \.zombie-move-card\s*{[\s\S]*background-size:\s*cover;/);
   assert.match(cssSource, /@media \(max-width:\s*560px\)\s*{[\s\S]*\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
 });
 

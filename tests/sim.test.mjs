@@ -340,6 +340,26 @@ test('scavenging choices can trigger a zombie encounter', () => {
   assert.equal(result.activeFight.zombies.length > 1, true);
 });
 
+test('ordinary scavenging can randomly trigger the same zombie fight mechanic', () => {
+  const life = { ...createNewLife({ seed: 1, world: 'zombie' }), pendingEvent: null };
+  const scavenging = runZombieActivity(life, 'scavenge');
+  const quietChoice = scavenging.pendingEvent.choices.find((choice) =>
+    choice.effects?.zombieScavenge &&
+    !choice.effects.zombieScavenge.leaveEmpty &&
+    !choice.effects.startZombieEncounter
+  );
+
+  assert.ok(quietChoice);
+  const result = resolveEventChoice(scavenging, quietChoice.id);
+
+  assert.equal(result.pendingEvent, null);
+  assert.equal(result.activeFight.source, 'zombieEncounter');
+  assert.equal(result.activeFight.opponentId, 'streetHorde');
+  assert.equal(result.activeFight.party.members[0].id, 'player');
+  assert.equal(result.activeFight.zombies.length > 1, true);
+  assert.match(result.log[0].text, /infected close in/);
+});
+
 test('safe zombie activities do not cause body injuries', () => {
   const safeActivities = ['secureShelter', 'treatWounds', 'recruitSurvivor', 'craftGear'];
 

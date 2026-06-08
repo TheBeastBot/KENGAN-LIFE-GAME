@@ -4780,7 +4780,7 @@ function renderZombieCombat() {
         </article>
       </div>
       ${fight.finished ? renderFightReport(fight) : `<div class="move-grid zombie-weapon-move-grid">${moves.map(([id, label, hint, disabled, image]) => `
-        <button class="move-card system-move-card zombie-move-card zombie-${id}-move" data-action="fight-turn-${id}" aria-label="${escapeHtml(`${label}: ${hint}`)}" ${disabled ? 'disabled' : ''}>
+        <button class="move-card system-move-card zombie-move-card zombie-${id}-move" style="background-image: url('${image}')" data-action="fight-turn-${id}" aria-label="${escapeHtml(`${label}: ${hint}`)}" title="${escapeHtml(`${label}: ${hint}`)}" ${disabled ? 'disabled' : ''}>
           <img src="${image}" alt="" aria-hidden="true">
         </button>
       `).join('')}</div>`}

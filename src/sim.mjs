@@ -6874,6 +6874,31 @@ function zombieScavengeEvent(life) {
   };
 }
 
+function zombieScavengeAmbushEncounter(life, choice) {
+  const outcome = choice.effects?.zombieScavenge;
+  if (!outcome || outcome.leaveEmpty || choice.effects?.startZombieEncounter) return null;
+  const baseChance = outcome.injury ? 0.38 : outcome.itemId ? 0.28 : 0.22;
+  const chance = clampFloat(
+    baseChance -
+      normalizeZombieStats(life.zombieWorld?.stats).survivability * 0.025 -
+      ((life.zombieWorld?.resources?.shelter ?? 0) >= 70 ? 0.04 : 0) -
+      (life.zombieWorld?.monarchOrigin ? 0.08 : 0),
+    0.08,
+    0.48
+  );
+  const roll = deterministicRoll(
+    life.rngSeed,
+    lifeMonth(life),
+    choice.id,
+    life.zombieWorld?.xp ?? 0,
+    'zombie-scavenge-ambush'
+  );
+  if (roll >= chance) return null;
+  if (outcome.resources?.medicine || outcome.injury?.severity === 'moderate') return 'pharmacyRush';
+  if (outcome.resources?.materials || outcome.itemId === 'crowbar') return 'barricadeRaid';
+  return 'streetHorde';
+}
+
 export function runZombieActivity(life, activityId) {
   const activity = ZOMBIE_ACTIVITIES[activityId];
   const next = clone(life);
@@ -13320,17 +13345,24 @@ export function resolveEventChoice(life, choiceId) {
 
   const next = clone(life);
   applyEventEffects(next, choice.effects);
+  const randomZombieEncounter = zombieScavengeAmbushEncounter(next, choice);
   if (choice.effects?.startChallengeFight) {
     next.activeFight = createActiveFight(next, challengeOpponentFor(next));
     next.nextFightPrep = {};
   }
-  if (choice.effects?.startZombieEncounter) {
-    const started = startZombieEncounter(next, choice.effects.startZombieEncounter);
+  if (choice.effects?.startZombieEncounter || randomZombieEncounter) {
+    const started = startZombieEncounter(next, choice.effects?.startZombieEncounter ?? randomZombieEncounter);
     next.activeFight = started.activeFight;
     next.log = started.log;
   }
   next.pendingEvent = null;
-  return addLog(next, choice.result, 'event');
+  return addLog(
+    next,
+    randomZombieEncounter
+      ? `${choice.result} The noise carries farther than expected; infected close in.`
+      : choice.result,
+    'event'
+  );
 }
 
 function applyEventEffects(life, effects = {}) {

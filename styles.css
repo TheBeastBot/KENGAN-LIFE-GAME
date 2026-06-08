@@ -4645,19 +4645,28 @@ select:focus {
 
 .zombie-weapon-move-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 .zombie-weapon-move-grid .zombie-move-card {
   position: relative;
-  min-height: 0;
+  min-height: clamp(132px, 22vw, 240px);
   aspect-ratio: 1;
   padding: 0;
   overflow: hidden;
   isolation: isolate;
+  background-color: rgba(8, 13, 10, 0.92);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .zombie-move-card {
   border-color: rgba(123, 166, 106, 0.3);
+}
+
+.zombie-move-card::before {
+  display: none;
 }
 
 .zombie-move-card img {
@@ -4710,7 +4719,7 @@ select:focus {
   }
 
   .zombie-weapon-move-grid .zombie-move-card {
-    min-height: 0;
+    min-height: 112px;
   }
 
   .zombie-activity-card.option-card {
