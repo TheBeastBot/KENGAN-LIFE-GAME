@@ -10,6 +10,7 @@ import {
   ZOMBIE_ACTIVITIES,
   ZOMBIE_ITEM_CATALOG,
   AGENT_GEAR_CATALOG,
+  AGENT_INJURY_TREATMENTS,
   AGENT_TRAINING_ACTIONS,
   HUNTER_LEVEL_REWARD_OPTIONS,
   HUNTER_ITEM_CATALOG,
@@ -121,6 +122,10 @@ import {
   generateAgentMissions,
   startAgentMission,
   equipAgentGear,
+  agentDoctorCost,
+  agentInjuryHealthPenalty,
+  treatAgentInjury,
+  healAgentInjuryWithDoctor,
   runZombieActivity,
   equipZombieItem,
   useZombieItem,
@@ -4612,6 +4617,7 @@ function renderAgentStatus(agent) {
           ${metric('Intel', agent.resources.intel)}
           ${metric('Cash', `$${agent.resources.cash}`)}
           ${metric('Trust', agent.resources.agencyTrust)}
+          ${metric('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
           ${metric('Nemesis', agent.nemesisAlert ? 'Alert' : 'Quiet')}
         </div>
       </div>
@@ -4629,6 +4635,39 @@ function renderAgentStats(agent) {
           <button data-action="agent-stat-${stat}" ${agent.statPoints <= 0 ? 'disabled' : ''}>+</button>
         </div>
       `).join('')}
+    </div>
+  `;
+}
+
+function renderAgentInjuries(agent) {
+  if (!agent.injuries.length) {
+    return '<div class="activity-list"><article class="option-card"><div><h3>No field injuries</h3><p>Your cover story is cleaner when you are not limping through it.</p></div></article></div>';
+  }
+  return `
+    <div class="activity-list">
+      ${agent.injuries.map((injury) => {
+        const treatment = AGENT_INJURY_TREATMENTS[injury.part] ?? AGENT_INJURY_TREATMENTS.ribs;
+        const penalty = agentInjuryHealthPenalty(injury);
+        const doctorCost = agentDoctorCost(injury);
+        return `
+          <article class="option-card">
+            <div>
+              <p class="eyebrow">${injury.treated ? 'Stabilized' : 'Untreated'} · -${penalty} max health</p>
+              <h3>${labelize(injury.severity)} ${labelize(injury.part)}</h3>
+              <p>${injury.label}</p>
+              <p class="muted">${treatment.name}</p>
+              ${injury.treated ? '<p class="muted">Field treatment complete. Doctor care removes the remaining health cap.</p>' : `
+                <div class="action-row">
+                  ${treatment.options.map((option) => `
+                    <button data-action="agent-injury-treat-${injury.id}__${option.id}" ${injury.treatmentAttempts.includes(option.id) ? 'disabled' : ''}>${option.label}</button>
+                  `).join('')}
+                </div>
+              `}
+            </div>
+            <button class="primary" data-action="agent-injury-doctor-${injury.id}" ${agent.resources.cash < doctorCost ? 'disabled' : ''}>Pay Doctor $${doctorCost}</button>
+          </article>
+        `;
+      }).join('')}
     </div>
   `;
 }
@@ -4754,7 +4793,7 @@ function renderAgent() {
       ${renderAgentStatus(agent)}
       ${renderCollapsibleSection({ id: 'agent-dossier', title: 'Dossier', subtitle: 'Cover identity, heat, intel, trust, rank, and safehouse readiness.', body: renderAgentStatus(agent) })}
       ${renderCollapsibleSection({ id: 'agent-stats', title: 'AGENT Stats', subtitle: `${agent.statPoints} points available`, body: `<article class="option-card zombie-window"><div>${renderAgentStats(agent)}</div></article>` })}
-      ${renderCollapsibleSection({ id: 'agent-injuries', title: 'Field Injuries', subtitle: `${agent.injuries.length} injury record${agent.injuries.length === 1 ? '' : 's'}`, body: `<div class="activity-list">${agent.injuries.length ? agent.injuries.map((injury) => `<article class="option-card"><div><h3>${labelize(injury.severity)} ${labelize(injury.part)}</h3><p>${injury.label}</p></div></article>`).join('') : '<article class="option-card"><div><h3>No field injuries</h3><p>Your cover story is cleaner when you are not limping through it.</p></div></article>'}</div>` })}
+      ${renderCollapsibleSection({ id: 'agent-injuries', title: 'Field Injuries', subtitle: `${agent.injuries.length} injury record${agent.injuries.length === 1 ? '' : 's'} · health cap treatment`, body: renderAgentInjuries(agent) })}
       ${renderCollapsibleSection({ id: 'agent-log', title: 'AGENT Log', subtitle: 'Handler and operation updates.', body: renderLog('world') })}
     </section>
   `;
@@ -5727,6 +5766,17 @@ function handleAction(action, source = null) {
   if (action.startsWith('agent-gear-equip-')) {
     activeTab = 'agent-loadout';
     setState(equipAgentGear(state, action.replace('agent-gear-equip-', '')));
+    return;
+  }
+  if (action.startsWith('agent-injury-treat-')) {
+    activeTab = 'agent';
+    const [injuryId, optionId] = action.replace('agent-injury-treat-', '').split('__');
+    setState(treatAgentInjury(state, injuryId, optionId));
+    return;
+  }
+  if (action.startsWith('agent-injury-doctor-')) {
+    activeTab = 'agent';
+    setState(healAgentInjuryWithDoctor(state, action.replace('agent-injury-doctor-', '')));
     return;
   }
   if (action.startsWith('agent-stat-')) {

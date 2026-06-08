@@ -188,6 +188,53 @@ export const AGENT_GEAR_CATALOG = {
   grappleWatch: { id: 'grappleWatch', name: 'Grapple Watch', type: 'gadget', effect: 'Improves repositioning and extraction.' },
   medFoam: { id: 'medFoam', name: 'Med Foam', type: 'gadget', effect: 'Restores field health during a mission.' },
 };
+export const AGENT_INJURY_TREATMENTS = {
+  ribs: {
+    name: 'Rib Injury Protocol',
+    doctorCost: 220,
+    options: [
+      { id: 'breathing-pain-control', label: 'Ice, pain control, and deep breaths', correct: true, explanation: 'Correct: rib injuries are usually supported with pain control, ice, rest, and regular deep breathing or coughs so the lungs stay clear.' },
+      { id: 'tight-wrap', label: 'Bind the chest tightly', correct: false, explanation: 'Wrong: tightly wrapping the ribs can restrict breathing and raise lung-complication risk.' },
+      { id: 'push-through', label: 'Train hard to keep the ribs mobile', correct: false, explanation: 'Wrong: heavy painful exertion can worsen symptoms. Mobility comes from careful breathing work, not forcing combat pace.' },
+    ],
+  },
+  shoulder: {
+    name: 'Shoulder Injury Protocol',
+    doctorCost: 190,
+    options: [
+      { id: 'sling-ice-evaluate', label: 'Support in a sling, ice, and get evaluated', correct: true, explanation: 'Correct: protect and immobilize the shoulder, use cold therapy, and seek care when dislocation or fracture is possible.' },
+      { id: 'force-reduction', label: 'Force the shoulder back into place', correct: false, explanation: 'Wrong: forcing a joint back can damage nerves, blood vessels, or bone. Immobilize and get proper care.' },
+      { id: 'heat-sparring', label: 'Heat it and spar until it loosens', correct: false, explanation: 'Wrong: early heat and hard use can increase swelling and instability after an acute shoulder injury.' },
+    ],
+  },
+  hand: {
+    name: 'Hand Injury Protocol',
+    doctorCost: 170,
+    options: [
+      { id: 'rings-ice-splint', label: 'Remove rings, ice, elevate, and splint', correct: true, explanation: 'Correct: remove constricting jewelry, control swelling, immobilize, and get medical review if fracture signs appear.' },
+      { id: 'pull-finger', label: 'Pull the fingers straight immediately', correct: false, explanation: 'Wrong: pulling or realigning a hand injury can worsen a fracture or dislocation.' },
+      { id: 'keep-gripping', label: 'Keep gripping a weapon to test strength', correct: false, explanation: 'Wrong: loading an injured hand can worsen swelling, pain, and structural damage.' },
+    ],
+  },
+  leg: {
+    name: 'Leg Injury Protocol',
+    doctorCost: 200,
+    options: [
+      { id: 'protect-ice-elevate', label: 'Protect, ice, compress gently, and elevate', correct: true, explanation: 'Correct: acute leg injuries are protected, cooled, gently compressed when safe, elevated, and assessed if weight-bearing is poor.' },
+      { id: 'run-it-out', label: 'Run it out before it stiffens', correct: false, explanation: 'Wrong: running on an acute leg injury can worsen tissue damage or an undetected fracture.' },
+      { id: 'tight-tourniquet', label: 'Tie a tight strap above the pain', correct: false, explanation: 'Wrong: tight straps can impair circulation. Use only gentle compression when appropriate.' },
+    ],
+  },
+  jaw: {
+    name: 'Jaw Injury Protocol',
+    doctorCost: 210,
+    options: [
+      { id: 'support-cold-urgent', label: 'Support the jaw, use cold, and seek urgent care', correct: true, explanation: 'Correct: jaw injuries need support, cold therapy, and prompt medical or dental evaluation if fracture or dislocation is possible.' },
+      { id: 'force-bite', label: 'Bite down hard to reset alignment', correct: false, explanation: 'Wrong: forcing the bite can worsen a jaw fracture, dislocation, or dental injury.' },
+      { id: 'chew-test', label: 'Chew something tough to test damage', correct: false, explanation: 'Wrong: chewing stresses the injury and can increase pain or displacement.' },
+    ],
+  },
+};
 export const AGENT_TRAINING_ACTIONS = {
   firingRange: { id: 'firingRange', label: 'Firing Range', stat: 'marksmanship', xp: 72, intel: 0, cashCost: 20, trust: 1, cover: 0 },
   shadowTail: { id: 'shadowTail', label: 'Shadow Tail', stat: 'stealth', xp: 68, intel: 1, cashCost: 15, trust: 1, cover: 2 },
@@ -1499,12 +1546,20 @@ function normalizeAgentInventory(inventory = []) {
 function normalizeAgentInjuries(injuries = []) {
   if (!Array.isArray(injuries)) return [];
   return injuries
-    .map((injury, index) => ({
-      id: injury?.id ?? `agent-injury-${index}`,
-      part: String(injury?.part ?? 'torso').slice(0, 32),
-      severity: ['mild', 'moderate', 'severe'].includes(injury?.severity) ? injury.severity : 'mild',
-      label: injury?.label ?? `${injury?.severity ?? 'mild'} ${injury?.part ?? 'torso'} injury`,
-    }))
+    .map((injury, index) => {
+      const part = AGENT_INJURY_TREATMENTS[injury?.part] ? injury.part : 'ribs';
+      const severity = ['mild', 'moderate', 'severe'].includes(injury?.severity) ? injury.severity : 'mild';
+      return {
+        id: injury?.id ?? `agent-injury-${index}`,
+        part,
+        severity,
+        label: injury?.label ?? `${severity} ${part} injury`,
+        treated: Boolean(injury?.treated),
+        treatmentAttempts: Array.isArray(injury?.treatmentAttempts)
+          ? injury.treatmentAttempts.map(String).slice(0, 8)
+          : [],
+      };
+    })
     .slice(0, 10);
 }
 
@@ -5225,6 +5280,28 @@ function withPlayerCombatStats(life) {
     : life;
 }
 
+const AGENT_INJURY_HEALTH_PENALTY = {
+  mild: 8,
+  moderate: 16,
+  severe: 28,
+};
+
+export function agentInjuryHealthPenalty(injury = {}) {
+  const base = AGENT_INJURY_HEALTH_PENALTY[injury.severity] ?? AGENT_INJURY_HEALTH_PENALTY.mild;
+  return injury.treated ? Math.ceil(base / 2) : base;
+}
+
+export function agentDoctorCost(injury = {}) {
+  const treatment = AGENT_INJURY_TREATMENTS[injury.part] ?? AGENT_INJURY_TREATMENTS.ribs;
+  const multiplier = { mild: 1, moderate: 1.5, severe: 2.25 }[injury.severity] ?? 1;
+  return Math.round((treatment.doctorCost ?? 200) * multiplier);
+}
+
+function agentHealthPenaltyTotal(agentWorld = {}) {
+  const agent = normalizeAgentWorld(agentWorld);
+  return agent.injuries.reduce((sum, injury) => sum + agentInjuryHealthPenalty(injury), 0);
+}
+
 export function maxLifeHealth(life) {
   const hunter = normalizeHunterWorld(life.hunterWorld);
   const sorcerer = normalizeSorcererWorld(life.sorcererWorld);
@@ -5236,7 +5313,12 @@ export function maxLifeHealth(life) {
   const usesHunterStats = usesHunterCombatOverlay(life);
   const stats = usesSorcererStats ? getSorcererEffectiveStats(life) : usesHunterStats ? getHunterEffectiveStats(life) : life.stats;
   const armorHealth = usesHunterStats ? Math.max(0, Math.floor(hunterArmorEffects(hunter).health ?? 0)) : 0;
-  return fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + (usesSorcererStats ? sorcerer.stats.body * 22 + sorcerer.stats.cursedEnergy * 12 : 0) + armorHealth;
+  const baseHealth = fightHealthFromStats(stats) + (usesHunterStats ? hunter.stats.vitality * HUNTER_VITALITY_HEALTH_BONUS : 0) + (usesSorcererStats ? sorcerer.stats.body * 22 + sorcerer.stats.cursedEnergy * 12 : 0) + armorHealth;
+  const agent = normalizeAgentWorld(life.agentWorld);
+  if (life?.activeWorld === 'agent' && agent.unlocked) {
+    return Math.max(45, baseHealth - agentHealthPenaltyTotal(agent));
+  }
+  return baseHealth;
 }
 
 function staminaFromStats(stats = {}) {
@@ -7019,6 +7101,7 @@ export function startAgentMission(life, missionId) {
   const approachRoll = deterministicRoll(next.rngSeed, mission.id, next.agentWorld.resources.intel, 'agent-approach');
   const approachBonus = next.agentWorld.stats[mission.primaryStat] * 0.035 + (weapon.stealth ?? 0) * 0.006 + next.agentWorld.resources.intel * 0.012;
   const approachClean = approachRoll < clampFloat(0.42 + approachBonus - mission.risk * 0.003, 0.12, 0.9);
+  next.resources.health = clampLifeResource(next, 'health', next.resources.health);
   next.agentWorld.activeMission = mission;
   next.agentWorld.resources.intel = clamp(next.agentWorld.resources.intel - Math.min(2, next.agentWorld.resources.intel), 0, 999);
   next.activeFight = {
@@ -7056,9 +7139,42 @@ export function startAgentMission(life, missionId) {
 
 function agentAddInjury(life, severity = 'mild') {
   const part = ['shoulder', 'ribs', 'hand', 'leg', 'jaw'][Math.floor(deterministicRoll(life.rngSeed, lifeMonth(life), life.log?.length ?? 0, 'agent-injury') * 5) % 5];
-  const injury = { id: `${part}-${lifeMonth(life)}-${life.agentWorld.injuries.length}`, part, severity, label: `${severity} ${part} field injury` };
+  const injury = { id: `${part}-${lifeMonth(life)}-${life.agentWorld.injuries.length}`, part, severity, label: `${severity} ${part} field injury`, treated: false, treatmentAttempts: [] };
   life.agentWorld.injuries = [injury, ...life.agentWorld.injuries].slice(0, 10);
   return injury;
+}
+
+export function treatAgentInjury(life, injuryId, optionId) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'AGENT medical protocols belong to the AGENT world.', 'world');
+  const injury = next.agentWorld.injuries.find((item) => item.id === injuryId);
+  if (!injury) return addLog(next, 'That AGENT injury record is not in the dossier.', 'world');
+  if (injury.treated) return addLog(next, `${labelFromId(injury.part)} injury is already stabilized.`, 'world');
+  const treatment = AGENT_INJURY_TREATMENTS[injury.part] ?? AGENT_INJURY_TREATMENTS.ribs;
+  const option = treatment.options.find((item) => item.id === optionId);
+  if (!option) return addLog(next, 'That treatment option is not in the field medical card.', 'world');
+  injury.treatmentAttempts = [option.id, ...injury.treatmentAttempts.filter((id) => id !== option.id)].slice(0, 8);
+  if (option.correct) {
+    injury.treated = true;
+    next.resources.health = clampLifeResource(next, 'health', next.resources.health);
+    return addLog(next, `${treatment.name}: ${option.explanation}`, 'world');
+  }
+  return addLog(next, `${treatment.name}: ${option.explanation}`, 'world');
+}
+
+export function healAgentInjuryWithDoctor(life, injuryId) {
+  const next = clone(life);
+  next.agentWorld = normalizeAgentWorld(next.agentWorld);
+  if (worldLocked(next, 'agent') || !next.agentWorld.unlocked) return addLog(next, 'AGENT doctors belong to the AGENT world.', 'world');
+  const injury = next.agentWorld.injuries.find((item) => item.id === injuryId);
+  if (!injury) return addLog(next, 'That AGENT injury record is not in the dossier.', 'world');
+  const cost = agentDoctorCost(injury);
+  if (next.agentWorld.resources.cash < cost) return addLog(next, `Doctor visit blocked: need $${cost} agency cash.`, 'world');
+  next.agentWorld.resources.cash = Math.max(0, next.agentWorld.resources.cash - cost);
+  next.agentWorld.injuries = next.agentWorld.injuries.filter((item) => item.id !== injury.id);
+  next.resources.health = maxLifeHealth(next);
+  return addLog(next, `Agency doctor cleared the ${injury.label}. Health restored to the current max.`, 'world');
 }
 
 function finishAgentMission(life, fight, extracted = false) {
@@ -7096,6 +7212,7 @@ function finishAgentMission(life, fight, extracted = false) {
   if (fight.meters.injuryRisk >= 50 || fight.meters.playerHealth < fight.meters.maxPlayerHealth * 0.35) {
     const injury = agentAddInjury(life, fight.meters.injuryRisk >= 70 ? 'moderate' : 'mild');
     fight.result.injuries.push(injury.label);
+    life.resources.health = clampLifeResource(life, 'health', life.resources.health);
   }
   life.agentWorld.nemesisAlert = life.agentWorld.resources.heat >= 70 || (life.agentWorld.completedMissions.length >= 6 && life.agentWorld.resources.agencyTrust >= 70);
   life.agentWorld.activeMission = null;

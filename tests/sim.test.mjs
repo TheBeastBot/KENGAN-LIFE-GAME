@@ -21,6 +21,7 @@ import {
   SORCERER_MOVES,
   ZOMBIE_ITEM_CATALOG,
   AGENT_GEAR_CATALOG,
+  AGENT_INJURY_TREATMENTS,
   AGENT_TRAINING_ACTIONS,
   HUNTER_LEVEL_REWARD_OPTIONS,
   SYSTEM_SHOP_ITEMS,
@@ -109,6 +110,10 @@ import {
   startAgentMission,
   takeAgentTurn,
   equipAgentGear,
+  agentDoctorCost,
+  agentInjuryHealthPenalty,
+  treatAgentInjury,
+  healAgentInjuryWithDoctor,
   runZombieActivity,
   equipZombieItem,
   useZombieItem,
@@ -296,7 +301,79 @@ test('agent world normalization preserves valid gear resources and clamps bad sa
   assert.equal(agent.safehouseLevel, 4);
   assert.equal(agent.completedMissions.length, 2);
   assert.equal(agent.injuries[0].part, 'shoulder');
+  assert.equal(agent.injuries[0].treated, false);
+  assert.deepEqual(agent.injuries[0].treatmentAttempts, []);
   assert.equal(agent.nemesisAlert, true);
+});
+
+test('agent injury treatment quiz stabilizes medically correct answers and preserves wrong attempts', () => {
+  const base = createNewLife({ seed: 524, world: 'agent' });
+  const life = {
+    ...base,
+    agentWorld: {
+      ...base.agentWorld,
+      injuries: [{ id: 'rib-1', part: 'ribs', severity: 'moderate', label: 'moderate ribs field injury' }],
+    },
+  };
+  const healthyMax = maxLifeHealth(base);
+  const injuredMax = maxLifeHealth(life);
+
+  const wrong = treatAgentInjury(life, 'rib-1', 'tight-wrap');
+  const treated = treatAgentInjury(wrong, 'rib-1', AGENT_INJURY_TREATMENTS.ribs.options.find((option) => option.correct).id);
+
+  assert.equal(injuredMax, healthyMax - 16);
+  assert.equal(wrong.agentWorld.injuries[0].treated, false);
+  assert.deepEqual(wrong.agentWorld.injuries[0].treatmentAttempts, ['tight-wrap']);
+  assert.match(wrong.log[0].text, /restrict breathing/i);
+  assert.equal(treated.agentWorld.injuries[0].treated, true);
+  assert.equal(maxLifeHealth(treated), healthyMax - 8);
+  assert.equal(agentInjuryHealthPenalty(treated.agentWorld.injuries[0]), 8);
+  assert.match(treated.log[0].text, /deep breathing/i);
+});
+
+test('agent doctor healing charges cash removes injury and restores capped health', () => {
+  const base = createNewLife({ seed: 525, world: 'agent' });
+  const injury = { id: 'jaw-1', part: 'jaw', severity: 'severe', label: 'severe jaw field injury', treated: true };
+  const life = {
+    ...base,
+    resources: { ...base.resources, health: 12 },
+    agentWorld: {
+      ...base.agentWorld,
+      resources: { ...base.agentWorld.resources, cash: 1000 },
+      injuries: [injury],
+    },
+  };
+  const cost = agentDoctorCost(injury);
+  const healed = healAgentInjuryWithDoctor(life, 'jaw-1');
+
+  assert.equal(healed.agentWorld.resources.cash, 1000 - cost);
+  assert.equal(healed.agentWorld.injuries.length, 0);
+  assert.equal(healed.resources.health, maxLifeHealth(healed));
+  assert.equal(maxLifeHealth(healed), maxLifeHealth(base));
+  assert.match(healed.log[0].text, /doctor cleared/i);
+});
+
+test('agent injury health caps do not affect non-agent worlds', () => {
+  const fighter = createNewLife({ seed: 526, world: 'fighter' });
+  const withAgentInjury = {
+    ...fighter,
+    agentWorld: {
+      ...fighter.agentWorld,
+      unlocked: true,
+      injuries: [{ id: 'rib-legacy', part: 'ribs', severity: 'severe', label: 'severe ribs field injury' }],
+    },
+  };
+  const agent = createNewLife({ seed: 527, world: 'agent' });
+  const injuredAgent = {
+    ...agent,
+    agentWorld: {
+      ...agent.agentWorld,
+      injuries: [{ id: 'rib-agent', part: 'ribs', severity: 'severe', label: 'severe ribs field injury' }],
+    },
+  };
+
+  assert.equal(maxLifeHealth(withAgentInjury), maxLifeHealth(fighter));
+  assert.equal(maxLifeHealth(injuredAgent), maxLifeHealth(agent) - 28);
 });
 
 test('agent stat spending and academy training progress the dossier only', () => {
