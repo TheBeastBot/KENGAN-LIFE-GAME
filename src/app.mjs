@@ -458,6 +458,7 @@ const NAV_SECTIONS = [
   ['agent-academy', 'Academy'],
   ['agent-missions', 'Missions'],
   ['agent-loadout', 'Loadout'],
+  ['agent-medical', 'Medical'],
   ['world', 'World'],
 ];
 const FIGHTER_NAV_SECTION_IDS = new Set([
@@ -474,7 +475,7 @@ const FIGHTER_NAV_SECTION_IDS = new Set([
   'world',
 ]);
 const ZOMBIE_NAV_SECTION_IDS = new Set(['life', 'zombie', 'zombie-activities', 'zombie-items']);
-const AGENT_NAV_SECTION_IDS = new Set(['life', 'agent', 'agent-academy', 'agent-missions', 'agent-loadout']);
+const AGENT_NAV_SECTION_IDS = new Set(['life', 'agent', 'agent-academy', 'agent-missions', 'agent-loadout', 'agent-medical']);
 
 function saveGame() {
   if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1483,6 +1484,7 @@ function renderActiveTab() {
   if (activeTab === 'agent-academy') return renderAgentAcademyTab();
   if (activeTab === 'agent-missions') return renderAgentMissionsTab();
   if (activeTab === 'agent-loadout') return renderAgentLoadout();
+  if (activeTab === 'agent-medical') return renderAgentMedicalTab();
   if (activeTab === 'world') return renderWorld();
   return renderLife();
 }
@@ -1613,6 +1615,7 @@ function renderAgentLife() {
         <button data-tab="agent-academy">Academy</button>
         <button data-tab="agent-missions">Missions</button>
         <button data-tab="agent-loadout">Loadout</button>
+        <button data-tab="agent-medical">Medical</button>
         <button data-tab="agent">Dossier</button>
       </div>
       <article class="option-card zombie-window">
@@ -4834,6 +4837,24 @@ function renderAgentMissionsTab() {
   `;
 }
 
+function renderAgentMedicalTab() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  if (!agent.unlocked) return '<section class="stack"><article class="option-card"><h2>Medical Locked</h2><p>This life did not enter the agency.</p></article></section>';
+  return `
+    <section class="stack zombie-panel">
+      <article class="option-card zombie-window">
+        <div>
+          <p class="eyebrow">Field Medical</p>
+          <h2>${state.resources.health}/${maxLifeHealth(state)} health</h2>
+          <p class="muted">${agent.injuries.length} active injury record${agent.injuries.length === 1 ? '' : 's'} / $${agent.resources.cash} agency cash</p>
+        </div>
+      </article>
+      ${renderCollapsibleSection({ id: 'agent-injuries', title: 'Field Injuries', subtitle: 'Treatment quizzes and doctor healing.', body: renderAgentInjuries(agent) })}
+      ${renderCollapsibleSection({ id: 'agent-log', title: 'Medical Log', subtitle: 'Recent treatment and operation updates.', body: renderLog('world') })}
+    </section>
+  `;
+}
+
 function renderZombieStatus(zombie) {
   const supplies = zombie.resources;
   return `
@@ -5769,13 +5790,13 @@ function handleAction(action, source = null) {
     return;
   }
   if (action.startsWith('agent-injury-treat-')) {
-    activeTab = 'agent';
+    activeTab = 'agent-medical';
     const [injuryId, optionId] = action.replace('agent-injury-treat-', '').split('__');
     setState(treatAgentInjury(state, injuryId, optionId));
     return;
   }
   if (action.startsWith('agent-injury-doctor-')) {
-    activeTab = 'agent';
+    activeTab = 'agent-medical';
     setState(healAgentInjuryWithDoctor(state, action.replace('agent-injury-doctor-', '')));
     return;
   }
