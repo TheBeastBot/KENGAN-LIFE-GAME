@@ -4556,15 +4556,19 @@ function renderZombieSupplies(zombie) {
 }
 
 function renderZombieTeam(zombie) {
-  const members = zombie.team.filter((member) => member.present !== false);
+  const members = zombie.team;
+  const statLine = (stats = {}) => Object.entries(stats)
+    .map(([stat, value]) => `${labelize(stat)} ${value}`)
+    .join(' / ');
   return members.length
     ? `<div class="activity-list">${members.map((member) => `
-      <article class="option-card zombie-window zombie-activity-card">
+      <article class="option-card zombie-window zombie-activity-card ${member.alive === false ? 'dead' : ''}">
         <div class="activity-icon zombie-activity-icon">TM</div>
         <div class="zombie-card-main">
-          <p class="eyebrow">${escapeHtml(member.role)} / Trust ${member.trust}</p>
+          <p class="eyebrow">${escapeHtml(member.role)} / Trust ${member.trust} / ${member.alive === false ? 'Dead' : member.present === false ? 'Away' : 'Alive'}</p>
           <h3>${escapeHtml(member.name)}</h3>
-          <p>Health ${member.health} / Stamina ${member.stamina} / Weapon ${escapeHtml(labelize(member.weapon))}</p>
+          <p>Health ${member.health}/${member.maxHealth ?? '?'} / Stamina ${member.stamina}/${member.maxStamina ?? '?'} / Weapon ${escapeHtml(labelize(member.weapon))}</p>
+          <p class="muted">Stats: ${escapeHtml(statLine(member.stats))}</p>
         </div>
         <span class="lock-pill zombie-card-action">${escapeHtml(member.relationship)}</span>
       </article>
@@ -4734,7 +4738,7 @@ function renderZombieCombat() {
         <span class="badge red">${fight.finished ? (fight.result?.won ? 'Cleared' : 'Failed') : 'Live'}</span>
       </article>
       <div class="combat-meters">
-        ${combatMeter('Active Survivor', fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
+        ${combatMeter(activeMember?.id === 'player' ? 'Main Player' : escapeHtml(activeMember?.name ?? 'Active Ally'), fight.meters.playerHealth, `${fight.meters.playerHealth}/${fight.meters.maxPlayerHealth ?? 100}`, fight.meters.maxPlayerHealth ?? 100)}
         ${combatMeter('Horde', fight.meters.opponentHealth, `${fight.meters.opponentHealth}/${fight.meters.maxOpponentHealth ?? 100}`, fight.meters.maxOpponentHealth ?? 100)}
         ${combatMeter('Stamina', fight.meters.playerStamina, `${fight.meters.playerStamina}/${fight.meters.maxPlayerStamina ?? 100}`, fight.meters.maxPlayerStamina ?? 100)}
         ${combatMeter('Guard', fight.meters.guard, 'Brace')}
@@ -4749,10 +4753,13 @@ function renderZombieCombat() {
           </div>
           <div class="zombie-party-row">
             ${party.map((member) => `
-              <button class="zombie-combatant-card ${fight.party?.activeId === member.id ? 'selected' : ''}" data-action="zombie-switch-${member.id}" ${fight.finished ? 'disabled' : ''}>
+              <button class="zombie-combatant-card ${fight.party?.activeId === member.id ? 'selected' : ''} ${member.alive === false ? 'dead' : ''} ${(member.health ?? 0) <= 0 || member.present === false ? 'down' : ''}" data-action="zombie-switch-${member.id}" ${(fight.finished || fight.party?.activeId === member.id || member.alive === false || (member.health ?? 0) <= 0 || member.present === false) ? 'disabled' : ''}>
+                <small>${member.id === 'player' ? 'Main Player' : 'Ally'}</small>
                 <strong>${escapeHtml(member.name)}</strong>
                 <span>${escapeHtml(member.role ?? 'Survivor')}</span>
                 <em>HP ${member.health ?? '?'} / STA ${member.stamina ?? '?'}</em>
+                <span>${escapeHtml(Object.entries(member.stats ?? {}).map(([stat, value]) => `${labelize(stat)} ${value}`).join(' / '))}</span>
+                <b>${fight.party?.activeId === member.id ? 'On Point' : member.alive === false ? 'Dead' : (member.health ?? 0) <= 0 || member.present === false ? 'Down' : 'Switch In'}</b>
               </button>
             `).join('')}
           </div>

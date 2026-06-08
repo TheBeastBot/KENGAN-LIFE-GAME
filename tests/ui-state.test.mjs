@@ -177,7 +177,12 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(appSource, /function renderZombieCombat\(\)/);
   assert.match(appSource, /Survivor Party/);
   assert.match(appSource, /Infected Line/);
+  assert.match(appSource, /Stats:/);
+  assert.match(appSource, /member\.alive === false \? 'Dead'/);
   assert.match(appSource, /class="zombie-combatant-card/);
+  assert.match(appSource, /member\.id === 'player' \? 'Main Player' : 'Ally'/);
+  assert.match(appSource, /'On Point'/);
+  assert.match(appSource, /'Switch In'/);
   assert.match(appSource, /class="zombie-enemy-card/);
   assert.match(appSource, /\['unarmed', 'Unarmed'/);
   assert.match(appSource, /\['melee', 'Melee'/);
@@ -191,6 +196,9 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.doesNotMatch(appSource, /\['shove', 'Shove'/);
   assert.doesNotMatch(appSource, /\['suppress', 'Suppress'/);
   assert.match(cssSource, /\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(cssSource, /\.zombie-combatant-card small\s*{/);
+  assert.match(cssSource, /\.zombie-combatant-card\.down\s*{/);
+  assert.match(cssSource, /\.zombie-combatant-card\.dead/);
   assert.match(cssSource, /@media \(max-width:\s*560px\)\s*{[\s\S]*\.zombie-combat-grid\s*{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
 });
 

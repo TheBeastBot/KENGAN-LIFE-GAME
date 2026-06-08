@@ -60,6 +60,7 @@ import {
   getSorcererRankReview,
   maxLifeEnergy,
   maxLifeHealth,
+  normalizeZombieWorld,
   getStatCap,
   getUnlockedFightMoves,
   getUnlockedHunterMoves,
@@ -155,7 +156,26 @@ test('new lives start with exactly one brother or sister', () => {
     assert.equal(life.zombieWorld.team.length, 1);
     assert.equal(life.zombieWorld.team[0].id, life.sibling.id);
     assert.equal(life.zombieWorld.team[0].relationship, life.sibling.relationship);
+    assert.equal(life.zombieWorld.team[0].alive, true);
+    assert.equal(Object.keys(life.zombieWorld.team[0].stats).length, 5);
+    assert.equal(life.zombieWorld.team[0].maxHealth > 0, true);
+    assert.equal(life.zombieWorld.team[0].maxStamina > 0, true);
   }
+});
+
+test('zombie team normalization gives allies stats and preserves death', () => {
+  const zombie = normalizeZombieWorld({
+    team: [
+      { id: 'old-save', name: 'Old Save Ally', role: 'Guard', health: 0, stamina: 10, present: true },
+    ],
+  });
+
+  const ally = zombie.team[0];
+  assert.deepEqual(ally.stats, { physical: 3, fighting: 3, survivability: 1, leadership: 1, soldier: 1 });
+  assert.equal(ally.alive, false);
+  assert.equal(ally.present, false);
+  assert.equal(ally.maxHealth > 0, true);
+  assert.equal(ally.maxStamina > 0, true);
 });
 
 test('favorite trainings are persisted separately from training progress and can be toggled off', () => {
@@ -427,6 +447,89 @@ test('zombie encounters support multiple zombies guns ammo body injuries and tea
   assert.equal(bitten.activeFight.exchanges[0].moveId, 'melee');
   assert.equal(bitten.zombieWorld.inventory.find((item) => item.id === 'kitchenKnife').durability, 23);
   assert.ok(bitten.zombieWorld.bodyInjuries.some((injury) => ['arm', 'hand', 'torso', 'leg', 'eye', 'head'].includes(injury.part)));
+});
+
+test('zombie survivor switching loads and preserves each combatant meters', () => {
+  let life = createNewLife({ seed: 509, world: 'zombie' });
+  life = {
+    ...life,
+    pendingEvent: null,
+    resources: { ...life.resources, health: 95, energy: 85 },
+    zombieWorld: {
+      ...life.zombieWorld,
+      stats: { physical: 8, fighting: 8, survivability: 4, leadership: 6, soldier: 0 },
+      team: [
+        { id: 'ally-one', name: 'Ally One', role: 'Guard', trust: 60, health: 80, stamina: 70, weapon: 'pipe', present: true, relationship: 'teammate' },
+      ],
+    },
+  };
+
+  const started = startZombieEncounter(life, 'streetHorde');
+  const switchedToAlly = switchZombieCombatant(started, 'ally-one');
+
+  assert.equal(switchedToAlly.activeFight.party.activeId, 'ally-one');
+  assert.equal(switchedToAlly.activeFight.round, started.activeFight.round);
+  assert.equal(switchedToAlly.activeFight.meters.playerHealth, 80);
+  assert.equal(switchedToAlly.activeFight.meters.playerStamina, 70);
+
+  const allyTurn = takeFightTurn(switchedToAlly, 'melee');
+  const allyAfterTurn = allyTurn.activeFight.party.members.find((member) => member.id === 'ally-one');
+  const playerAfterAllyTurn = allyTurn.activeFight.party.members.find((member) => member.id === 'player');
+
+  assert.equal(allyAfterTurn.health < 80, true);
+  assert.equal(allyAfterTurn.stamina < 70, true);
+  assert.equal(playerAfterAllyTurn.health, 95);
+  assert.equal(playerAfterAllyTurn.stamina, 85);
+
+  const switchedToPlayer = switchZombieCombatant(allyTurn, 'player');
+  assert.equal(switchedToPlayer.activeFight.party.activeId, 'player');
+  assert.equal(switchedToPlayer.activeFight.meters.playerHealth, 95);
+  assert.equal(switchedToPlayer.activeFight.meters.playerStamina, 85);
+});
+
+test('zombie allies use their own stats and can die in combat', () => {
+  let life = createNewLife({ seed: 519, world: 'zombie' });
+  life = {
+    ...life,
+    pendingEvent: null,
+    resources: { ...life.resources, health: 100, energy: 100 },
+    zombieWorld: {
+      ...life.zombieWorld,
+      stats: { physical: 10, fighting: 10, survivability: 8, leadership: 8, soldier: 0 },
+      team: [
+        {
+          id: 'frontline-ally',
+          name: 'Frontline Ally',
+          role: 'Guard',
+          trust: 60,
+          stats: { physical: 0, fighting: 0, survivability: 0, leadership: 0, soldier: 0 },
+          health: 8,
+          maxHealth: 8,
+          stamina: 30,
+          maxStamina: 30,
+          weapon: 'pipe',
+          alive: true,
+          present: true,
+          relationship: 'teammate',
+        },
+      ],
+    },
+  };
+
+  const started = startZombieEncounter(life, 'streetHorde');
+  const switched = switchZombieCombatant(started, 'frontline-ally');
+  switched.activeFight.meters.playerHealth = 1;
+  const afterTurn = takeFightTurn(switched, 'melee');
+  const allyInParty = afterTurn.activeFight.party.members.find((member) => member.id === 'frontline-ally');
+  const allyInTeam = afterTurn.zombieWorld.team.find((member) => member.id === 'frontline-ally');
+
+  assert.equal(Boolean(afterTurn.ending), false);
+  assert.equal(afterTurn.activeFight.party.activeId, 'player');
+  assert.equal(allyInParty.alive, false);
+  assert.equal(allyInParty.present, false);
+  assert.equal(allyInTeam.alive, false);
+  assert.equal(allyInTeam.present, false);
+  assert.match(afterTurn.activeFight.exchanges[0].text, /was killed by the infected/);
 });
 
 test('zombie attacks hit one target while the full swarm makes combat brutal', () => {

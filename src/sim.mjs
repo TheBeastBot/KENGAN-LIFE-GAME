@@ -1400,6 +1400,31 @@ function normalizeZombieStats(stats = {}) {
   );
 }
 
+function zombieAllyRoleStats(role = 'Survivor', relationship = 'teammate') {
+  const key = String(role).toLowerCase();
+  const relationshipKey = String(relationship).toLowerCase();
+  const presets = {
+    brother: { physical: 2, fighting: 1, survivability: 1, leadership: 0, soldier: 0 },
+    sister: { physical: 1, fighting: 1, survivability: 2, leadership: 1, soldier: 0 },
+    medic: { physical: 1, fighting: 1, survivability: 3, leadership: 2, soldier: 0 },
+    runner: { physical: 3, fighting: 1, survivability: 3, leadership: 0, soldier: 0 },
+    guard: { physical: 3, fighting: 3, survivability: 1, leadership: 1, soldier: 1 },
+    mechanic: { physical: 1, fighting: 1, survivability: 2, leadership: 1, soldier: 2 },
+    survivor: { physical: 1, fighting: 1, survivability: 1, leadership: 1, soldier: 0 },
+  };
+  return normalizeZombieStats(presets[key] ?? presets[relationshipKey] ?? presets.survivor);
+}
+
+function zombieAllyMaxHealth(member = {}) {
+  const stats = normalizeZombieStats(member.stats ?? zombieAllyRoleStats(member.role, member.relationship));
+  return Math.max(1, Math.round(member.maxHealth ?? 68 + stats.physical * 7 + stats.survivability * 4));
+}
+
+function zombieAllyMaxStamina(member = {}) {
+  const stats = normalizeZombieStats(member.stats ?? zombieAllyRoleStats(member.role, member.relationship));
+  return Math.max(1, Math.round(member.maxStamina ?? 64 + stats.survivability * 5 + stats.fighting * 2));
+}
+
 function normalizeZombieResources(resources = {}) {
   return {
     food: clamp(resources.food ?? DEFAULT_ZOMBIE_WORLD.resources.food, 0, 999),
@@ -1477,18 +1502,29 @@ function normalizeZombieTeam(team = []) {
   if (!Array.isArray(team)) return [];
   return team
     .filter((member) => member?.id && member?.name)
-    .map((member) => ({
-      id: String(member.id),
-      name: String(member.name),
-      role: member.role ?? 'Survivor',
-      trust: clamp(member.trust ?? 45, 0, 100),
-      health: clamp(member.health ?? 70, 0, 140),
-      stamina: clamp(member.stamina ?? 65, 0, 140),
-      weapon: member.weapon ?? 'pipe',
-      present: member.present !== false,
-      relationship: member.relationship ?? 'teammate',
-      injuries: normalizeZombieBodyInjuries(member.injuries),
-    }))
+    .map((member) => {
+      const stats = normalizeZombieStats(member.stats ?? zombieAllyRoleStats(member.role, member.relationship));
+      const maxHealth = zombieAllyMaxHealth({ ...member, stats });
+      const maxStamina = zombieAllyMaxStamina({ ...member, stats });
+      const health = clamp(member.health ?? maxHealth, 0, maxHealth);
+      const alive = member.alive !== false && health > 0;
+      return {
+        id: String(member.id),
+        name: String(member.name),
+        role: member.role ?? 'Survivor',
+        trust: clamp(member.trust ?? 45, 0, 100),
+        stats,
+        health,
+        maxHealth,
+        stamina: clamp(member.stamina ?? maxStamina, 0, maxStamina),
+        maxStamina,
+        weapon: member.weapon ?? 'pipe',
+        alive,
+        present: alive && member.present !== false,
+        relationship: member.relationship ?? 'teammate',
+        injuries: normalizeZombieBodyInjuries(member.injuries),
+      };
+    })
     .slice(0, 6);
 }
 
@@ -6865,14 +6901,26 @@ export function runZombieActivity(life, activityId) {
   }
   if (activityId === 'recruitSurvivor' && next.zombieWorld.team.length < 6) {
     const recruitIndex = next.zombieWorld.team.length + 1;
+    const role = ['Medic', 'Runner', 'Guard', 'Mechanic'][recruitIndex % 4];
+    const stats = zombieAllyRoleStats(role);
+    const recruit = {
+      role,
+      stats,
+      maxHealth: zombieAllyMaxHealth({ role, stats }),
+      maxStamina: zombieAllyMaxStamina({ role, stats }),
+    };
     next.zombieWorld.team.push({
       id: `survivor-${lifeMonth(next)}-${recruitIndex}`,
       name: ['Maya Cruz', 'Jon Bell', 'Tessa Park', 'Omar Vale'][recruitIndex % 4],
-      role: ['Medic', 'Runner', 'Guard', 'Mechanic'][recruitIndex % 4],
+      role,
       trust: 42 + next.zombieWorld.stats.leadership * 3,
-      health: 72,
-      stamina: 66,
+      stats,
+      health: recruit.maxHealth,
+      maxHealth: recruit.maxHealth,
+      stamina: recruit.maxStamina,
+      maxStamina: recruit.maxStamina,
       weapon: recruitIndex % 2 ? 'pipe' : 'crowbar',
+      alive: true,
       present: true,
       relationship: 'teammate',
     });
@@ -6913,13 +6961,76 @@ export function runZombieActivity(life, activityId) {
 
 function createZombieParty(life) {
   const zombie = normalizeZombieWorld(life.zombieWorld);
+  const playerMaxHealth = maxLifeHealth(life);
+  const playerMaxStamina = maxLifeEnergy(life);
   return {
     activeId: 'player',
     members: [
-      { id: 'player', name: life.identity?.name ?? 'You', role: 'Player', health: life.resources.health, stamina: life.resources.energy, present: true },
-      ...zombie.team.filter((member) => member.present),
+      { id: 'player', name: life.identity?.name ?? 'You', role: 'Main Player', stats: zombie.stats, health: life.resources.health, maxHealth: playerMaxHealth, stamina: life.resources.energy, maxStamina: playerMaxStamina, alive: true, present: true },
+      ...zombie.team
+        .filter((member) => member.alive !== false && member.present !== false)
+        .map((member) => ({
+          ...member,
+          maxHealth: member.maxHealth ?? Math.max(1, member.health ?? 72),
+          maxStamina: member.maxStamina ?? Math.max(1, member.stamina ?? 66),
+        })),
     ],
   };
+}
+
+function activeZombiePartyMember(fight) {
+  return fight.party?.members?.find((member) => member.id === fight.party?.activeId && member.alive !== false && member.present !== false)
+    ?? fight.party?.members?.find((member) => member.alive !== false && member.present !== false)
+    ?? null;
+}
+
+function zombieCombatantStats(life, member) {
+  if (!member || member.id === 'player') return normalizeZombieStats(life.zombieWorld?.stats);
+  return normalizeZombieStats(member.stats ?? zombieAllyRoleStats(member.role, member.relationship));
+}
+
+function syncZombieActiveMemberFromMeters(fight) {
+  const member = activeZombiePartyMember(fight);
+  if (!member) return null;
+  member.health = clamp(fight.meters.playerHealth, 0, member.maxHealth ?? fight.meters.maxPlayerHealth ?? 100);
+  member.stamina = clamp(fight.meters.playerStamina, 0, member.maxStamina ?? fight.meters.maxPlayerStamina ?? 100);
+  if (member.health <= 0) {
+    member.present = false;
+    if (member.id !== 'player') member.alive = false;
+  }
+  return member;
+}
+
+function loadZombieActiveMemberMeters(fight, member) {
+  if (!member) return;
+  fight.party.activeId = member.id;
+  fight.meters.maxPlayerHealth = member.maxHealth ?? Math.max(1, member.health ?? 1);
+  fight.meters.maxPlayerStamina = member.maxStamina ?? Math.max(1, member.stamina ?? 1);
+  fight.meters.playerHealth = clamp(member.health ?? fight.meters.maxPlayerHealth, 0, fight.meters.maxPlayerHealth);
+  fight.meters.playerStamina = clamp(member.stamina ?? fight.meters.maxPlayerStamina, 0, fight.meters.maxPlayerStamina);
+}
+
+function persistZombieParty(life, fight) {
+  const party = fight.party?.members ?? [];
+  const player = party.find((member) => member.id === 'player');
+  if (player) {
+    life.resources.health = clampLifeResource(life, 'health', player.health ?? life.resources.health);
+    life.resources.energy = clampLifeResource(life, 'energy', player.stamina ?? life.resources.energy);
+  }
+  life.zombieWorld.team = (life.zombieWorld.team ?? []).map((member) => {
+    const updated = party.find((item) => item.id === member.id);
+    return updated ? {
+      ...member,
+      stats: normalizeZombieStats(updated.stats ?? member.stats ?? zombieAllyRoleStats(member.role, member.relationship)),
+      health: updated.health,
+      maxHealth: updated.maxHealth,
+      stamina: updated.stamina,
+      maxStamina: updated.maxStamina,
+      alive: updated.alive !== false,
+      present: updated.alive !== false && updated.present !== false,
+      injuries: updated.injuries ?? member.injuries ?? [],
+    } : member;
+  });
 }
 
 export function startZombieEncounter(life, encounterId = 'streetHorde') {
@@ -6972,20 +7083,12 @@ export function switchZombieCombatant(life, memberId) {
   const next = clone(life);
   const fight = next.activeFight;
   if (!fight || fight.source !== 'zombieEncounter' || fight.finished) return addLog(next, 'No live zombie encounter can switch survivors.', 'world');
-  const member = fight.party?.members?.find((item) => item.id === memberId && item.present !== false);
+  syncZombieActiveMemberFromMeters(fight);
+  const member = fight.party?.members?.find((item) => item.id === memberId && item.alive !== false && item.present !== false && (item.health ?? 0) > 0);
   if (!member) return addLog(next, 'That survivor is not present in the encounter.', 'world');
-  fight.party.activeId = member.id;
-  fight.meters.momentum = clamp(fight.meters.momentum - 6, -50, 50);
-  fight.exchanges.unshift({
-    round: fight.round,
-    tactic: 'switch',
-    moveId: 'switch',
-    tacticLabel: 'Switch Survivor',
-    text: `Switch: ${member.name} takes point while the group covers the gap.`,
-    playerDamage: 0,
-    enemyDamage: 0,
-  });
-  fight.round += 1;
+  if (fight.party?.activeId === member.id) return next;
+  loadZombieActiveMemberMeters(fight, member);
+  fight.meters.momentum = clamp(fight.meters.momentum - 3, -50, 50);
   return addLog(next, `${member.name} switched to the front of the zombie encounter.`, 'world');
 }
 
@@ -7003,6 +7106,8 @@ function applyZombieTargetDamage(target, damage = 0) {
 
 function applyZombieFightResult(life, fight, won) {
   life.zombieWorld = normalizeZombieWorld(life.zombieWorld);
+  syncZombieActiveMemberFromMeters(fight);
+  persistZombieParty(life, fight);
   const template = ZOMBIE_ENCOUNTERS[fight.opponentId] ?? ZOMBIE_ENCOUNTERS.streetHorde;
   if (won) {
     life.zombieWorld.encountersCleared += 1;
@@ -7018,6 +7123,8 @@ function applyZombieFightResult(life, fight, won) {
 
 function endFatalZombieFight(life, fight) {
   const encounterName = ZOMBIE_ENCOUNTERS[fight.opponentId]?.name ?? 'the infected';
+  syncZombieActiveMemberFromMeters(fight);
+  persistZombieParty(life, fight);
   life.resources.health = 0;
   return endLife(life, {
     eyebrow: 'Zombie Fatality',
@@ -7045,11 +7152,18 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     suppress: 'range',
     guard: 'unarmed',
   }[moveId] ?? moveId;
-  const stats = next.zombieWorld.stats;
-  const activeId = fight.party?.activeId ?? 'player';
-  const activeMember = fight.party?.members?.find((member) => member.id === activeId) ?? fight.party?.members?.[0];
-  const leadershipBoost = activeId === 'player' ? 0 : stats.leadership * 2;
-  const assistingMembers = (fight.party?.members ?? []).filter((member) => member.present !== false && member.id !== activeId);
+  let activeId = fight.party?.activeId ?? 'player';
+  let activeMember = activeZombiePartyMember(fight);
+  if (!activeMember || (activeMember.health ?? 0) <= 0) {
+    const replacement = fight.party?.members?.find((member) => member.alive !== false && member.present !== false && (member.health ?? 0) > 0);
+    if (!replacement) return endFatalZombieFight(next, fight);
+    loadZombieActiveMemberMeters(fight, replacement);
+    activeMember = replacement;
+    activeId = replacement.id;
+  }
+  const activeStats = zombieCombatantStats(next, activeMember);
+  const leadershipBoost = activeId === 'player' ? 0 : activeStats.leadership * 2;
+  const assistingMembers = (fight.party?.members ?? []).filter((member) => member.alive !== false && member.present !== false && member.id !== activeId);
   const meleeItem = ZOMBIE_ITEM_CATALOG[next.zombieWorld.equippedMelee];
   const meleeEntry = zombieInventoryEntry(next.zombieWorld, next.zombieWorld.equippedMelee);
   const rangeItem = ZOMBIE_ITEM_CATALOG[next.zombieWorld.equippedGun];
@@ -7065,7 +7179,7 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   let hit = true;
   let spentAmmo = 0;
   let staminaCost = 8;
-  let incomingReduction = stats.leadership + (moveId === 'guard' ? 10 : 0);
+  let incomingReduction = activeStats.leadership + (moveId === 'guard' ? 10 : 0);
   let selfInjury = null;
   let weaponLabel = 'Fists';
   if (normalizedMoveId === 'range') {
@@ -7073,29 +7187,32 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     spentAmmo = rangeItem.ammoCost ?? 1;
     if (next.zombieWorld.resources.ammo < spentAmmo) return addLog(next, 'No ammo left for that gun action.', 'world');
     next.zombieWorld.resources.ammo = clamp(next.zombieWorld.resources.ammo - spentAmmo, 0, 999);
-    const hitChance = clampFloat(0.3 + stats.soldier * 0.055 + fight.meters.momentum * 0.002 - liveZombies(fight).length * 0.018, 0.12, 0.9);
+    const hitChance = clampFloat(0.3 + activeStats.soldier * 0.055 + fight.meters.momentum * 0.002 - liveZombies(fight).length * 0.018, 0.12, 0.9);
     hit = deterministicRoll(next.rngSeed, fight.round, normalizedMoveId, activeId, 'zombie-gun-hit') < hitChance;
-    playerDamage = hit ? Math.round(rangeItem.damage + stats.soldier * 6 + stats.physical + leadershipBoost) : 0;
+    playerDamage = hit ? Math.round(rangeItem.damage + activeStats.soldier * 6 + activeStats.physical + leadershipBoost) : 0;
     staminaCost = 5;
     weaponLabel = rangeItem.name;
   } else if (normalizedMoveId === 'melee') {
     if (!meleeItem || meleeItem.type !== 'melee' || !meleeEntry) return addLog(next, 'No melee weapon is equipped.', 'world');
     if ((meleeEntry.durability ?? 0) <= 0) return addLog(next, `${meleeItem.name} is broken. Equip another melee weapon.`, 'world');
-    playerDamage = Math.round(meleeItem.damage + stats.physical * 3 + stats.fighting * 4 + stats.soldier + leadershipBoost + (next.zombieWorld.monarchOrigin ? 8 : 0));
+    playerDamage = Math.round(meleeItem.damage + activeStats.physical * 3 + activeStats.fighting * 4 + activeStats.soldier + leadershipBoost + (next.zombieWorld.monarchOrigin ? 8 : 0));
     meleeEntry.durability = Math.max(0, meleeEntry.durability - 1);
     staminaCost = 11;
     weaponLabel = meleeItem.name;
   } else if (normalizedMoveId === 'unarmed') {
-    playerDamage = Math.round(7 + stats.physical * 2 + stats.fighting * 3 + leadershipBoost);
+    playerDamage = Math.round(7 + activeStats.physical * 2 + activeStats.fighting * 3 + leadershipBoost);
     staminaCost = 10;
-    const selfInjuryChance = clampFloat(0.2 - stats.fighting * 0.012 - stats.survivability * 0.008, 0.04, 0.2);
+    const selfInjuryChance = clampFloat(0.2 - activeStats.fighting * 0.012 - activeStats.survivability * 0.008, 0.04, 0.2);
     if (deterministicRoll(next.rngSeed, fight.round, activeId, 'zombie-unarmed-self-injury') < selfInjuryChance) {
-      selfInjury = addZombieBodyInjury(next, 'hand', 'mild');
+      selfInjury = activeId === 'player'
+        ? addZombieBodyInjury(next, 'hand', 'mild')
+        : { id: `hand-${fight.round}-${activeId}`, part: 'hand', severity: 'mild', permanent: false, label: 'mild hand injury' };
       fight.meters.playerHealth = clamp(fight.meters.playerHealth - 4, 0, fight.meters.maxPlayerHealth ?? 100);
-      next.resources.health = clampLifeResource(next, 'health', next.resources.health - 4);
+      if (activeId === 'player') next.resources.health = clampLifeResource(next, 'health', next.resources.health - 4);
+      else activeMember.injuries = [selfInjury, ...(activeMember.injuries ?? [])].slice(0, 8);
     }
   } else if (normalizedMoveId === 'retreat') {
-    const retreatChance = clampFloat(0.38 + stats.survivability * 0.045 + stats.leadership * 0.025 - liveZombies(fight).length * 0.03, 0.12, 0.86);
+    const retreatChance = clampFloat(0.38 + activeStats.survivability * 0.045 + activeStats.leadership * 0.025 - liveZombies(fight).length * 0.03, 0.12, 0.86);
     const escaped = deterministicRoll(next.rngSeed, fight.round, activeId, 'zombie-retreat') < retreatChance;
     next.zombieWorld.resources.morale = clamp(next.zombieWorld.resources.morale - 8, 0, 100);
     next.zombieWorld.resources.food = clamp(next.zombieWorld.resources.food - 1, 0, 999);
@@ -7116,7 +7233,8 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     : assistingMembers.reduce((sum, member) => {
       const memberHealth = Number.isFinite(member.health) ? member.health : 0;
       if (memberHealth <= 0) return sum;
-      return sum + Math.max(1, Math.round(3 + stats.leadership * 1.6 + stats.fighting * 0.6));
+      const memberStats = zombieCombatantStats(next, member);
+      return sum + Math.max(1, Math.round(3 + memberStats.leadership * 1.2 + memberStats.fighting * 0.8));
     }, 0);
   const totalDamage = playerDamage + assistDamage;
   const damagedZombies = applyZombieTargetDamage(target, totalDamage);
@@ -7124,15 +7242,25 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
   const swarm = liveZombies(fight).length;
   const encounterDamage = ZOMBIE_ENCOUNTERS[fight.opponentId]?.damage ?? 12;
   const baseIncoming = Math.max(0, swarmAtStart * 11 + Math.round(encounterDamage * 1.25) - incomingReduction);
-  const enemyDamage = Math.max(0, Math.round(baseIncoming * (activeId === 'player' ? 1 : Math.max(0.55, 1 - stats.leadership * 0.025))));
+  const enemyDamage = Math.max(0, Math.round(baseIncoming * (activeId === 'player' ? 1 : Math.max(0.55, 1 - activeStats.leadership * 0.025))));
   fight.meters.playerStamina = clamp(fight.meters.playerStamina - staminaCost, 0, fight.meters.maxPlayerStamina ?? 100);
   fight.meters.playerHealth = clamp(fight.meters.playerHealth - enemyDamage, 0, fight.meters.maxPlayerHealth ?? 100);
+  syncZombieActiveMemberFromMeters(fight);
   fight.meters.momentum = clamp(fight.meters.momentum + (hit ? Math.round(playerDamage / 8) : -6) - Math.max(0, enemyDamage - 8), -50, 50);
-  fight.meters.injuryRisk = clamp((ZOMBIE_ENCOUNTERS[fight.opponentId]?.risk ?? 35) + swarm * 4 + Math.max(0, enemyDamage - 6) - stats.survivability * 2 - (next.zombieWorld.monarchOrigin ? 10 : 0), 0, 100);
+  fight.meters.injuryRisk = clamp((ZOMBIE_ENCOUNTERS[fight.opponentId]?.risk ?? 35) + swarm * 4 + Math.max(0, enemyDamage - 6) - activeStats.survivability * 2 - (next.zombieWorld.monarchOrigin ? 10 : 0), 0, 100);
   if (enemyDamage > 0 || fight.meters.injuryRisk > 25) {
     const part = ZOMBIE_BODY_PARTS[Math.floor(deterministicRoll(next.rngSeed, fight.round, normalizedMoveId, 'body-part') * ZOMBIE_BODY_PARTS.length) % ZOMBIE_BODY_PARTS.length];
     const severity = fight.meters.injuryRisk > 58 ? 'severe' : fight.meters.injuryRisk > 34 ? 'moderate' : 'mild';
-    const injury = addZombieBodyInjury(next, part, severity);
+    const injury = activeMember.id === 'player'
+      ? addZombieBodyInjury(next, part, severity)
+      : {
+        id: `${part}-${fight.round}-${activeMember.id}`,
+        part,
+        severity,
+        permanent: false,
+        label: `${severity} ${part} injury`,
+      };
+    if (activeMember.id !== 'player') activeMember.injuries = [injury, ...(activeMember.injuries ?? [])].slice(0, 8);
     if (fight.result?.injuries) fight.result.injuries.push(injury.label);
   }
   fight.exchanges.unshift({
@@ -7154,10 +7282,22 @@ function takeZombieEncounterTurn(life, moveId = 'meleeSwing') {
     damagedZombies,
     zombieCount: swarm,
   });
-  if (fight.meters.playerHealth <= 0) {
+  if (fight.meters.playerHealth <= 0 && activeMember.id === 'player') {
     return endFatalZombieFight(next, fight);
   }
-  const finished = fight.meters.playerHealth <= 0 || liveZombies(fight).length === 0 || fight.round >= fight.maxRounds;
+  if (fight.meters.playerHealth <= 0) {
+    activeMember.alive = false;
+    activeMember.present = false;
+    persistZombieParty(next, fight);
+    const replacement = fight.party?.members?.find((member) => member.alive !== false && member.present !== false && (member.health ?? 0) > 0);
+    if (replacement) {
+      loadZombieActiveMemberMeters(fight, replacement);
+      fight.exchanges[0].text += ` ${activeMember.name} was killed by the infected; ${replacement.name} takes point.`;
+    } else {
+      return endFatalZombieFight(next, fight);
+    }
+  }
+  const finished = liveZombies(fight).length === 0 || fight.round >= fight.maxRounds;
   if (finished) {
     finishActiveFight(next);
     return next;
@@ -7323,14 +7463,22 @@ export function createNewLife({ gender = 'Male', firstName = '', seed = Date.now
     life.sorcererWorld.missionOffers = createSorcererMissionBoard(life);
   } else if (activeWorld === 'zombie') {
     life.zombieWorld = { ...normalizeZombieWorld(life.zombieWorld), unlocked: true };
+    const siblingRole = siblingRelationship === 'brother' ? 'Brother' : 'Sister';
+    const siblingStats = zombieAllyRoleStats(siblingRole, siblingRelationship);
+    const siblingMaxHealth = zombieAllyMaxHealth({ role: siblingRole, relationship: siblingRelationship, stats: siblingStats });
+    const siblingMaxStamina = zombieAllyMaxStamina({ role: siblingRole, relationship: siblingRelationship, stats: siblingStats });
     life.zombieWorld.team = [{
       id: sibling.id,
       name: sibling.name,
-      role: siblingRelationship === 'brother' ? 'Brother' : 'Sister',
+      role: siblingRole,
       trust: sibling.trust,
-      health: 76,
-      stamina: 70,
+      stats: siblingStats,
+      health: siblingMaxHealth,
+      maxHealth: siblingMaxHealth,
+      stamina: siblingMaxStamina,
+      maxStamina: siblingMaxStamina,
       weapon: 'pipe',
+      alive: true,
       present: true,
       relationship: siblingRelationship,
       injuries: [],
@@ -11583,8 +11731,10 @@ function finishActiveFight(life) {
     injuries: [],
   };
 
-  life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
-  life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth);
+  if (!zombieFight) {
+    life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
+    life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth);
+  }
   life.world.heat = clamp(life.world.heat + (systemFight ? 1 : getRarity(life.clan.rarity).powerMultiplier * 2), 0, 100);
 
   if (fight.meters.injuryRisk >= 15) {
@@ -11616,8 +11766,7 @@ function finishActiveFight(life) {
   }
   if (zombieFight) {
     applyZombieFightResult(life, fight, won);
-    life.resources.energy = clampLifeResource(life, 'energy', fight.meters.playerStamina);
-    life.resources.health = clampLifeResource(life, 'health', fight.meters.playerHealth + (life.zombieWorld?.monarchOrigin ? 4 : 0));
+    if (life.zombieWorld?.monarchOrigin) life.resources.health = clampLifeResource(life, 'health', life.resources.health + 4);
     life.log = [createLog(summary, 'world'), ...life.log].slice(0, 60);
     return;
   }

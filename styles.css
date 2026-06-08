@@ -4566,9 +4566,34 @@ select:focus {
   font-weight: 800;
 }
 
+.zombie-combatant-card small {
+  color: #7ed3f2;
+  font-size: 0.62rem;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.zombie-combatant-card b {
+  color: #b9dfaa;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .zombie-combatant-card.selected {
   border-color: #7ba66a;
   background: rgba(123, 166, 106, 0.2);
+}
+
+.zombie-combatant-card.down {
+  opacity: 0.45;
+}
+
+.zombie-combatant-card.dead,
+.zombie-activity-card.dead {
+  border-color: rgba(200, 74, 61, 0.42);
+  opacity: 0.58;
 }
 
 .zombie-horde-row {
