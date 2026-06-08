@@ -33,6 +33,7 @@ import {
   SOCIAL_ACTIONS,
   SOCIAL_TRASH_TALK_STYLES,
   TRAINING_ACTIONS,
+  acceptClan,
   coachFighter,
   createNewLife,
   endLife,
@@ -76,6 +77,7 @@ import {
   joinTournament,
   redeemClanPassword,
   redeemHunterPassword,
+  redeemMentorPassword,
   redeemMonarchBodyPassword,
   redeemWorldResetPassword,
   resetWorld,
@@ -96,6 +98,7 @@ import {
   generateHunterGateOffers,
   retreatHunterDungeon,
   selectHunterGate,
+  spendLifeChoice,
   spendMoneyAction,
   spendHunterStatPoint,
   spendHunterStatPoints,
@@ -355,6 +358,32 @@ test('agent loadout and tactical actions resolve gadgets damage extraction and h
   assert.equal(extracted.agentWorld.completedMissions.length, 1);
   assert.equal(extracted.agentWorld.resources.heat >= life.agentWorld.resources.heat, true);
   assert.equal(extracted.agentWorld.resources.cash > life.agentWorld.resources.cash, true);
+});
+
+test('agent lives reject inherited clan mentor and password mechanics', () => {
+  const baseLife = createNewLife({ seed: 523, world: 'agent' });
+  const life = { ...baseLife, identity: { ...baseLife.identity, age: 22 } };
+  const clanBefore = life.clan.name;
+  const mentorBefore = life.mentor.id;
+  const statsBefore = { ...life.stats };
+
+  const rerolled = rerollClan(life);
+  const accepted = acceptClan(life);
+  const clanPassword = redeemClanPassword(life, 'BUCKY21');
+  const mentorPassword = redeemMentorPassword(life, 'MENTOR21');
+  const monarchBody = redeemMonarchBodyPassword(life, 'MONARCH21');
+  const worldReset = redeemWorldResetPassword(life, 'WORLDRESET21');
+  const mentorChoice = spendLifeChoice(life, 'mentor');
+
+  assert.equal(rerolled.clan.name, clanBefore);
+  assert.equal(rerolled.resources.clanRerolls, life.resources.clanRerolls);
+  assert.match(rerolled.log[0].text, /AGENT/i);
+  assert.equal(accepted.log[0].text.includes('AGENT'), true);
+  assert.equal(clanPassword.clan.name, clanBefore);
+  assert.equal(mentorPassword.mentor.id, mentorBefore);
+  assert.deepEqual(monarchBody.stats, statsBefore);
+  assert.equal(worldReset.activeWorld, 'agent');
+  assert.equal(mentorChoice.mentor.id, mentorBefore);
 });
 
 test('hard-separated worlds block normal cross-world unlocks', () => {

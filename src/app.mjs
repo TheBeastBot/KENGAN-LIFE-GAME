@@ -1321,25 +1321,38 @@ function renderEndedLife() {
 
 function renderHeader() {
   const rarity = rarityInfo(state.clan.rarity);
+  const isAgent = state.activeWorld === 'agent';
+  const agent = isAgent ? normalizeAgentWorld(state.agentWorld) : null;
+  const displayName = isAgent
+    ? `Agent ${escapeHtml(state.identity.firstName || state.identity.name?.split(' ')?.[0] || 'Unknown')}`
+    : escapeHtml(state.identity.name);
   return `
     <header class="top-card fighter-passport">
       <div class="fighter-id">
-        <p class="eyebrow">${state.phase} / ${state.rank}</p>
-        <h1>${escapeHtml(state.identity.name)}</h1>
+        <p class="eyebrow">${isAgent ? `AGENT / ${agent.rank}` : `${state.phase} / ${state.rank}`}</p>
+        <h1>${displayName}</h1>
         <p class="muted">Age ${ageLabel(state.identity)} / ${state.identity.gender} / ${state.background.neighborhood}</p>
       </div>
       <div class="header-actions">
-        <span class="badge ${rarity.color}">${state.clan.rarity}</span>
+        <span class="badge ${isAgent ? 'blue' : rarity.color}">${isAgent ? 'AGENT' : state.clan.rarity}</span>
         <button class="small-btn menu-btn" data-action="nav-menu-open">Menu</button>
       </div>
       <div class="status-grid resource-chips">
-        ${metric('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
-        ${metric('Energy', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
-        ${metric('Mood', state.resources.mood)}
-        ${metric('Rep', state.resources.reputation)}
-        ${metric('Money', `$${state.resources.money}`)}
-        ${metric('Power', statTotal())}
-        ${metric('Archetype', getPlayerArchetype(state))}
+        ${isAgent ? `
+          ${metric('Cover', agent.resources.cover)}
+          ${metric('Heat', agent.resources.heat)}
+          ${metric('Intel', agent.resources.intel)}
+          ${metric('Cash', `$${agent.resources.cash}`)}
+          ${metric('Trust', agent.resources.agencyTrust)}
+        ` : `
+          ${metric('Health', `${state.resources.health}/${maxLifeHealth(state)}`)}
+          ${metric('Energy', `${state.resources.energy}/${maxLifeEnergy(state)}`)}
+          ${metric('Mood', state.resources.mood)}
+          ${metric('Rep', state.resources.reputation)}
+          ${metric('Money', `$${state.resources.money}`)}
+          ${metric('Power', statTotal())}
+          ${metric('Archetype', getPlayerArchetype(state))}
+        `}
       </div>
     </header>
   `;
@@ -1470,6 +1483,7 @@ function renderActiveTab() {
 }
 
 function renderLife() {
+  if (state.activeWorld === 'agent') return renderAgentLife();
   const hunter = normalizeHunterWorld(state.hunterWorld);
   const canResetWorld = hunter.shadowMonarch?.unlocked && hunter.monarchWar?.finalChoiceUnlocked;
   return `
@@ -1580,6 +1594,38 @@ function renderLife() {
           </div>
         </article>
       ` : ''}
+    </section>
+  `;
+}
+
+function renderAgentLife() {
+  const agent = normalizeAgentWorld(state.agentWorld);
+  return `
+    <section class="stack">
+      ${renderAgentStatus(agent)}
+      <div class="action-grid">
+        ${button('Age Up', 'age-up', 'primary')}
+        <button data-tab="agent-academy">Academy</button>
+        <button data-tab="agent-missions">Missions</button>
+        <button data-tab="agent-loadout">Loadout</button>
+        <button data-tab="agent">Dossier</button>
+      </div>
+      <article class="option-card zombie-window">
+        <div>
+          <p class="eyebrow">Clean AGENT Life</p>
+          <h2>No clans. No mentors. No password gates.</h2>
+          <p class="muted">This life runs on cover, heat, intel, agency trust, training drills, loadouts, missions, and extraction.</p>
+        </div>
+      </article>
+      ${renderCollapsibleSection({
+        id: 'life-feed',
+        title: 'Life Feed',
+        subtitle: 'Recent dossier, operation, and world updates.',
+        count: state.log.length,
+        body: renderLog(),
+      })}
+      <button class="danger" data-action="end-life">End Life</button>
+      <button class="danger" data-action="reset">Reset Life</button>
     </section>
   `;
 }

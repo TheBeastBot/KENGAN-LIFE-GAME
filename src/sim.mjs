@@ -1458,6 +1458,10 @@ function worldLocked(life, world) {
   return Boolean(life?.activeWorld) && life.activeWorld !== world;
 }
 
+function isAgentLife(life) {
+  return life?.activeWorld === 'agent';
+}
+
 function normalizeHunterStats(stats = {}) {
   return Object.fromEntries(
     Object.keys(DEFAULT_HUNTER_STATS).map((stat) => [stat, Math.max(0, Math.floor(stats?.[stat] ?? DEFAULT_HUNTER_STATS[stat]))])
@@ -8072,11 +8076,13 @@ export function resetWorld(life, { debug = false, destination = 'hunter' } = {})
 }
 
 export function redeemWorldResetPassword(life, password) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no password override mechanics.', 'world');
   if ((password ?? '').trim().toUpperCase() !== WORLD_RESET_PASSWORD) return addLog(life, 'World Reset override failed.', 'life');
   return resetWorld(life, { debug: true });
 }
 
 export function rerollClan(life) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no clan reroll mechanic.', 'world');
   if (life.resources.clanRerolls <= 0) return addLog(life, 'No Clan Rerolls remain.', 'clan');
   const rng = createRng(life.rngSeed + life.resources.clanRerolls * 97);
   const nextPity = Math.max(0, Math.floor(life.clanRerollPity ?? 0)) + 1;
@@ -8107,10 +8113,12 @@ export function rerollClan(life) {
 }
 
 export function acceptClan(life) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no clan acceptance mechanic.', 'world');
   return addLog(life, `You accept the burden of ${life.clan.name}.`, 'clan');
 }
 
 export function redeemClanPassword(life, password) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no clan password mechanic.', 'world');
   if ((password ?? '').trim().toUpperCase() !== SECRET_CLAN_PASSWORD) {
     return addLog(life, 'Clan password rejected.', 'clan');
   }
@@ -8140,6 +8148,7 @@ export function redeemClanPassword(life, password) {
 }
 
 export function redeemHunterPassword(life, password) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no Hunter password mechanic.', 'world');
   if ((password ?? '').trim().toUpperCase() !== HUNTER_EVENT_PASSWORD) {
     return addLog(life, 'Hunter password rejected.', 'world');
   }
@@ -8170,6 +8179,7 @@ export function redeemHunterPassword(life, password) {
 }
 
 export function redeemMentorPassword(life, password) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no mentor password mechanic.', 'world');
   if ((password ?? '').trim().toUpperCase() !== SECRET_MENTOR_PASSWORD) {
     return addLog(life, 'Mentor password rejected.', 'mentor');
   }
@@ -8182,6 +8192,7 @@ export function redeemMentorPassword(life, password) {
 }
 
 export function redeemMonarchBodyPassword(life, password) {
+  if (isAgentLife(life)) return addLog(life, 'AGENT life has no body override password mechanic.', 'world');
   if ((password ?? '').trim().toUpperCase() !== MONARCH_BODY_PASSWORD) {
     return addLog(life, 'Monarch Body password rejected.', 'life');
   }
@@ -12595,6 +12606,12 @@ function yearlyEvent(life, ageStep = 'year') {
   const next = clone(life);
   const age = next.identity.age;
 
+  if (isAgentLife(next)) {
+    next.agentWorld = normalizeAgentWorld(next.agentWorld);
+    next.agentWorld.resources.cover = clamp(next.agentWorld.resources.cover + (ageStep === 'month' ? 1 : 3), 0, 100);
+    return { life: next, text: ageStep === 'month' ? 'A quiet month passes under cover. The agency file stays clean.' : 'Another year passes under a sealed cover identity.', type: 'world' };
+  }
+
   if (ageStep === 'year' && age === 14) {
     next.relationships.mentor = clamp(next.relationships.mentor + 8);
     return { life: next, text: 'A tired coach notices your stance and offers free morning drills.', type: 'life' };
@@ -12636,6 +12653,7 @@ export function spendLifeChoice(life, choice) {
     return addLog(next, 'You work a rough shift and trade energy for money.', 'life');
   }
   if (choice === 'mentor') {
+    if (isAgentLife(next)) return addLog(next, 'AGENT life has no mentor search mechanic.', 'world');
     return findMentor(next);
   }
   return next;
