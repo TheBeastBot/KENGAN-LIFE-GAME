@@ -1414,6 +1414,7 @@ function renderNavMenu() {
 
 function renderActiveTab() {
   const available = new Set(availableNavSections().map(([id]) => id));
+  if (state.activeFight?.source === 'zombieEncounter' && !state.activeFight.finished) activeTab = 'zombie';
   if (!available.has(activeTab)) activeTab = 'life';
   if (activeTab === 'train') return renderTrain();
   if (activeTab === 'recover') return renderRecover();
@@ -5546,6 +5547,7 @@ function handleAction(action, source = null) {
     selectedFightCategory = null;
     const previousExchangeCount = state.activeFight?.exchanges?.length ?? 0;
     const nextFightState = takeFightTurn(state, moveId);
+    if (nextFightState.activeFight?.source === 'zombieEncounter' && !nextFightState.activeFight.finished) activeTab = 'zombie';
     const nextExchangeCount = nextFightState.activeFight?.exchanges?.length ?? 0;
     const latestExchangeLabel = nextFightState.activeFight?.exchanges?.[0]?.tacticLabel;
     if (nextExchangeCount > previousExchangeCount) triggerMoveIconBurst(moveId, latestExchangeLabel);
@@ -5557,7 +5559,12 @@ function handleAction(action, source = null) {
     setState({ ...state, activeFight: null });
   }
   if (action.startsWith('event-')) {
-    setState(resolveEventChoice(state, action.replace('event-', '')));
+    const nextEventState = resolveEventChoice(state, action.replace('event-', ''));
+    if (nextEventState.activeFight?.source === 'zombieEncounter' && !nextEventState.activeFight.finished) {
+      activeTab = 'zombie';
+      fightInfoOpen = false;
+    }
+    setState(nextEventState);
   }
 }
 
@@ -5611,6 +5618,12 @@ document.addEventListener('click', (event) => {
 
   const tab = event.target.closest('[data-tab]');
   if (tab) {
+    if (state.activeFight?.source === 'zombieEncounter' && !state.activeFight.finished) {
+      activeTab = 'zombie';
+      navMenuOpen = false;
+      render();
+      return;
+    }
     activeTab = tab.dataset.tab;
     navMenuOpen = false;
     render();

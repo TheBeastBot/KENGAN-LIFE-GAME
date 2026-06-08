@@ -165,6 +165,7 @@ test('Zombie mode navigation hides fighter-life tabs and exposes dedicated activ
   assert.match(appSource, /const ZOMBIE_NAV_SECTION_IDS = new Set\(\['life', 'zombie', 'zombie-activities', 'zombie-items'\]\);/);
   assert.match(appSource, /state\.activeWorld === 'zombie'[\s\S]*ZOMBIE_NAV_SECTION_IDS\.has\(id\)/);
   assert.match(appSource, /if \(!available\.has\(activeTab\)\) activeTab = 'life';/);
+  assert.match(appSource, /state\.activeFight\?\.source === 'zombieEncounter' && !state\.activeFight\.finished\) activeTab = 'zombie';/);
   assert.match(appSource, /activeTab === 'zombie-activities'[\s\S]*renderZombieActivitiesTab\(\)/);
   assert.match(appSource, /function renderZombieActivitiesTab\(\)/);
   assert.doesNotMatch(zombieRenderer, /id: 'zombie-activities'/);
@@ -193,6 +194,7 @@ test('Zombie combat UI exposes party and infected rosters', async () => {
   assert.match(appSource, /ZOMBIE_ITEM_ASSETS\[rangeItem\?\.id\]/);
   assert.match(appSource, /style="background-image: url\('\$\{image\}'\)"/);
   assert.match(appSource, /<img src="\$\{image\}"/);
+  assert.match(appSource, /nextEventState\.activeFight\?\.source === 'zombieEncounter'[\s\S]*activeTab = 'zombie';/);
   assert.doesNotMatch(appSource, /class="zombie-move-status"/);
   assert.doesNotMatch(appSource, /\['shove', 'Shove'/);
   assert.doesNotMatch(appSource, /\['suppress', 'Suppress'/);
