@@ -16,6 +16,28 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
 const label = (value) => String(value).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (char) => char.toUpperCase());
+const GENERATED_ASSET_ROOT = './assets/dragon-ball/generated';
+const KI_MOVE_WORDS = [
+  'beam', 'wave', 'blast', 'cannon', 'sphere', 'ray', 'flash', 'bomb', 'grenade',
+  'shot', 'bullet', 'photon', 'galick', 'masenko', 'kame', 'spirit', 'big bang', 'destructo',
+];
+
+function originArt(originId = state?.origin ?? setupOrigin) {
+  return `${GENERATED_ASSET_ROOT}/origin-${originId}.jpg`;
+}
+
+function cardArt(item) {
+  if (!item) return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
+  if (item.type === 'form') return `${GENERATED_ASSET_ROOT}/card-form.jpg`;
+  if (item.type === 'heal') return `${GENERATED_ASSET_ROOT}/card-heal.jpg`;
+  if (item.type === 'support' || item.type === 'stat') return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
+  if (item.type === 'counter') return `${GENERATED_ASSET_ROOT}/card-counter.jpg`;
+  if (item.type === 'injury') return `${GENERATED_ASSET_ROOT}/card-injury.jpg`;
+  const searchable = `${item.name} ${item.text}`.toLowerCase();
+  return /\bki\b/.test(searchable) || KI_MOVE_WORDS.some((word) => searchable.includes(word))
+    ? `${GENERATED_ASSET_ROOT}/card-ki.jpg`
+    : `${GENERATED_ASSET_ROOT}/card-strike.jpg`;
+}
 
 function update(next, message = '') {
   state = next;
@@ -33,7 +55,7 @@ function renderCard(item, { action = '', disabled = false, badge = '', compact =
   return `
     <button class="db-card ${cardTone(item)} ${compact ? 'compact' : ''}" ${action ? `data-action="${action}"` : `data-card-detail="${item.id}"`} ${disabled ? 'disabled' : ''}>
       <span class="db-card-top"><b>${escapeHtml(item.name)}</b><i>${item.cost ?? '-'}</i></span>
-      <span class="db-card-art"><img src="./assets/dragon-ball/${item.type === 'form' ? 'fighter-silhouette' : item.type === 'stat' ? 'dragon-mark' : 'energy-orb'}.svg" alt=""></span>
+      <span class="db-card-art"><img src="${cardArt(item)}" alt="" loading="lazy"></span>
       <span class="db-card-type">${escapeHtml(item.type)} / ${escapeHtml(item.rarity ?? 'common')}</span>
       <span class="db-card-text">${escapeHtml(item.text)}</span>
       ${badge ? `<strong class="db-card-badge">${escapeHtml(badge)}</strong>` : ''}
@@ -57,6 +79,7 @@ function renderSetup() {
         <div class="origin-grid">
           ${Object.values(ORIGINS).map((item) => `
             <button class="origin-choice ${item.id === setupOrigin ? 'selected' : ''}" data-origin="${item.id}">
+              <img src="${originArt(item.id)}" alt="">
               <strong>${item.name}</strong>
               <span>${item.passive}</span>
               <small>${item.passiveText}</small>
@@ -78,7 +101,7 @@ function renderHeader() {
   return `
     <header class="db-header">
       <div class="fighter-title">
-        <img src="./assets/dragon-ball/dragon-mark.svg" alt="">
+        <img src="${originArt()}" alt="">
         <div><p>${origin.name} / Age ${state.age}</p><h1>${escapeHtml(state.name)}</h1><span>${origin.passive}</span></div>
       </div>
       <div class="header-meter">
@@ -107,7 +130,7 @@ function renderJourney() {
     <section class="journey-stack">
       <article class="saga-banner">
         <div><p>Age ${state.age} Saga</p><h2>${AGE_REWARD_NAMES[ageIndex]}</h2><span>Clear every encounter to unlock the next age reward draft.</span></div>
-        <img src="./assets/dragon-ball/fighter-silhouette.svg" alt="">
+        <img src="${originArt()}" alt="">
       </article>
       ${renderTimeline()}
       <div class="encounter-map">
@@ -202,12 +225,12 @@ function renderCombat() {
       <section class="combat-arena">
         <div class="combatant enemy">
           <div><p>Enemy Intent</p><h2>${escapeHtml(combat.intent.label)}</h2><span>${combat.intent.damage ? `${combat.intent.damage} incoming damage` : `${combat.intent.block} Block`}</span></div>
-          <img src="./assets/dragon-ball/fighter-silhouette.svg" alt="">
+          <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
         </div>
         <div class="impact-orb"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
         <div class="combatant player">
-          <img src="./assets/dragon-ball/fighter-silhouette.svg" alt="">
+          <img src="${originArt()}" alt="">
           <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name} / Block ${combat.player.block} / Focus ${combat.player.focus}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
         </div>

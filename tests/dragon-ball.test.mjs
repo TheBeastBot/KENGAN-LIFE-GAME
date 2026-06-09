@@ -251,7 +251,13 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /renderCollection/);
   assert.match(originalSource, /href="\.\/dragon-ball\.html"/);
   assert.doesNotMatch(appSource, /sim\.mjs/);
+  assert.match(appSource, /assets\/dragon-ball\/generated/);
+  assert.match(appSource, /origin-\$\{originId\}\.jpg/);
+  assert.match(appSource, /card-strike\.jpg/);
+  assert.match(appSource, /card-ki\.jpg/);
   assert.match(css, /--orange:\s*#f47b20/);
+  assert.match(css, /ui-hero\.jpg/);
+  assert.match(css, /ui-arena\.jpg/);
   assert.match(css, /@media \(max-width:\s*520px\)/);
   assert.ok(COMBAT_CARD_IDS.length >= 100);
 });
