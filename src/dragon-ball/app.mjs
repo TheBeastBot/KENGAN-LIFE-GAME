@@ -224,7 +224,7 @@ function renderCombat() {
     <main class="combat-screen">
       <section class="combat-arena">
         <div class="combatant enemy">
-          <div><p>Enemy Intent</p><h2>${escapeHtml(combat.intent.label)}</h2><span>${combat.intent.damage ? `${combat.intent.damage} incoming damage` : `${combat.intent.block} Block`}</span></div>
+          <div><p>Enemy Intent</p><h2>${escapeHtml(combat.intent.label)}</h2><span>${combat.intent.damage ? `${combat.intent.damage} incoming damage${combat.intent.pierce ? ` / ${Math.round(combat.intent.pierce * 100)}% Block pierce` : ''}` : `${combat.intent.block} Block`}</span></div>
           <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
         </div>

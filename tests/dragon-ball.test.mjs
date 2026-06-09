@@ -5,13 +5,13 @@ import { readFile } from 'node:fs/promises';
 import {
   CARDS, COMBAT_CARD_IDS, DRAGON_BALL_SAVE_KEY, ENCOUNTERS_BY_AGE, ORIGINS,
 } from '../src/dragon-ball/data.mjs';
-import { createRewardDraft, encountersForAge } from '../src/dragon-ball/campaign.mjs';
+import { createRewardDraft, encountersForAge, enemyForEncounter } from '../src/dragon-ball/campaign.mjs';
 import {
   advanceAfterAgeDraft, beginAgeReward, beginEncounter, canAgeUp, claimDraftCard,
   createDragonBallRun, normalizeDragonBallState, setDeck, validateDeck,
 } from '../src/dragon-ball/state.mjs';
 import {
-  endCombatTurn, playCombatCard, startDragonBallCombat,
+  endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
 } from '../src/dragon-ball/combat.mjs';
 import {
   clearDragonBallGame, loadDragonBallGame, saveDragonBallGame,
@@ -106,6 +106,46 @@ test('combat starts with five cards, visible intent, and seeded draw order', () 
   assert.equal(one.activeCombat.hand.length, 5);
   assert.ok(one.activeCombat.intent.label);
   assert.deepEqual(one.activeCombat.hand, two.activeCombat.hand);
+});
+
+test('harder enemy curve requires multiple turns and gives bosses a major advantage', () => {
+  const early = createDragonBallRun({ seed: 45 });
+  const earlyFight = early.encounters.find((item) => item.type === 'fighter');
+  const earlyEnemy = enemyForEncounter(early, earlyFight);
+  assert.ok(earlyEnemy.maxHealth > early.stats.health);
+  assert.ok(earlyEnemy.power >= 13);
+
+  const late = { ...early, age: 20, encounters: encountersForAge(20) };
+  const normal = enemyForEncounter(late, late.encounters.find((item) => item.type === 'fighter'));
+  const boss = enemyForEncounter(late, late.encounters.find((item) => item.type === 'specialFight'));
+  assert.ok(boss.maxHealth > normal.maxHealth * 1.7);
+  assert.ok(boss.power > normal.power * 1.45);
+  assert.equal(boss.special, true);
+});
+
+test('enemy guard survives into the player turn while player block expires each turn', () => {
+  let state = createDragonBallRun({ seed: 46 });
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.block = 20;
+  state.activeCombat.intent = { type: 'guard', label: 'Guard and Charge', block: 18, focus: 1 };
+  state = endCombatTurn(state);
+  assert.equal(state.activeCombat.player.block, 0);
+  assert.equal(state.activeCombat.enemy.block, 18);
+});
+
+test('special fights gain an enraging block-piercing ultimate', () => {
+  const base = createDragonBallRun({ seed: 47 });
+  const state = { ...base, age: 7, encounters: encountersForAge(7) };
+  const encounter = state.encounters.find((item) => item.type === 'specialFight');
+  const started = startDragonBallCombat(state, encounter.id);
+  started.activeCombat.turn = 5;
+  const firstUltimate = enemyIntent(started.activeCombat);
+  started.activeCombat.turn = 10;
+  const laterUltimate = enemyIntent(started.activeCombat);
+  assert.equal(firstUltimate.label, 'Limit-Breaking Ultimate');
+  assert.equal(firstUltimate.pierce, 0.5);
+  assert.ok(laterUltimate.damage > firstUltimate.damage);
 });
 
 test('playing cards spends Ki and applies damage block healing and forms', () => {

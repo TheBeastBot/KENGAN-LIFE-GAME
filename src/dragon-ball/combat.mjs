@@ -19,13 +19,25 @@ function drawCards(combat, count) {
 }
 
 export function enemyIntent(combat) {
+  const rage = Math.min(combat.enemy.special ? 0.55 : 0.38, Math.max(0, combat.turn - 1) * (combat.enemy.special ? 0.055 : 0.035));
+  const pressure = 1 + rage + combat.enemy.phase * 0.04;
   const patterns = [
-    { type: 'attack', label: 'Rush Attack', damage: combat.enemy.power },
-    { type: 'guard', label: 'Guard and Charge', block: 8 + combat.enemy.defense, focus: 1 },
-    { type: 'attack', label: 'Heavy Ki Blast', damage: Math.round(combat.enemy.power * 1.35), burn: 1 },
-    { type: 'attack', label: 'Feinting Combo', damage: Math.round(combat.enemy.power * 0.8), weak: 1 },
+    { type: 'attack', label: 'Rush Attack', damage: Math.round(combat.enemy.power * pressure) },
+    { type: 'guard', label: 'Guard and Charge', block: 11 + Math.round(combat.enemy.defense * 1.2), focus: 1 },
+    { type: 'attack', label: 'Heavy Ki Blast', damage: Math.round(combat.enemy.power * 1.42 * pressure), burn: 1 },
+    { type: 'attack', label: 'Feinting Combo', damage: Math.round(combat.enemy.power * 0.9 * pressure), weak: 1 },
   ];
-  return patterns[(combat.turn + combat.enemy.phase) % patterns.length];
+  if (combat.enemy.special) {
+    patterns.push({
+      type: 'attack',
+      label: 'Limit-Breaking Ultimate',
+      damage: Math.round(combat.enemy.power * 1.72 * pressure),
+      burn: 1,
+      weak: 1,
+      pierce: 0.5,
+    });
+  }
+  return patterns[(combat.turn - 1 + combat.enemy.phase) % patterns.length];
 }
 
 export function startDragonBallCombat(state, encounterId) {
@@ -125,6 +137,7 @@ export function endCombatTurn(state) {
   const intent = combat.intent;
   combat.discardPile.push(...combat.hand);
   combat.hand = [];
+  combat.enemy.block = 0;
   if (intent.type === 'guard') {
     combat.enemy.block += intent.block;
     combat.enemy.phase += intent.focus ?? 0;
@@ -137,9 +150,9 @@ export function endCombatTurn(state) {
     const raw = Math.max(1, Math.round(
       intent.damage * weakMultiplier * (1 - speedMitigation) - state.stats.defense * 0.3 * defenseMultiplier
     ));
-    const blocked = Math.min(combat.player.block, raw);
+    const effectiveBlock = Math.round(combat.player.block * (1 - (intent.pierce ?? 0)));
+    const blocked = Math.min(effectiveBlock, raw);
     const damage = raw - blocked;
-    combat.player.block = 0;
     combat.player.health = Math.max(0, combat.player.health - damage);
     if (intent.weak) combat.player.weak += intent.weak;
     if (intent.burn) combat.player.burn += intent.burn;
@@ -151,13 +164,13 @@ export function endCombatTurn(state) {
     combat.player.burn = Math.max(0, combat.player.burn - 1);
   }
   if (state.origin === 'namekian') combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + 3);
+  combat.player.block = 0;
   const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   if (form?.effect.drain) {
     combat.player.spirit = Math.max(0, combat.player.spirit - form.effect.drain);
     if (combat.player.spirit === 0) combat.player.activeForm = null;
   }
   if (combat.player.health <= 0) return recordCombatDefeat(next, combat.encounter);
-  combat.enemy.block = 0;
   combat.enemy.weak = Math.max(0, combat.enemy.weak - 1);
   combat.player.weak = Math.max(0, combat.player.weak - 1);
   combat.turn += 1;

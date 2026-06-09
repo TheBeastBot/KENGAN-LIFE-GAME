@@ -184,10 +184,11 @@ export function recordCombatVictory(state, encounter, cooldowns = {}) {
 
 export function recordCombatDefeat(state, encounter) {
   const injury = INJURY_CARDS[(state.history.length + state.age) % INJURY_CARDS.length].id;
+  const recoveryHealth = Math.max(1, Math.round(state.stats.health * (encounter.type === 'specialFight' ? 0.28 : 0.38)));
   return {
     ...state,
     activeCombat: null,
-    currentHealth: Math.max(1, Math.round(state.stats.health * 0.5)),
+    currentHealth: recoveryHealth,
     injuries: [...state.injuries, injury].slice(-5),
     history: [{ type: 'defeat', text: `Lost to ${encounter.name}. ${CARDS[injury].name} added until Age Up.` }, ...state.history].slice(0, 100),
   };

@@ -33,17 +33,20 @@ export function createRewardDraft(state, kind, sourceId = 'reward') {
 }
 
 export function enemyForEncounter(state, encounter) {
-  const scale = 1 + (state.age - 6) * 0.08;
+  const ageIndex = state.age - 6;
+  const scale = 1.46 + ageIndex * 0.115;
   const special = encounter.type === 'specialFight';
-  const maxHealth = Math.round((52 + encounter.enemyPower * 0.62) * scale * (special ? 1.15 : 1));
+  const maxHealth = Math.round((58 + encounter.enemyPower * 0.72) * scale * (special ? 1.38 : 1));
+  const power = Math.round((10 + encounter.enemyPower * 0.13) * (special ? 1.22 : 1));
   return {
     id: encounter.id,
     name: encounter.name,
     maxHealth,
     health: maxHealth,
-    power: Math.round(7 + encounter.enemyPower * 0.09),
-    defense: Math.round(2 + encounter.enemyPower * 0.035),
-    speed: Math.round(5 + encounter.enemyPower * 0.045),
+    power,
+    defense: Math.round((3 + encounter.enemyPower * 0.043) * (special ? 1.2 : 1)),
+    speed: Math.round((6 + encounter.enemyPower * 0.05) * (special ? 1.12 : 1)),
+    special,
     phase: 0,
   };
 }
