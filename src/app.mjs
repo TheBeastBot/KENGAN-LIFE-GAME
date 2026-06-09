@@ -1181,6 +1181,10 @@ function renderStart() {
           `).join('')}
         </div>
         <button class="primary wide" data-action="new-life">Start New Life</button>
+        <a class="dragon-ball-launch wide" href="./dragon-ball.html">
+          <strong>Dragon Ball Deck Builder</strong>
+          <span>Play the completely separate card-battling campaign</span>
+        </a>
       </section>
       <section class="rarity-strip">
         ${CLAN_RARITIES.map((rarity) => `<span class="badge ${rarity.color}">${rarity.name}</span>`).join('')}
@@ -1457,6 +1461,12 @@ function renderNavMenu() {
               </article>
             `;
           }).join('')}
+          <a class="nav-menu-row dragon-ball-nav-link" href="./dragon-ball.html">
+            <span class="nav-menu-section">
+              <strong>Dragon Ball Deck Builder</strong>
+              <span>Open the separate deck-building campaign</span>
+            </span>
+          </a>
         </div>
         <button class="danger wide" data-action="reset">Reset Life</button>
       </section>
