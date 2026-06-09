@@ -21,13 +21,36 @@ const KI_MOVE_WORDS = [
   'beam', 'wave', 'blast', 'cannon', 'sphere', 'ray', 'flash', 'bomb', 'grenade',
   'shot', 'bullet', 'photon', 'galick', 'masenko', 'kame', 'spirit', 'big bang', 'destructo',
 ];
+const SAIYAN_FORM_ART = {
+  'form-saiyan-2': 'form-saiyan-kaioken.jpg',
+  'form-saiyan-3': 'form-saiyan-ssj1.jpg',
+  'form-saiyan-4': 'form-saiyan-ascended.jpg',
+  'form-saiyan-5': 'form-saiyan-ssj2.jpg',
+  'form-saiyan-6': 'form-saiyan-ssj3.jpg',
+  'form-saiyan-7': 'form-saiyan-god.jpg',
+  'form-saiyan-8': 'form-saiyan-blue.jpg',
+  'form-saiyan-9': 'form-saiyan-ui-sign.jpg',
+};
 
 function originArt(originId = state?.origin ?? setupOrigin) {
   return `${GENERATED_ASSET_ROOT}/origin-${originId}.jpg`;
 }
 
+function saiyanFormArt(formId) {
+  const fileName = SAIYAN_FORM_ART[formId];
+  return fileName ? `${GENERATED_ASSET_ROOT}/${fileName}` : null;
+}
+
+function characterArt(originId = state?.origin ?? setupOrigin, activeFormId = null) {
+  if (originId === 'saiyan' && activeFormId) {
+    return saiyanFormArt(activeFormId) ?? originArt(originId);
+  }
+  return originArt(originId);
+}
+
 function cardArt(item) {
   if (!item) return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
+  if (item.type === 'form' && saiyanFormArt(item.id)) return saiyanFormArt(item.id);
   if (item.type === 'form') return `${GENERATED_ASSET_ROOT}/card-form.jpg`;
   if (item.type === 'heal') return `${GENERATED_ASSET_ROOT}/card-heal.jpg`;
   if (item.type === 'support' || item.type === 'stat') return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
@@ -229,8 +252,8 @@ function renderCombat() {
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
         </div>
         <div class="impact-orb"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
-        <div class="combatant player">
-          <img src="${originArt()}" alt="">
+        <div class="combatant player ${combat.player.activeForm ? 'transformed' : ''}">
+          <img src="${characterArt(state.origin, combat.player.activeForm)}" alt="${escapeHtml(combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name)}">
           <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name} / Block ${combat.player.block} / Focus ${combat.player.focus}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
         </div>
