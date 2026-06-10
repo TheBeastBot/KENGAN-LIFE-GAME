@@ -354,7 +354,7 @@ function renderTower() {
         <article class="tower-loadout-panel">
           <header>
             <div><p>Bonus Combat Loadout</p><h3>${state.tower.loadout.length}/5 Tower Cards</h3></div>
-            <span>${state.tower.active ? 'Locked during climb' : 'Outside the 20-card limit'}</span>
+            <span>${state.tower.active ? 'Locked during climb' : 'Active in every combat'}</span>
           </header>
           <div class="tower-loadout-slots">
             ${Array.from({ length: 5 }, (_, index) => {
@@ -369,7 +369,7 @@ function renderTower() {
               `;
             }).join('')}
           </div>
-          <p class="tower-loadout-note">Equipped cards are shuffled into Tower combat alongside your normal deck and Injury cards.</p>
+          <p class="tower-loadout-note">Equipped cards are shuffled into every combat alongside your normal deck and Injury cards. They never count toward the 20-card limit.</p>
         </article>
       </div>
 
@@ -467,7 +467,7 @@ function renderDetail() {
     <section class="detail-overlay" data-action="close-detail">
       <article class="detail-panel">
         ${renderCard(item)}
-        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Infinite Tower exclusive / Rank ${item.towerRank}` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}`}</small><button data-action="close-detail">Close</button></div>
+        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Earned only in Infinite Tower / Rank ${item.towerRank} / Usable in every combat` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}`}</small><button data-action="close-detail">Close</button></div>
       </article>
     </section>
   `;

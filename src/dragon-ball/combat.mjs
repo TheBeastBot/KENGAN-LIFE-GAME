@@ -78,7 +78,7 @@ export function startDragonBallCombat(state, encounterId) {
     drawPile: shuffle([
       ...state.deck,
       ...state.injuries,
-      ...(encounter.source === 'tower' ? state.tower.loadout : []),
+      ...state.tower.loadout,
     ], seed),
     discardPile: [],
     exhaustPile: [],

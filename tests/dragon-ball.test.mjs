@@ -387,6 +387,19 @@ test('tower combat includes equipped bonus cards without changing the normal dec
   assert.equal(state.activeCombat.encounter.source, 'tower');
 });
 
+test('equipped tower cards are also shuffled into regular campaign combat', () => {
+  let state = { ...createDragonBallRun({ seed: 2101 }), age: 8 };
+  state.tower.cards = { 'tower-card-1': 1, 'tower-card-2': 2 };
+  state = setTowerLoadout(state, ['tower-card-1', 'tower-card-2']);
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  const combatCards = [...state.activeCombat.hand, ...state.activeCombat.drawPile];
+  assert.ok(combatCards.includes('tower-card-1'));
+  assert.ok(combatCards.includes('tower-card-2'));
+  assert.equal(state.deck.length, 10);
+  assert.notEqual(state.activeCombat.encounter.source, 'tower');
+});
+
 test('tower victories advance floors, heal partially, and queue permanent stat drafts', () => {
   let state = { ...createDragonBallRun({ seed: 211 }), age: 8, currentHealth: 40 };
   state = startTowerRun(state);
@@ -722,6 +735,7 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /Infinite Tower/);
   assert.match(appSource, /setTowerLoadout/);
   assert.match(appSource, /tower-fight/);
+  assert.match(appSource, /shuffled into every combat/);
   assert.match(appSource, /Recovery Center/);
   assert.match(appSource, /buyRecoveryService/);
   assert.match(appSource, /combatRewardFor/);
