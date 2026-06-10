@@ -1,4 +1,4 @@
-import { AGE_REWARD_NAMES, CARDS, ORIGINS, STAT_KEYS } from './data.mjs';
+import { AGE_REWARD_NAMES, CARDS, ORIGINS, STAT_KEYS, TOWER_CARD_IDS } from './data.mjs';
 import {
   RECOVERY_SERVICES, advanceAfterAgeDraft, beginAgeReward, beginEncounter,
   buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
@@ -6,6 +6,9 @@ import {
 } from './state.mjs';
 import { endCombatTurn, playCombatCard, startDragonBallCombat } from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
+import {
+  claimTowerReward, generateTowerEncounter, setTowerLoadout, startTowerRun, towerCardAtRank,
+} from './tower.mjs';
 
 const app = document.querySelector('#dragon-ball-app');
 let state = loadDragonBallGame();
@@ -74,7 +77,7 @@ function update(next, message = '') {
 }
 
 function cardTone(item) {
-  return `${item.type} ${item.rarity ?? 'common'}`;
+  return `${item.type} ${item.rarity ?? 'common'} ${item.towerOnly ? 'tower-card' : ''}`;
 }
 
 function renderCard(item, { action = '', disabled = false, badge = '', compact = false } = {}) {
@@ -190,7 +193,7 @@ function renderDeck() {
   const deckCounts = state.deck.reduce((map, id) => ({ ...map, [id]: (map[id] ?? 0) + 1 }), {});
   const eligible = Object.keys(state.collection).filter((id) => {
     const item = CARDS[id];
-    return item && item.type !== 'stat' && (!item.origins?.length || item.origins.includes(state.origin));
+    return item && !item.towerOnly && item.type !== 'stat' && (!item.origins?.length || item.origins.includes(state.origin));
   });
   const validation = validateDeck(state);
   return `
@@ -222,7 +225,7 @@ function renderDeck() {
 }
 
 function renderCollection() {
-  const all = Object.values(CARDS).filter((item) => item.type !== 'injury');
+  const all = Object.values(CARDS).filter((item) => item.type !== 'injury' && !item.towerOnly);
   const filtered = all.filter((item) => collectionFilter === 'all' || item.type === collectionFilter);
   const owned = filtered.filter((item) => item.type === 'stat' ? false : state.collection[item.id]);
   return `
@@ -245,6 +248,7 @@ function renderHistory() {
 }
 
 function recoveryDisabledReason(serviceId) {
+  if (state.tower?.active) return 'Climb In Progress';
   const cost = recoveryServiceCost(state, serviceId);
   if (state.zeni < cost) return `Need ${cost - state.zeni} more Zeni`;
   if (serviceId === 'injury-treatment' && !state.injuries.length) return 'No Injuries';
@@ -287,6 +291,111 @@ function renderRecovery() {
   `;
 }
 
+function renderTower() {
+  if (state.age < 8) {
+    return `
+      <section class="tower-locked">
+        <div class="tower-sigil">8</div>
+        <p>Endless Trial Sealed</p>
+        <h2>Infinite Tower</h2>
+        <span>The Tower opens at age 8. Grow stronger, then return for an endurance climb with permanent rewards.</span>
+      </section>
+    `;
+  }
+
+  const floor = state.tower.currentFloor;
+  const encounter = generateTowerEncounter(state, floor);
+  const boss = floor % 5 === 0;
+  const equipped = new Set(state.tower.loadout);
+  const ownedIds = TOWER_CARD_IDS.filter((id) => state.tower.cards[id]);
+  const nextBoss = boss ? floor : floor + (5 - floor % 5);
+  return `
+    <section class="tower-screen">
+      <article class="tower-hero">
+        <div>
+          <p>Endless Endurance Activity</p>
+          <h2>Infinite Tower</h2>
+          <span>Damage carries between floors. Every victory restores 25% Health; boss floors fully restore you.</span>
+        </div>
+        <div class="tower-record">
+          <span>Highest Floor</span>
+          <strong>${state.tower.highestFloor}</strong>
+          <small>${state.tower.active ? `Run active on floor ${floor}` : 'Next climb begins at floor 1'}</small>
+        </div>
+      </article>
+
+      <div class="tower-dashboard">
+        <article class="tower-floor-panel ${boss ? 'boss-floor' : ''}">
+          <header>
+            <div><span>${boss ? 'Boss Floor' : 'Next Challenger'}</span><h3>Floor ${floor}</h3></div>
+            <strong>${encounter.enemyPower}<small>Enemy Power</small></strong>
+          </header>
+          <div class="tower-enemy-preview">
+            <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
+            <div>
+              <p>${boss ? 'Limit-Breaking Ultimate Ready' : `Threat ${encounter.difficulty}`}</p>
+              <h3>${escapeHtml(encounter.name)}</h3>
+              <span>${boss ? 'Enhanced stats, escalating AI, and a block-piercing ultimate attack.' : 'Stats and aggression increase continuously with every floor.'}</span>
+            </div>
+          </div>
+          <div class="tower-run-health">
+            <div><span>Run Health</span><b>${state.currentHealth}/${state.stats.health}</b></div>
+            <i><b style="width:${Math.max(0, state.currentHealth / state.stats.health * 100)}%"></b></i>
+          </div>
+          <div class="tower-rewards">
+            <span><b>Every Floor</b> Permanent stat draft + Zeni</span>
+            <span><b>Floor ${nextBoss}</b> ${boss ? 'Full heal + Tower Card draft' : 'Next Tower Card boss reward'}</span>
+          </div>
+          ${state.tower.active
+            ? `<button class="db-primary wide" data-action="tower-fight">Challenge Floor ${floor}</button>`
+            : `<button class="db-primary wide" data-action="tower-start">Begin Climb</button>`}
+        </article>
+
+        <article class="tower-loadout-panel">
+          <header>
+            <div><p>Bonus Combat Loadout</p><h3>${state.tower.loadout.length}/5 Tower Cards</h3></div>
+            <span>${state.tower.active ? 'Locked during climb' : 'Outside the 20-card limit'}</span>
+          </header>
+          <div class="tower-loadout-slots">
+            ${Array.from({ length: 5 }, (_, index) => {
+              const id = state.tower.loadout[index];
+              if (!id) return `<div class="tower-empty-slot"><b>${index + 1}</b><span>Empty</span></div>`;
+              const rank = state.tower.cards[id];
+              return `
+                <div class="tower-equipped">
+                  <button data-card-detail="${id}"><b>${escapeHtml(CARDS[id].name)}</b><span>Rank ${rank}</span></button>
+                  <button data-action="tower-remove-${id}" ${state.tower.active ? 'disabled' : ''}>Remove</button>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <p class="tower-loadout-note">Equipped cards are shuffled into Tower combat alongside your normal deck and Injury cards.</p>
+        </article>
+      </div>
+
+      <article class="tower-collection-panel">
+        <header>
+          <div><p>Tower-Exclusive Collection</p><h3>${ownedIds.length}/${TOWER_CARD_IDS.length} Cards Discovered</h3></div>
+          <span>Boss duplicates upgrade cards to Rank 5.</span>
+        </header>
+        <div class="tower-card-grid">
+          ${ownedIds.map((id) => {
+            const rank = state.tower.cards[id];
+            const item = towerCardAtRank(id, rank);
+            const disabled = state.tower.active || equipped.has(id) || state.tower.loadout.length >= 5;
+            return renderCard(item, {
+              action: `tower-add-${id}`,
+              disabled,
+              badge: equipped.has(id) ? `Equipped / R${rank}` : `Rank ${rank} / Equip`,
+              compact: true,
+            });
+          }).join('') || '<p class="empty-copy">Clear floor 5 to discover your first Tower-exclusive card.</p>'}
+        </div>
+      </article>
+    </section>
+  `;
+}
+
 function renderCombat() {
   const combat = state.activeCombat;
   const playerPercent = combat.player.health / combat.player.maxHealth * 100;
@@ -302,7 +411,7 @@ function renderCombat() {
         <div class="impact-orb"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
         <div class="combatant player ${combat.player.activeForm ? 'transformed' : ''}">
           <img src="${characterArt(state.origin, combat.player.activeForm)}" alt="${escapeHtml(combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name)}">
-          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name} / Block ${combat.player.block} / Focus ${combat.player.focus}</span></div>
+          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
         </div>
       </section>
@@ -312,7 +421,14 @@ function renderCombat() {
           <button data-action="end-turn">End Turn</button>
         </header>
         <div class="combat-hand">
-          ${combat.hand.map((id, index) => renderCard(CARDS[id], { action: `play-${index}`, disabled: CARDS[id].type === 'injury' || CARDS[id].cost > combat.player.ki })).join('')}
+          ${combat.hand.map((id, index) => {
+            const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, state.tower.cards[id]) : CARDS[id];
+            return renderCard(item, {
+              action: `play-${index}`,
+              disabled: item.type === 'injury' || item.cost > combat.player.ki,
+              badge: item.towerOnly ? `Tower Rank ${state.tower.cards[id]}` : '',
+            });
+          }).join('')}
         </div>
         <div class="combat-log">${combat.log.slice(0, 4).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}</div>
       </section>
@@ -322,27 +438,36 @@ function renderCombat() {
 
 function renderDraft() {
   const draft = state.pendingDraft;
+  const towerDraft = ['towerStat', 'towerCard'].includes(draft.kind);
+  const title = draft.kind === 'towerCard'
+    ? (draft.options.every((id) => CARDS[id].type === 'stat') ? 'Choose a Master Stat' : 'Choose a Tower Card')
+    : draft.kind === 'towerStat' ? 'Choose a Permanent Stat' : 'Choose One Card';
   return `
     <section class="draft-overlay">
       <div class="draft-rays"></div>
       <article class="draft-panel">
-        <p>${draft.ageAdvance ? `Age ${state.age} Complete` : 'Encounter Reward'}</p>
-        <h2>Choose One Card</h2>
-        <span>${draft.ageAdvance ? 'This reward closes the chapter and advances time.' : 'The other two cards will disappear.'}</span>
-        <div class="draft-grid">${draft.options.map((id) => renderCard(CARDS[id], { action: `draft-${id}` })).join('')}</div>
+        <p>${towerDraft ? `Infinite Tower Floor ${draft.towerFloor} Cleared` : draft.ageAdvance ? `Age ${state.age} Complete` : 'Encounter Reward'}</p>
+        <h2>${title}</h2>
+        <span>${draft.kind === 'towerCard' ? 'New cards unlock permanently. Owned cards gain a rank, up to Rank 5.' : draft.ageAdvance ? 'This reward closes the chapter and advances time.' : 'The other two cards will disappear.'}</span>
+        <div class="draft-grid">${draft.options.map((id) => {
+          const rank = state.tower?.cards?.[id] ?? 0;
+          const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, Math.min(5, rank + 1)) : CARDS[id];
+          return renderCard(item, { action: `draft-${id}`, badge: item.towerOnly ? (rank ? `Upgrade R${rank} to R${rank + 1}` : 'New Tower Card') : '' });
+        }).join('')}</div>
       </article>
     </section>
   `;
 }
 
 function renderDetail() {
-  const item = CARDS[selectedCardId];
+  const base = CARDS[selectedCardId];
+  const item = base?.towerOnly ? towerCardAtRank(selectedCardId, state.tower.cards[selectedCardId]) : base;
   if (!item) return '';
   return `
     <section class="detail-overlay" data-action="close-detail">
       <article class="detail-panel">
         ${renderCard(item)}
-        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}</small><button data-action="close-detail">Close</button></div>
+        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Infinite Tower exclusive / Rank ${item.towerRank}` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}`}</small><button data-action="close-detail">Close</button></div>
       </article>
     </section>
   `;
@@ -353,31 +478,32 @@ function renderCompleted() {
     <main class="ending-screen">
       <img src="./assets/dragon-ball/dragon-mark.svg" alt="">
       <p>Campaign Complete</p><h1>Champion of the Final Sky</h1><span>${escapeHtml(state.ending)}</span>
-      <div><button class="db-primary" data-action="reset-run">Start Another Run</button><a href="./index.html">Return to Underground Life Sim</a></div>
+      <div><button class="db-primary" data-action="open-tower">Keep Climbing</button><button class="db-primary" data-action="reset-run">Start Another Run</button><a href="./index.html">Return to Underground Life Sim</a></div>
     </main>
   `;
 }
 
 function render() {
   if (!state) return renderSetup();
-  if (state.completed) {
-    app.innerHTML = renderCompleted();
-    return;
-  }
   if (state.activeCombat) {
     app.innerHTML = renderCombat();
+    return;
+  }
+  if (state.completed && activeTab === 'journey') {
+    app.innerHTML = renderCompleted();
     return;
   }
   const content = activeTab === 'deck' ? renderDeck()
     : activeTab === 'collection' ? renderCollection()
       : activeTab === 'recovery' ? renderRecovery()
         : activeTab === 'history' ? renderHistory()
-          : renderJourney();
+          : activeTab === 'tower' ? renderTower()
+            : renderJourney();
   app.innerHTML = `
     <main class="db-shell">
       ${renderHeader()}
       <nav class="db-nav">
-        ${[['journey', 'Journey'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
+        ${[['journey', 'Journey'], ['tower', 'Tower'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
         <a href="./index.html">Other Modes</a>
       </nav>
       <section class="db-content">${content}</section>
@@ -403,6 +529,33 @@ function handleAction(action) {
     return;
   }
   if (!state) return;
+  if (action === 'open-tower') {
+    activeTab = 'tower';
+    render();
+    return;
+  }
+  if (action === 'tower-start') {
+    const next = startTowerRun(state);
+    update(next, next === state ? 'The Infinite Tower is currently unavailable.' : 'Infinite Tower run started.');
+    return;
+  }
+  if (action === 'tower-fight') {
+    const encounter = generateTowerEncounter(state);
+    update(startDragonBallCombat(state, encounter.id));
+    return;
+  }
+  if (action.startsWith('tower-add-')) {
+    const id = action.replace('tower-add-', '');
+    const next = setTowerLoadout(state, [...state.tower.loadout, id]);
+    update(next, next === state ? 'That Tower Card cannot be equipped right now.' : `${CARDS[id].name} equipped.`);
+    return;
+  }
+  if (action.startsWith('tower-remove-')) {
+    const id = action.replace('tower-remove-', '');
+    const next = setTowerLoadout(state, state.tower.loadout.filter((cardId) => cardId !== id));
+    update(next, next === state ? 'Tower loadouts are locked during a climb.' : `${CARDS[id].name} removed.`);
+    return;
+  }
   if (action.startsWith('encounter-')) {
     const id = action.replace('encounter-', '');
     const encounter = state.encounters.find((item) => item.id === id);
@@ -415,7 +568,10 @@ function handleAction(action) {
   }
   if (action.startsWith('draft-')) {
     const id = action.replace('draft-', '');
-    update(state.pendingDraft?.ageAdvance ? advanceAfterAgeDraft(state, id) : claimDraftCard(state, id), `Claimed ${CARDS[id]?.name}.`);
+    const next = ['towerStat', 'towerCard'].includes(state.pendingDraft?.kind)
+      ? claimTowerReward(state, id)
+      : state.pendingDraft?.ageAdvance ? advanceAfterAgeDraft(state, id) : claimDraftCard(state, id);
+    update(next, `Claimed ${CARDS[id]?.name}.`);
     return;
   }
   if (action.startsWith('play-')) {

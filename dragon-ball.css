@@ -121,6 +121,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .db-card.counter { background: linear-gradient(150deg,#f1e5ff,#c38cff); }
 .db-card.stat { background: linear-gradient(150deg,#fff8df,#f6ce52); }
 .db-card.legendary { border-color: #9a5415; box-shadow: 0 0 18px #ffb300,5px 5px 0 #512400; }
+.db-card.tower-card { color: white; background: linear-gradient(155deg,#221251,#061d48 72%); border-color: #c991ff; box-shadow: 0 0 22px #7e35de88,5px 5px 0 #130629; }
+.db-card.tower-card .db-card-top i { background: #8e41dc; }
+.db-card.tower-card .db-card-type { color: #efceff; }
+.db-card.tower-card .db-card-badge { background: #efceff; color: #261046; }
 .db-card-top { display: flex; justify-content: space-between; align-items: start; min-height: 44px; text-transform: uppercase; }
 .db-card-top i { min-width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--blue); color: white; font-style: normal; }
 .db-card-art { height: 140px; display: grid; place-items: center; overflow: hidden; background: #071b3b; border: 2px solid var(--line); }
@@ -162,6 +166,59 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .recovery-service p { line-height: 1.5; }
 .recovery-service > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: auto; }
 .recovery-service button { border: 3px solid var(--line); background: var(--orange); color: white; padding: 9px 12px; font-weight: 900; }
+
+.tower-screen { display: grid; gap: 22px; }
+.tower-hero { min-height: 220px; display: flex; justify-content: space-between; align-items: center; gap: 28px; padding: 34px; color: white; border: 4px solid var(--line); box-shadow: 8px 8px 0 #8e41dc; background:
+  linear-gradient(110deg,rgba(8,15,48,.96),rgba(45,16,92,.9) 65%,rgba(120,38,153,.72)),
+  url("./assets/dragon-ball/generated/ui-arena.jpg") center/cover no-repeat; }
+.tower-hero p, .tower-loadout-panel header p, .tower-collection-panel header p { margin: 0; color: #e8bcff; font-size: .72rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+.tower-hero h2 { margin: 4px 0; color: white; font-size: clamp(2.4rem,6vw,5rem); line-height: .9; font-style: italic; text-transform: uppercase; text-shadow: 4px 4px 0 #120623; }
+.tower-hero > div:first-child { max-width: 720px; }
+.tower-record { min-width: 190px; padding: 20px; text-align: center; color: white; border: 3px solid #e8bcff; background: #090b25cc; transform: skew(-3deg); }
+.tower-record span, .tower-record small, .tower-record strong { display: block; }
+.tower-record span { color: #e8bcff; font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.tower-record strong { color: var(--gold); font-size: 4rem; line-height: 1; }
+.tower-record small { margin-top: 7px; }
+.tower-dashboard { display: grid; grid-template-columns: minmax(420px,1.2fr) minmax(320px,.8fr); gap: 20px; }
+.tower-floor-panel, .tower-loadout-panel, .tower-collection-panel { background: white; border: 3px solid var(--line); padding: 22px; box-shadow: 5px 5px 0 #18223a25; }
+.tower-floor-panel { display: grid; gap: 18px; }
+.tower-floor-panel.boss-floor { background: linear-gradient(145deg,#fff,#ffe1e7); border-color: #9e192d; box-shadow: 7px 7px 0 #9e192d; }
+.tower-floor-panel > header, .tower-loadout-panel > header, .tower-collection-panel > header { display: flex; justify-content: space-between; align-items: center; gap: 18px; border-bottom: 3px solid var(--line); padding-bottom: 13px; }
+.tower-floor-panel header span { color: #7225a7; font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.tower-floor-panel h3, .tower-loadout-panel h3, .tower-collection-panel h3 { margin: 3px 0; font-size: 1.65rem; text-transform: uppercase; }
+.tower-floor-panel header > strong { color: var(--orange-dark); font-size: 2rem; text-align: right; }
+.tower-floor-panel header small { display: block; color: var(--ink); font-size: .62rem; text-transform: uppercase; }
+.tower-enemy-preview { display: grid; grid-template-columns: 135px 1fr; align-items: center; gap: 18px; }
+.tower-enemy-preview img { width: 135px; height: 155px; object-fit: cover; border: 3px solid var(--line); filter: hue-rotate(35deg) contrast(1.12); }
+.tower-enemy-preview p { margin: 0; color: #9e192d; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
+.tower-enemy-preview h3 { margin: 4px 0; }
+.tower-run-health { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.tower-run-health > div span, .tower-run-health > div b { display: block; }
+.tower-run-health span { color: var(--orange-dark); font-size: .67rem; font-weight: 900; text-transform: uppercase; }
+.tower-run-health > i { height: 18px; background: #d7dae3; border: 2px solid var(--line); transform: skew(-12deg); overflow: hidden; }
+.tower-run-health > i b { display: block; height: 100%; background: linear-gradient(90deg,#43c956,#d2ec3a); }
+.tower-rewards { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.tower-rewards span { padding: 11px; background: var(--cream); border-left: 5px solid #8e41dc; font-size: .78rem; }
+.tower-rewards b { display: block; color: #7225a7; text-transform: uppercase; }
+.tower-loadout-panel { display: flex; flex-direction: column; }
+.tower-loadout-panel > header span, .tower-collection-panel > header span { max-width: 210px; text-align: right; font-size: .75rem; }
+.tower-loadout-slots { display: grid; gap: 8px; margin-top: 16px; }
+.tower-empty-slot, .tower-equipped { min-height: 60px; display: grid; grid-template-columns: 46px 1fr; align-items: center; border: 2px dashed #9b91ad; background: #f4eff8; }
+.tower-empty-slot b { height: 100%; display: grid; place-items: center; color: white; background: #34245a; }
+.tower-empty-slot span { padding: 10px; color: #6c6377; font-weight: 800; }
+.tower-equipped { grid-template-columns: 1fr auto; border-style: solid; border-color: #34245a; background: #eee4ff; }
+.tower-equipped button { border: 0; background: transparent; padding: 10px; font-weight: 900; }
+.tower-equipped button:first-child { text-align: left; }
+.tower-equipped button span { display: block; color: #7225a7; font-size: .68rem; text-transform: uppercase; }
+.tower-equipped button:last-child { align-self: stretch; color: white; background: #34245a; font-size: .7rem; text-transform: uppercase; }
+.tower-loadout-note { margin-top: auto; padding-top: 16px; font-size: .78rem; line-height: 1.45; }
+.tower-collection-panel > header { margin-bottom: 18px; }
+.tower-card-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 15px; }
+.tower-locked { min-height: 500px; display: grid; place-content: center; justify-items: center; text-align: center; padding: 35px; color: white; border: 4px solid #8e41dc; background: radial-gradient(circle,#422071,#090d25 65%); }
+.tower-locked .tower-sigil { width: 110px; height: 110px; display: grid; place-items: center; color: var(--gold); border: 5px solid #e8bcff; border-radius: 50%; font-size: 4rem; font-weight: 1000; box-shadow: 0 0 35px #b24dff; }
+.tower-locked p { margin: 24px 0 0; color: #e8bcff; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+.tower-locked h2 { margin: 4px; font-size: clamp(2.5rem,7vw,5rem); text-transform: uppercase; font-style: italic; }
+.tower-locked span { max-width: 540px; line-height: 1.6; }
 
 .combat-screen { min-height: 100vh; background: #071b3b; color: white; }
 .combat-arena { min-height: 48vh; position: relative; overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; background:
@@ -229,6 +286,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .encounter-node .encounter-line { display: none; }
   .encounter-node > button { grid-column: 1/-1; }
   .deck-layout { grid-template-columns: 1fr; }
+  .tower-dashboard { grid-template-columns: 1fr; }
   .recovery-grid { grid-template-columns: 1fr; }
   .stat-board { grid-template-columns: repeat(3,1fr); }
   .combat-arena { grid-template-columns: 1fr; }
@@ -254,6 +312,14 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .recovery-hero > strong { min-width: auto; font-size: 1.8rem; }
   .recovery-status { grid-template-columns: 1fr auto; }
   .recovery-status > i { grid-column: 1/-1; grid-row: 2; }
+  .tower-hero { align-items: flex-start; flex-direction: column; padding: 22px; }
+  .tower-record { width: 100%; }
+  .tower-floor-panel, .tower-loadout-panel, .tower-collection-panel { padding: 16px; }
+  .tower-enemy-preview { grid-template-columns: 90px 1fr; gap: 12px; }
+  .tower-enemy-preview img { width: 90px; height: 125px; }
+  .tower-rewards { grid-template-columns: 1fr; }
+  .tower-floor-panel > header, .tower-loadout-panel > header, .tower-collection-panel > header { align-items: flex-start; }
+  .tower-card-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
   .saga-banner h2 { font-size: 1.65rem; }
   .saga-banner span { font-size: .78rem; }
   .age-up-panel { align-items: stretch; flex-direction: column; }

@@ -123,6 +123,29 @@ const uniqueCards = [
   card('unique-final-flashpoint', 'Final Flashpoint', 'move', 3, 'Deal 28 damage plus 2 damage per Focus. Consume all Focus.', { damage: 28, damagePerFocus: 2, consumeFocus: true }, { rarity: 'legendary', minAge: 18, cooldownAges: 1 }),
 ];
 
+const towerCards = [
+  card('tower-card-1', 'Infinite Breaker', 'move', 2, 'Deal 22 damage through Block.', { damage: 22, ignoreBlock: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-2', 'Hundred-Floor Rush', 'move', 2, 'Strike 4 times for 7 damage.', { damage: 7, hits: 4 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-3', 'Abyss Reversal', 'counter', 1, 'Gain 20 Block and draw 2 cards.', { block: 20, draw: 2 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-4', 'Immortal Senzu', 'heal', 2, 'Heal 45% of maximum Health and clear Weak and Burn. Exhaust.', { healPercent: 0.45, clearAll: true, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-5', 'Limitless Reactor', 'support', 1, 'Gain 2 maximum Ki this battle and refill 3 Ki. Exhaust.', { maxKi: 2, ki: 3, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-6', 'Phantom Floor', 'counter', 1, 'Gain 12 Block, retain 75% unused Block, and draw 1.', { block: 12, retainBlock: 0.75, draw: 1 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-7', 'Desperation Nova', 'move', 1, 'Deal 10 damage plus 50% of missing Health.', { damage: 10, missingHealthDamage: 0.5 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-8', 'Spirit Fountain', 'support', 0, 'Restore 6 Spirit, gain 1 Ki, and draw 1.', { spirit: 6, ki: 1, draw: 1 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-9', 'Ascension Pulse', 'support', 1, 'Gain 4 Focus and draw 2 cards.', { focus: 4, draw: 2 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-10', 'Sky-Splitting Beam', 'move', 3, 'Deal 45 damage. Exhaust.', { damage: 45, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-11', 'Pressure Collapse', 'move', 2, 'Deal 20 damage and apply 3 Weak.', { damage: 20, weak: 3 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-12', 'Perfect Recovery', 'heal', 2, 'Fully restore Health. Exhaust.', { healPercent: 1, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-13', 'Dragon Staircase', 'move', 2, 'Strike 5 times for 6 damage.', { damage: 6, hits: 5 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-14', 'Unbroken Guard', 'counter', 2, 'Gain 28 Block and retain half of unused Block.', { block: 28, retainBlock: 0.5 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-15', 'Form Resonance', 'support', 1, 'Gain 3 Focus, restore 4 Spirit, draw 1, and strengthen your active form by 12%.', { focus: 3, spirit: 4, draw: 1, formSupport: 0.12 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-16', 'Zero-Mortal Flash', 'move', 3, 'Deal 34 damage plus 3 per Focus. Consume all Focus.', { damage: 34, damagePerFocus: 3, consumeFocus: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-17', 'Temporal Reset', 'support', 1, 'Draw 4 cards and gain 2 Ki. Exhaust.', { draw: 4, ki: 2, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-18', 'Tower Zenkai', 'heal', 1, 'Heal 30% maximum Health and gain 3 Focus.', { healPercent: 0.3, focus: 3 }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-19', 'Absolute Counter', 'counter', 2, 'Gain 18 Block and deal 18 damage through Block.', { block: 18, damage: 18, ignoreBlock: true }, { rarity: 'legendary', towerOnly: true }),
+  card('tower-card-20', 'Endless Horizon', 'move', 3, 'Strike 3 times for 14 damage. Exhaust.', { damage: 14, hits: 3, exhaust: true }, { rarity: 'legendary', towerOnly: true }),
+];
+
 const forms = [
   ['form-saiyan-1', 'Great Ape Control', ['saiyan'], 8, 1.35, 1.05, 1],
   ['form-saiyan-2', 'Kaioken', ['saiyan', 'earthling'], 9, 1.4, 1.15, 1],
@@ -170,11 +193,21 @@ export const INJURY_CARDS = [
 ];
 
 export const CARDS = Object.fromEntries(
-  [...starterCards, ...moveCards, ...utilityCards, ...uniqueCards, ...formCards, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
+  [...starterCards, ...moveCards, ...utilityCards, ...uniqueCards, ...towerCards, ...formCards, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
 );
 
-export const COMBAT_CARD_IDS = Object.values(CARDS).filter((item) => CARD_TYPES.includes(item.type) && item.type !== 'injury').map((item) => item.id);
+export const COMBAT_CARD_IDS = Object.values(CARDS).filter((item) => CARD_TYPES.includes(item.type) && item.type !== 'injury' && !item.towerOnly).map((item) => item.id);
 export const STAT_CARD_IDS = statCards.map((item) => item.id);
+export const TOWER_CARD_IDS = towerCards.map((item) => item.id);
+
+export const TOWER_ENEMY_NAMES = [
+  'Stone-Fist Initiate', 'Crimson Dojo Hunter', 'Gravity Chamber Reject', 'Ki-Thief Marauder', 'Obsidian Gatekeeper',
+  'Void-School Disciple', 'Meteor Arena Champion', 'Phantom Crane Master', 'Savage Moon Saiyan', 'Iron Halo Android',
+  'Namekian Rift Warrior', 'Galactic Patrol Exile', 'Demon Realm Striker', 'Frozen Star Tyrant', 'Perfect Bio-Warrior',
+  'Majin Tower Eater', 'Celestial Assassin', 'Time Patrol Renegade', 'Destroyer Candidate', 'Angel Trial Keeper',
+  'Shadow Dragon Spawn', 'Universe Six Ace', 'Pride Trooper Elite', 'Legendary Berserker', 'God Ki Usurper',
+  'Eternal Fusion', 'Ultra Instinct Echo', 'Omega Floor Warden', 'Endless Sky Emperor', 'Tower Heart Incarnate',
+];
 
 export const ORIGINS = {
   saiyan: {

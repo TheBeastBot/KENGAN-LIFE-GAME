@@ -2,6 +2,7 @@ import {
   CARDS, COMBAT_CARD_IDS, DRAGON_BALL_VERSION, INJURY_CARDS, ORIGINS, STAT_KEYS,
 } from './data.mjs';
 import { createRewardDraft, encountersForAge } from './campaign.mjs';
+import { createTowerState, normalizeTowerState } from './tower.mjs';
 
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -32,7 +33,7 @@ export function recoveryServiceCost(state, serviceId) {
 export function buyRecoveryService(state, serviceId) {
   const service = RECOVERY_SERVICES[serviceId];
   const cost = recoveryServiceCost(state, serviceId);
-  if (!service || state.activeCombat || state.completed || state.zeni < cost) return state;
+  if (!service || state.activeCombat || state.tower?.active || state.zeni < cost) return state;
   if (serviceId !== 'injury-treatment' && state.currentHealth >= state.stats.health) return state;
   if (serviceId === 'injury-treatment' && !state.injuries.length) return state;
 
@@ -72,6 +73,7 @@ export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = D
     deck: [...selected.deck],
     injuries: [],
     cooldowns: {},
+    tower: createTowerState(),
     encounters: encountersForAge(6),
     clearedEncounterIds: [],
     pendingDraft: null,
@@ -90,7 +92,9 @@ export function normalizeDragonBallState(input) {
   const stats = Object.fromEntries(STAT_KEYS.map((key) => [key, Math.max(1, Math.floor(input.stats?.[key] ?? fallback.stats[key]))]));
   const collection = {};
   for (const [id, count] of Object.entries(input.collection ?? {})) {
-    if (CARDS[id] && CARDS[id].type !== 'stat' && CARDS[id].type !== 'injury') collection[id] = clamp(Math.floor(count), 1, 9);
+    if (CARDS[id] && !CARDS[id].towerOnly && CARDS[id].type !== 'stat' && CARDS[id].type !== 'injury') {
+      collection[id] = clamp(Math.floor(count), 1, 9);
+    }
   }
   for (const id of fallback.deck) collection[id] = Math.max(collection[id] ?? 0, fallback.deck.filter((cardId) => cardId === id).length);
   const deck = Array.isArray(input.deck) ? input.deck.filter((id) => CARDS[id] && collection[id]) : fallback.deck;
@@ -108,6 +112,7 @@ export function normalizeDragonBallState(input) {
     deck: validation.valid ? [...deck] : [...fallback.deck],
     injuries: Array.isArray(input.injuries) ? input.injuries.filter((id) => INJURY_CARDS.some((item) => item.id === id)).slice(0, 5) : [],
     cooldowns: Object.fromEntries(Object.entries(input.cooldowns ?? {}).filter(([id, value]) => CARDS[id] && Number(value) > 0).map(([id, value]) => [id, Math.floor(value)])),
+    tower: normalizeTowerState(input.tower),
     encounters: Array.isArray(input.encounters) && input.encounters.length ? input.encounters : encountersForAge(age),
     clearedEncounterIds: Array.isArray(input.clearedEncounterIds) ? input.clearedEncounterIds : [],
     pendingDraft: input.pendingDraft?.options?.length === 3 ? input.pendingDraft : null,
@@ -142,7 +147,7 @@ export function setDeck(state, deck) {
 }
 
 export function beginEncounter(state, encounterId) {
-  if (state.pendingDraft || state.activeCombat) return state;
+  if (state.pendingDraft || state.activeCombat || state.tower?.active) return state;
   const encounter = state.encounters.find((item) => item.id === encounterId);
   if (!encounter || state.clearedEncounterIds.includes(encounterId)) return state;
   if (encounter.type === 'mentor' || encounter.type === 'specialMentor') {

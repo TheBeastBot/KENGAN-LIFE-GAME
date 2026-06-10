@@ -7,6 +7,7 @@ export function encountersForAge(age) {
 
 export function cardIsEligible(card, state, { includeStats = false, legendary = false } = {}) {
   if (!card) return false;
+  if (card.towerOnly) return false;
   if (!includeStats && card.type === 'stat') return false;
   if (card.type === 'injury') return false;
   if ((card.minAge ?? 6) > state.age) return false;
