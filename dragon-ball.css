@@ -265,12 +265,6 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .detail-panel small { margin: 20px 0; }
 .detail-panel button { padding: 10px; border: 3px solid var(--line); background: white; font-weight: 900; }
 .db-toast { position: fixed; z-index: 120; right: 20px; bottom: 20px; max-width: 360px; background: var(--blue-dark); color: white; border: 3px solid var(--gold); padding: 12px 18px; font-weight: 800; box-shadow: 5px 5px 0 #0008; }
-.ending-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; text-align: center; color: white; padding: 30px; background: radial-gradient(circle,#195bb5,#06132c 70%); }
-.ending-screen img { width: 170px; }
-.ending-screen h1 { font-size: clamp(2.5rem,7vw,6rem); text-transform: uppercase; font-style: italic; color: var(--gold); margin: 8px; }
-.ending-screen div { display: flex; gap: 18px; align-items: center; margin-top: 25px; }
-.ending-screen a { color: white; }
-
 @media (max-width: 820px) {
   .db-start { grid-template-columns: 1fr; }
   .db-start-copy { padding: 35px 24px; min-height: 45vh; }

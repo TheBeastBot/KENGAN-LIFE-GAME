@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import {
   CARDS, COMBAT_CARD_IDS, DRAGON_BALL_SAVE_KEY, ENCOUNTERS_BY_AGE, ORIGINS,
 } from '../src/dragon-ball/data.mjs';
-import { createRewardDraft, encountersForAge, enemyForEncounter } from '../src/dragon-ball/campaign.mjs';
+import { createRewardDraft, encountersForAge, enemyForEncounter, sagaNameForAge } from '../src/dragon-ball/campaign.mjs';
 import {
   advanceAfterAgeDraft, beginAgeReward, beginEncounter, canAgeUp, claimDraftCard,
   createDragonBallRun, normalizeDragonBallState, setDeck, validateDeck,
@@ -100,7 +100,7 @@ test('tower loadout allows five owned unique cards outside the normal deck', () 
   assert.equal(validateDeck(equipped).valid, true);
 });
 
-test('tower loadout and Recovery Center are locked during an active climb', async () => {
+test('tower loadout can be edited during an active climb while Recovery stays locked', async () => {
   const { buyRecoveryService } = await import('../src/dragon-ball/state.mjs');
   const base = { ...createDragonBallRun({ seed: 2031 }), age: 8, zeni: 500, currentHealth: 10 };
   const cards = { 'tower-card-1': 1, 'tower-card-2': 1 };
@@ -108,12 +108,60 @@ test('tower loadout and Recovery Center are locked during an active climb', asyn
     ...base,
     tower: { ...base.tower, active: true, cards, loadout: ['tower-card-1'] },
   };
-  assert.strictEqual(setTowerLoadout(climbing, ['tower-card-2']), climbing);
+  const edited = setTowerLoadout(climbing, ['tower-card-2']);
+  assert.deepEqual(edited.tower.loadout, ['tower-card-2']);
   assert.strictEqual(buyRecoveryService(climbing, 'full-restore'), climbing);
   const campaignFight = climbing.encounters.find((item) => item.type === 'fighter');
   const mentor = climbing.encounters.find((item) => item.type === 'mentor');
   assert.strictEqual(startDragonBallCombat(climbing, campaignFight.id), climbing);
   if (mentor) assert.strictEqual(beginEncounter(climbing, mentor.id), climbing);
+});
+
+test('late campaign ages remix authored encounters through age 100', () => {
+  for (const age of [21, 35, 60, 99, 100]) {
+    const encounters = encountersForAge(age);
+    assert.ok([3, 4].includes(encounters.length));
+    assert.ok(encounters.every((item) => item.age === age));
+    assert.equal(new Set(encounters.map((item) => item.id)).size, encounters.length);
+    assert.ok(encounters.some((item) => item.type === 'fighter'));
+    assert.ok(encounters.some((item) => item.type.includes('Mentor') || item.type === 'mentor'));
+  }
+  assert.notDeepEqual(encountersForAge(21), encountersForAge(36));
+  assert.match(sagaNameForAge(21), /Ascended|Legacy|Master/);
+  assert.match(sagaNameForAge(100, 2), /Eternal/);
+});
+
+test('age 100 creates repeatable Eternal Saga cycles without ending the run', () => {
+  let state = createDragonBallRun({ seed: 2032 });
+  state = {
+    ...state,
+    age: 100,
+    ageCycle: 0,
+    encounters: encountersForAge(100, 0),
+  };
+  state.clearedEncounterIds = state.encounters.map((item) => item.id);
+  state = beginAgeReward(state);
+  assert.equal(state.pendingDraft.ageAdvance, true);
+  state = advanceAfterAgeDraft(state, state.pendingDraft.options[0]);
+  assert.equal(state.age, 100);
+  assert.equal(state.ageCycle, 1);
+  assert.equal(state.completed, false);
+  assert.equal(state.ending, null);
+  assert.ok(state.encounters.every((item) => item.id.includes('cycle-1')));
+  assert.equal(state.clearedEncounterIds.length, 0);
+});
+
+test('legacy completed age-20 saves reopen into the extended campaign', () => {
+  const state = normalizeDragonBallState({
+    ...createDragonBallRun({ seed: 2033 }),
+    age: 20,
+    completed: true,
+    ending: 'Old ending',
+    encounters: encountersForAge(20),
+  });
+  assert.equal(state.age, 20);
+  assert.equal(state.completed, false);
+  assert.equal(state.ending, null);
 });
 
 test('tower rewards always draft stats and every fifth floor drafts unowned cards then upgrades', () => {
@@ -667,7 +715,7 @@ test('Age Up is gated by all encounters and clears injuries while reducing coold
   assert.equal(state.currentHealth, state.stats.health);
 });
 
-test('age 20 reward completes the campaign instead of deleting the run', () => {
+test('age 20 reward advances into the extended campaign', () => {
   let state = createDragonBallRun({ seed: 102 });
   state = {
     ...state,
@@ -677,8 +725,10 @@ test('age 20 reward completes the campaign instead of deleting the run', () => {
   state.clearedEncounterIds = state.encounters.map((item) => item.id);
   state = beginAgeReward(state);
   state = advanceAfterAgeDraft(state, state.pendingDraft.options[0]);
-  assert.equal(state.completed, true);
-  assert.match(state.ending, /Final Sky/);
+  assert.equal(state.age, 21);
+  assert.equal(state.completed, false);
+  assert.equal(state.ending, null);
+  assert.ok(state.encounters.length >= 3);
 });
 
 test('normalization removes bad data and preserves a playable Dragon Ball run', () => {
@@ -693,7 +743,7 @@ test('normalization removes bad data and preserves a playable Dragon Ball run', 
     cooldowns: { fake: 5 },
   });
   assert.equal(state.origin, 'saiyan');
-  assert.equal(state.age, 20);
+  assert.equal(state.age, 100);
   assert.equal(validateDeck(state).valid, true);
   assert.deepEqual(state.injuries, []);
   assert.deepEqual(state.cooldowns, {});
@@ -733,6 +783,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /renderRecovery/);
   assert.match(appSource, /renderTower/);
   assert.match(appSource, /Infinite Tower/);
+  assert.match(appSource, /Next Eternal Saga/);
+  assert.doesNotMatch(appSource, /Campaign Complete/);
   assert.match(appSource, /setTowerLoadout/);
   assert.match(appSource, /tower-fight/);
   assert.match(appSource, /shuffled into every combat/);

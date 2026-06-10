@@ -1,9 +1,10 @@
-import { AGE_REWARD_NAMES, CARDS, ORIGINS, STAT_KEYS, TOWER_CARD_IDS } from './data.mjs';
+import { CARDS, ORIGINS, STAT_KEYS, TOWER_CARD_IDS } from './data.mjs';
 import {
   RECOVERY_SERVICES, advanceAfterAgeDraft, beginAgeReward, beginEncounter,
   buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
   recoveryServiceCost, setDeck, validateDeck,
 } from './state.mjs';
+import { sagaNameForAge } from './campaign.mjs';
 import { endCombatTurn, playCombatCard, startDragonBallCombat } from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
 import {
@@ -145,8 +146,9 @@ function renderHeader() {
 }
 
 function renderTimeline() {
-  return `<div class="age-timeline">${Array.from({ length: 15 }, (_, index) => index + 6).map((age) => `
-    <span class="${age < state.age ? 'done' : age === state.age ? 'active' : ''}">${age}</span>
+  const startAge = state.age <= 20 ? 6 : Math.min(86, Math.max(6, state.age - 7));
+  return `<div class="age-timeline">${Array.from({ length: 15 }, (_, index) => startAge + index).map((age) => `
+    <span class="${age < state.age ? 'done' : age === state.age ? 'active' : ''}">${age}${age === 100 ? '∞' : ''}</span>
   `).join('')}</div>`;
 }
 
@@ -156,11 +158,11 @@ function encounterIcon(type) {
 
 function renderJourney() {
   const cleared = new Set(state.clearedEncounterIds);
-  const ageIndex = state.age - 6;
+  const sagaName = sagaNameForAge(state.age, state.ageCycle);
   return `
     <section class="journey-stack">
       <article class="saga-banner">
-        <div><p>Age ${state.age} Saga</p><h2>${AGE_REWARD_NAMES[ageIndex]}</h2><span>Clear every encounter to unlock the next age reward draft.</span></div>
+        <div><p>Age ${state.age} Saga${state.age === 100 ? ` / Cycle ${state.ageCycle + 1}` : ''}</p><h2>${sagaName}</h2><span>Clear every encounter to unlock the next age reward draft.</span></div>
         <img src="${originArt()}" alt="">
       </article>
       ${renderTimeline()}
@@ -183,7 +185,7 @@ function renderJourney() {
       </div>
       <article class="age-up-panel ${canAgeUp(state) ? 'ready' : ''}">
         <div><p>Chapter Progress</p><h3>${cleared.size}/${state.encounters.length} Encounters Cleared</h3><span>${canAgeUp(state) ? 'Your age reward is ready.' : 'Finish the remaining encounters.'}</span></div>
-        <button class="db-primary" data-action="age-up" ${canAgeUp(state) ? '' : 'disabled'}>${state.age === 20 ? 'Complete Campaign' : 'Age Up'}</button>
+        <button class="db-primary" data-action="age-up" ${canAgeUp(state) ? '' : 'disabled'}>${state.age === 100 ? 'Next Eternal Saga' : 'Age Up'}</button>
       </article>
     </section>
   `;
@@ -354,7 +356,7 @@ function renderTower() {
         <article class="tower-loadout-panel">
           <header>
             <div><p>Bonus Combat Loadout</p><h3>${state.tower.loadout.length}/5 Tower Cards</h3></div>
-            <span>${state.tower.active ? 'Locked during climb' : 'Active in every combat'}</span>
+            <span>Editable between every fight</span>
           </header>
           <div class="tower-loadout-slots">
             ${Array.from({ length: 5 }, (_, index) => {
@@ -364,7 +366,7 @@ function renderTower() {
               return `
                 <div class="tower-equipped">
                   <button data-card-detail="${id}"><b>${escapeHtml(CARDS[id].name)}</b><span>Rank ${rank}</span></button>
-                  <button data-action="tower-remove-${id}" ${state.tower.active ? 'disabled' : ''}>Remove</button>
+                  <button data-action="tower-remove-${id}">Remove</button>
                 </div>
               `;
             }).join('')}
@@ -382,7 +384,7 @@ function renderTower() {
           ${ownedIds.map((id) => {
             const rank = state.tower.cards[id];
             const item = towerCardAtRank(id, rank);
-            const disabled = state.tower.active || equipped.has(id) || state.tower.loadout.length >= 5;
+            const disabled = equipped.has(id) || state.tower.loadout.length >= 5;
             return renderCard(item, {
               action: `tower-add-${id}`,
               disabled,
@@ -473,24 +475,10 @@ function renderDetail() {
   `;
 }
 
-function renderCompleted() {
-  return `
-    <main class="ending-screen">
-      <img src="./assets/dragon-ball/dragon-mark.svg" alt="">
-      <p>Campaign Complete</p><h1>Champion of the Final Sky</h1><span>${escapeHtml(state.ending)}</span>
-      <div><button class="db-primary" data-action="open-tower">Keep Climbing</button><button class="db-primary" data-action="reset-run">Start Another Run</button><a href="./index.html">Return to Underground Life Sim</a></div>
-    </main>
-  `;
-}
-
 function render() {
   if (!state) return renderSetup();
   if (state.activeCombat) {
     app.innerHTML = renderCombat();
-    return;
-  }
-  if (state.completed && activeTab === 'journey') {
-    app.innerHTML = renderCompleted();
     return;
   }
   const content = activeTab === 'deck' ? renderDeck()
@@ -529,11 +517,6 @@ function handleAction(action) {
     return;
   }
   if (!state) return;
-  if (action === 'open-tower') {
-    activeTab = 'tower';
-    render();
-    return;
-  }
   if (action === 'tower-start') {
     const next = startTowerRun(state);
     update(next, next === state ? 'The Infinite Tower is currently unavailable.' : 'Infinite Tower run started.');
@@ -553,7 +536,7 @@ function handleAction(action) {
   if (action.startsWith('tower-remove-')) {
     const id = action.replace('tower-remove-', '');
     const next = setTowerLoadout(state, state.tower.loadout.filter((cardId) => cardId !== id));
-    update(next, next === state ? 'Tower loadouts are locked during a climb.' : `${CARDS[id].name} removed.`);
+    update(next, next === state ? 'That Tower Card cannot be removed right now.' : `${CARDS[id].name} removed.`);
     return;
   }
   if (action.startsWith('encounter-')) {

@@ -66,6 +66,7 @@ export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = D
     name: String(name).trim().slice(0, 24) || 'Hero',
     origin: selected.id,
     age: 6,
+    ageCycle: 0,
     zeni: 80,
     stats: { ...selected.stats },
     currentHealth: selected.stats.health,
@@ -88,7 +89,8 @@ export function normalizeDragonBallState(input) {
   if (!input || typeof input !== 'object') return null;
   const origin = ORIGINS[input.origin] ? input.origin : 'saiyan';
   const fallback = createDragonBallRun({ name: input.name, origin, seed: input.seed });
-  const age = clamp(Math.floor(input.age ?? 6), 6, 20);
+  const age = clamp(Math.floor(input.age ?? 6), 6, 100);
+  const ageCycle = age === 100 ? Math.max(0, Math.floor(Number(input.ageCycle) || 0)) : 0;
   const stats = Object.fromEntries(STAT_KEYS.map((key) => [key, Math.max(1, Math.floor(input.stats?.[key] ?? fallback.stats[key]))]));
   const collection = {};
   for (const [id, count] of Object.entries(input.collection ?? {})) {
@@ -105,6 +107,7 @@ export function normalizeDragonBallState(input) {
     version: DRAGON_BALL_VERSION,
     origin,
     age,
+    ageCycle,
     zeni: input.zeni === undefined ? fallback.zeni : Math.max(0, Math.floor(Number(input.zeni) || 0)),
     stats,
     currentHealth: clamp(Math.floor(input.currentHealth ?? stats.health), 0, stats.health),
@@ -113,12 +116,13 @@ export function normalizeDragonBallState(input) {
     injuries: Array.isArray(input.injuries) ? input.injuries.filter((id) => INJURY_CARDS.some((item) => item.id === id)).slice(0, 5) : [],
     cooldowns: Object.fromEntries(Object.entries(input.cooldowns ?? {}).filter(([id, value]) => CARDS[id] && Number(value) > 0).map(([id, value]) => [id, Math.floor(value)])),
     tower: normalizeTowerState(input.tower),
-    encounters: Array.isArray(input.encounters) && input.encounters.length ? input.encounters : encountersForAge(age),
+    encounters: Array.isArray(input.encounters) && input.encounters.length ? input.encounters : encountersForAge(age, ageCycle),
     clearedEncounterIds: Array.isArray(input.clearedEncounterIds) ? input.clearedEncounterIds : [],
     pendingDraft: input.pendingDraft?.options?.length === 3 ? input.pendingDraft : null,
     activeCombat: input.activeCombat ?? null,
     history: Array.isArray(input.history) ? input.history.slice(0, 100) : fallback.history,
-    completed: Boolean(input.completed),
+    completed: false,
+    ending: null,
   };
 }
 
@@ -207,20 +211,26 @@ export function finishAgeAdvance(state) {
 export function advanceAfterAgeDraft(state, cardId) {
   if (!state.pendingDraft?.ageAdvance || !state.pendingDraft.options.includes(cardId)) return state;
   const claimed = claimDraftCard(state, cardId);
-  if (state.age >= 20) {
-    return { ...claimed, completed: true, ending: `${claimed.name} became champion of the Final Sky.` };
-  }
-  const nextAge = state.age + 1;
+  const nextAge = Math.min(100, state.age + 1);
+  const nextCycle = state.age >= 100 ? (state.ageCycle ?? 0) + 1 : 0;
   const cooldowns = Object.fromEntries(Object.entries(claimed.cooldowns).map(([id, value]) => [id, value - 1]).filter(([, value]) => value > 0));
   return {
     ...claimed,
     age: nextAge,
+    ageCycle: nextCycle,
     currentHealth: claimed.stats.health,
     injuries: [],
     cooldowns,
-    encounters: encountersForAge(nextAge),
+    encounters: encountersForAge(nextAge, nextCycle),
     clearedEncounterIds: [],
-    history: [{ type: 'age', text: `Reached age ${nextAge}. A new chapter begins.` }, ...claimed.history].slice(0, 100),
+    completed: false,
+    ending: null,
+    history: [{
+      type: 'age',
+      text: nextAge === 100
+        ? `Entered Eternal Saga ${nextCycle + 1} at age 100.`
+        : `Reached age ${nextAge}. A new chapter begins.`,
+    }, ...claimed.history].slice(0, 100),
   };
 }
 

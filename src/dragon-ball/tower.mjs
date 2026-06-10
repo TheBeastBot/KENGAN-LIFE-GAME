@@ -75,7 +75,6 @@ export function validateTowerLoadout(state, loadout = state.tower?.loadout ?? []
 }
 
 export function setTowerLoadout(state, loadout) {
-  if (state.tower?.active) return state;
   const validation = validateTowerLoadout(state, loadout);
   return validation.valid ? { ...state, tower: { ...state.tower, loadout: [...loadout] } } : state;
 }

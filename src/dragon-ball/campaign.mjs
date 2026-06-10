@@ -1,8 +1,44 @@
-import { CARDS, ENCOUNTERS_BY_AGE, STAT_CARD_IDS } from './data.mjs';
+import { AGE_REWARD_NAMES, CARDS, ENCOUNTERS_BY_AGE, STAT_CARD_IDS } from './data.mjs';
 import { hashSeed, sample } from './random.mjs';
 
-export function encountersForAge(age) {
-  return (ENCOUNTERS_BY_AGE[age] ?? []).map((encounter) => ({ ...encounter }));
+const LATE_SAGA_TIERS = ['Ascended', 'Legacy', 'Master', 'Divine', 'Eternal', 'Infinite'];
+
+export function sagaNameForAge(age, cycle = 0) {
+  const safeAge = Math.max(6, Math.min(100, Math.floor(Number(age) || 6)));
+  if (safeAge <= 20) return AGE_REWARD_NAMES[safeAge - 6];
+  if (safeAge === 100) return `Eternal Saga ${cycle + 1}`;
+  const templateIndex = (safeAge - 6) % AGE_REWARD_NAMES.length;
+  const tierIndex = Math.min(LATE_SAGA_TIERS.length - 1, Math.floor((safeAge - 21) / AGE_REWARD_NAMES.length));
+  return `${LATE_SAGA_TIERS[tierIndex]} ${AGE_REWARD_NAMES[templateIndex]}`;
+}
+
+export function encountersForAge(age, cycle = 0) {
+  const safeAge = Math.max(6, Math.min(100, Math.floor(Number(age) || 6)));
+  if (safeAge <= 20) return (ENCOUNTERS_BY_AGE[safeAge] ?? []).map((encounter) => ({ ...encounter }));
+
+  const safeCycle = safeAge === 100 ? Math.max(0, Math.floor(Number(cycle) || 0)) : 0;
+  const templateAge = 6 + ((safeAge - 6) % 15);
+  const template = ENCOUNTERS_BY_AGE[templateAge] ?? ENCOUNTERS_BY_AGE[20];
+  const era = Math.floor((safeAge - 6) / 15);
+  const cycleSuffix = safeAge === 100 ? `-cycle-${safeCycle}` : '';
+  const title = safeAge === 100 ? `Eternal ${safeCycle + 1}` : LATE_SAGA_TIERS[Math.min(LATE_SAGA_TIERS.length - 1, era - 1)];
+  const agePower = 28 + (safeAge - 6) * 12 + safeCycle * 85;
+
+  return template.map((encounter, index) => {
+    const special = encounter.type === 'specialFight';
+    const training = encounter.type === 'mentor' || encounter.type === 'specialMentor';
+    return {
+      ...encounter,
+      id: `age-${safeAge}${cycleSuffix}-${encounter.type}-${index}`,
+      age: safeAge,
+      name: training
+        ? `${encounter.name} · ${title} Teaching`
+        : `${encounter.name} · ${title} Challenger`,
+      difficulty: training ? 0 : Math.max(3, Math.ceil((safeAge - 15) / 10) + (special ? 2 : 0) + safeCycle),
+      enemyPower: training ? 0 : Math.round(agePower * (special ? 1.5 : 1)),
+      reward: special ? 'legendary' : encounter.reward,
+    };
+  });
 }
 
 export function cardIsEligible(card, state, { includeStats = false, legendary = false } = {}) {
