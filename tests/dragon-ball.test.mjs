@@ -43,11 +43,57 @@ test('each origin starts at age 6 with a valid distinct ten-card deck', () => {
     assert.equal(state.origin, origin);
     assert.equal(state.age, 6);
     assert.equal(state.deck.length, 10);
+    assert.equal(state.zeni, 80);
     assert.equal(validateDeck(state).valid, true);
     assert.equal(state.encounters.length, encountersForAge(6).length);
     signatures.add(state.deck.join('|'));
   }
   assert.equal(signatures.size, 4);
+});
+
+test('combat victories award Zeni with a larger purse for special fights', async () => {
+  const { combatRewardFor, recordCombatVictory } = await import('../src/dragon-ball/state.mjs');
+  const base = createDragonBallRun({ seed: 12 });
+  const fighter = base.encounters.find((item) => item.type === 'fighter');
+  const special = { ...fighter, id: 'test-special', type: 'specialFight', difficulty: fighter.difficulty + 2 };
+  const fighterWin = recordCombatVictory(base, fighter);
+  const specialWin = recordCombatVictory(base, special);
+  assert.equal(fighterWin.zeni, base.zeni + combatRewardFor(base, fighter));
+  assert.equal(specialWin.zeni, base.zeni + combatRewardFor(base, special));
+  assert.ok(specialWin.zeni > fighterWin.zeni);
+  assert.match(fighterWin.history[0].text, /Zeni/);
+});
+
+test('Recovery Center spends Zeni to heal and treat injuries outside combat', async () => {
+  const { buyRecoveryService, recoveryServiceCost } = await import('../src/dragon-ball/state.mjs');
+  const base = createDragonBallRun({ seed: 13 });
+  const hurt = {
+    ...base,
+    zeni: 500,
+    currentHealth: 10,
+    injuries: ['injury-bruised-ribs', 'injury-burned-ki'],
+  };
+  const patched = buyRecoveryService(hurt, 'capsule-patch');
+  assert.ok(patched.currentHealth > hurt.currentHealth);
+  assert.equal(patched.zeni, hurt.zeni - recoveryServiceCost(hurt, 'capsule-patch'));
+
+  const restored = buyRecoveryService(patched, 'full-restore');
+  assert.equal(restored.currentHealth, restored.stats.health);
+
+  const treated = buyRecoveryService(restored, 'injury-treatment');
+  assert.equal(treated.injuries.length, 1);
+  assert.equal(treated.zeni, restored.zeni - recoveryServiceCost(restored, 'injury-treatment'));
+});
+
+test('Recovery Center rejects unaffordable, unnecessary, and in-combat purchases', async () => {
+  const { buyRecoveryService } = await import('../src/dragon-ball/state.mjs');
+  const base = createDragonBallRun({ seed: 14 });
+  const broke = { ...base, zeni: 0, currentHealth: 1 };
+  assert.strictEqual(buyRecoveryService(broke, 'full-restore'), broke);
+  assert.strictEqual(buyRecoveryService(base, 'full-restore'), base);
+  assert.strictEqual(buyRecoveryService(base, 'injury-treatment'), base);
+  const inCombat = { ...broke, activeCombat: { turn: 1 } };
+  assert.strictEqual(buyRecoveryService(inCombat, 'capsule-patch'), inCombat);
 });
 
 test('encounter and reward generation is deterministic for a seed', () => {
@@ -265,6 +311,13 @@ test('normalization removes bad data and preserves a playable Dragon Ball run', 
   assert.deepEqual(state.cooldowns, {});
 });
 
+test('legacy saves gain an emergency Zeni reserve and invalid balances are clamped', () => {
+  const legacy = normalizeDragonBallState({ name: 'Legacy', origin: 'saiyan', age: 10 });
+  const invalid = normalizeDragonBallState({ name: 'Invalid', origin: 'saiyan', zeni: -500 });
+  assert.equal(legacy.zeni, 80);
+  assert.equal(invalid.zeni, 0);
+});
+
 test('Dragon Ball persistence uses only its independent save key', () => {
   const storage = memoryStorage({ 'underground-life-sim-save-v1': '{"legacy":true}' });
   const state = createDragonBallRun({ seed: 4 });
@@ -289,6 +342,11 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /renderCombat/);
   assert.match(appSource, /renderDeck/);
   assert.match(appSource, /renderCollection/);
+  assert.match(appSource, /renderRecovery/);
+  assert.match(appSource, /Recovery Center/);
+  assert.match(appSource, /buyRecoveryService/);
+  assert.match(appSource, /combatRewardFor/);
+  assert.match(appSource, /Zeni/);
   assert.match(originalSource, /href="\.\/dragon-ball\.html"/);
   assert.doesNotMatch(appSource, /sim\.mjs/);
   assert.match(appSource, /assets\/dragon-ball\/generated/);
@@ -304,6 +362,7 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(css, /ui-hero\.jpg/);
   assert.match(css, /ui-arena\.jpg/);
   assert.match(css, /transformed-pulse/);
+  assert.match(css, /\.recovery-grid/);
   assert.match(css, /@media \(max-width:\s*520px\)/);
   assert.match(CARDS['form-saiyan-3'].name, /SSJ1/);
   assert.match(CARDS['form-saiyan-5'].name, /SSJ2/);

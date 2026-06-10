@@ -1,5 +1,9 @@
 import { AGE_REWARD_NAMES, CARDS, ORIGINS, STAT_KEYS } from './data.mjs';
-import { beginAgeReward, beginEncounter, canAgeUp, claimDraftCard, createDragonBallRun, advanceAfterAgeDraft, setDeck, validateDeck } from './state.mjs';
+import {
+  RECOVERY_SERVICES, advanceAfterAgeDraft, beginAgeReward, beginEncounter,
+  buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
+  recoveryServiceCost, setDeck, validateDeck,
+} from './state.mjs';
 import { endCombatTurn, playCombatCard, startDragonBallCombat } from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
 
@@ -130,6 +134,7 @@ function renderHeader() {
       <div class="header-meter">
         <span>HP ${state.currentHealth}/${state.stats.health}</span>
         <i><b style="width:${Math.max(0, state.currentHealth / state.stats.health * 100)}%"></b></i>
+        <strong>${state.zeni} Zeni</strong>
       </div>
       <button class="icon-button" data-action="reset-run">New Run</button>
     </header>
@@ -166,7 +171,7 @@ function renderJourney() {
               <div>
                 <p>${label(encounter.type)} / ${encounter.difficulty ? `Threat ${encounter.difficulty}` : 'Training'}</p>
                 <h3>${escapeHtml(encounter.name)}</h3>
-                <span>${encounter.type === 'mentor' ? 'Draft a permanent stat increase.' : encounter.type === 'specialMentor' ? 'Draft a move or transformation.' : `Power ${encounter.enemyPower}. Win a ${encounter.reward} draft.`}</span>
+                <span>${encounter.type === 'mentor' ? 'Draft a permanent stat increase.' : encounter.type === 'specialMentor' ? 'Draft a move or transformation.' : `Power ${encounter.enemyPower}. Win a ${encounter.reward} draft and ${combatRewardFor(state, encounter)} Zeni.`}</span>
               </div>
               <button data-action="encounter-${encounter.id}" ${done ? 'disabled' : ''}>${done ? 'Cleared' : encounter.type.includes('Mentor') || encounter.type === 'mentor' ? 'Train' : 'Fight'}</button>
             </article>
@@ -235,6 +240,49 @@ function renderHistory() {
       <article class="stat-board">${STAT_KEYS.map((key) => `<div><span>${label(key)}</span><b>${state.stats[key]}</b></div>`).join('')}</article>
       <h2>Journey Log</h2>
       ${state.history.map((entry) => `<article class="history-entry"><span>${label(entry.type)}</span><p>${escapeHtml(entry.text)}</p></article>`).join('')}
+    </section>
+  `;
+}
+
+function recoveryDisabledReason(serviceId) {
+  const cost = recoveryServiceCost(state, serviceId);
+  if (state.zeni < cost) return `Need ${cost - state.zeni} more Zeni`;
+  if (serviceId === 'injury-treatment' && !state.injuries.length) return 'No Injuries';
+  if (serviceId !== 'injury-treatment' && state.currentHealth >= state.stats.health) return 'Health Full';
+  return '';
+}
+
+function renderRecovery() {
+  return `
+    <section class="recovery-center">
+      <article class="recovery-hero">
+        <div>
+          <p>Capsule Recovery Network</p>
+          <h2>Recovery Center</h2>
+          <span>Spend combat winnings to prepare for the next encounter. Prices rise as the campaign becomes more dangerous.</span>
+        </div>
+        <strong>${state.zeni}<small>Zeni Available</small></strong>
+      </article>
+      <article class="recovery-status">
+        <div><span>Current Health</span><b>${state.currentHealth}/${state.stats.health}</b></div>
+        <i><b style="width:${Math.max(0, state.currentHealth / state.stats.health * 100)}%"></b></i>
+        <div><span>Active Injuries</span><b>${state.injuries.length}</b></div>
+        <p>${state.injuries.length ? state.injuries.map((id) => CARDS[id].name).join(' / ') : 'No injuries are weakening your deck.'}</p>
+      </article>
+      <div class="recovery-grid">
+        ${Object.entries(RECOVERY_SERVICES).map(([id, service]) => {
+          const cost = recoveryServiceCost(state, id);
+          const reason = recoveryDisabledReason(id);
+          return `
+            <article class="recovery-service">
+              <span>${id === 'capsule-patch' ? 'Quick Care' : id === 'full-restore' ? 'Complete Care' : 'Specialist Care'}</span>
+              <h3>${service.name}</h3>
+              <p>${service.description}</p>
+              <div><strong>${cost} Zeni</strong><button data-action="recover-${id}" ${reason ? 'disabled' : ''}>${reason || 'Purchase'}</button></div>
+            </article>
+          `;
+        }).join('')}
+      </div>
     </section>
   `;
 }
@@ -320,12 +368,16 @@ function render() {
     app.innerHTML = renderCombat();
     return;
   }
-  const content = activeTab === 'deck' ? renderDeck() : activeTab === 'collection' ? renderCollection() : activeTab === 'history' ? renderHistory() : renderJourney();
+  const content = activeTab === 'deck' ? renderDeck()
+    : activeTab === 'collection' ? renderCollection()
+      : activeTab === 'recovery' ? renderRecovery()
+        : activeTab === 'history' ? renderHistory()
+          : renderJourney();
   app.innerHTML = `
     <main class="db-shell">
       ${renderHeader()}
       <nav class="db-nav">
-        ${[['journey', 'Journey'], ['deck', 'Deck'], ['collection', 'Cards'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
+        ${[['journey', 'Journey'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
         <a href="./index.html">Other Modes</a>
       </nav>
       <section class="db-content">${content}</section>
@@ -372,6 +424,12 @@ function handleAction(action) {
   }
   if (action === 'end-turn') {
     update(endCombatTurn(state));
+    return;
+  }
+  if (action.startsWith('recover-')) {
+    const id = action.replace('recover-', '');
+    const next = buyRecoveryService(state, id);
+    update(next, next === state ? 'That recovery service is currently unavailable.' : `${RECOVERY_SERVICES[id].name} complete.`);
     return;
   }
   if (action.startsWith('deck-add-')) {

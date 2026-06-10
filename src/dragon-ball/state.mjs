@@ -6,6 +6,57 @@ import { createRewardDraft, encountersForAge } from './campaign.mjs';
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export const RECOVERY_SERVICES = {
+  'capsule-patch': {
+    name: 'Capsule Patch',
+    description: 'Restore 35% of maximum Health.',
+  },
+  'full-restore': {
+    name: 'Full Recovery',
+    description: 'Restore all Health before the next encounter.',
+  },
+  'injury-treatment': {
+    name: 'Injury Treatment',
+    description: 'Remove one Injury card and restore 20% Health.',
+  },
+};
+
+export function recoveryServiceCost(state, serviceId) {
+  const ageStep = Math.max(0, state.age - 6);
+  if (serviceId === 'capsule-patch') return 30 + ageStep * 4;
+  if (serviceId === 'full-restore') return 75 + ageStep * 8;
+  if (serviceId === 'injury-treatment') return 95 + ageStep * 7;
+  return Infinity;
+}
+
+export function buyRecoveryService(state, serviceId) {
+  const service = RECOVERY_SERVICES[serviceId];
+  const cost = recoveryServiceCost(state, serviceId);
+  if (!service || state.activeCombat || state.completed || state.zeni < cost) return state;
+  if (serviceId !== 'injury-treatment' && state.currentHealth >= state.stats.health) return state;
+  if (serviceId === 'injury-treatment' && !state.injuries.length) return state;
+
+  const next = clone(state);
+  next.zeni -= cost;
+  if (serviceId === 'capsule-patch') {
+    next.currentHealth = Math.min(next.stats.health, next.currentHealth + Math.ceil(next.stats.health * 0.35));
+  } else if (serviceId === 'full-restore') {
+    next.currentHealth = next.stats.health;
+  } else {
+    const removed = next.injuries.shift();
+    next.currentHealth = Math.min(next.stats.health, next.currentHealth + Math.ceil(next.stats.health * 0.2));
+    next.history.unshift({ type: 'recovery', text: `${service.name} removed ${CARDS[removed].name} for ${cost} Zeni.` });
+    return next;
+  }
+  next.history.unshift({ type: 'recovery', text: `${service.name} restored Health for ${cost} Zeni.` });
+  return next;
+}
+
+export function combatRewardFor(state, encounter) {
+  const base = 24 + state.age * 3 + Math.max(1, encounter.difficulty ?? 1) * 7;
+  return Math.round(base * (encounter.type === 'specialFight' ? 2 : 1));
+}
+
 export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = Date.now() } = {}) {
   const selected = ORIGINS[origin] ?? ORIGINS.saiyan;
   return {
@@ -14,6 +65,7 @@ export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = D
     name: String(name).trim().slice(0, 24) || 'Hero',
     origin: selected.id,
     age: 6,
+    zeni: 80,
     stats: { ...selected.stats },
     currentHealth: selected.stats.health,
     collection: Object.fromEntries([...new Set(selected.deck)].map((id) => [id, selected.deck.filter((cardId) => cardId === id).length])),
@@ -49,6 +101,7 @@ export function normalizeDragonBallState(input) {
     version: DRAGON_BALL_VERSION,
     origin,
     age,
+    zeni: input.zeni === undefined ? fallback.zeni : Math.max(0, Math.floor(Number(input.zeni) || 0)),
     stats,
     currentHealth: clamp(Math.floor(input.currentHealth ?? stats.health), 0, stats.health),
     collection,
@@ -167,9 +220,11 @@ export function advanceAfterAgeDraft(state, cardId) {
 }
 
 export function recordCombatVictory(state, encounter, cooldowns = {}) {
+  const purse = combatRewardFor(state, encounter);
   return {
     ...state,
     activeCombat: null,
+    zeni: state.zeni + purse,
     cooldowns: { ...state.cooldowns, ...cooldowns },
     currentHealth: Math.max(1, state.currentHealth),
     pendingDraft: {
@@ -178,7 +233,7 @@ export function recordCombatVictory(state, encounter, cooldowns = {}) {
       kind: encounter.reward,
       options: createRewardDraft(state, encounter.reward, `${encounter.id}-victory`),
     },
-    history: [{ type: 'victory', text: `Defeated ${encounter.name}.` }, ...state.history].slice(0, 100),
+    history: [{ type: 'victory', text: `Defeated ${encounter.name} and earned ${purse} Zeni.` }, ...state.history].slice(0, 100),
   };
 }
 
