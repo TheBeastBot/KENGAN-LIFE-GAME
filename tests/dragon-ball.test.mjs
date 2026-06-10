@@ -785,6 +785,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /Infinite Tower/);
   assert.match(appSource, /Next Eternal Saga/);
   assert.doesNotMatch(appSource, /Campaign Complete/);
+  assert.match(appSource, /Campaign Ages 6–100/);
+  assert.match(appSource, /length:\s*95/);
   assert.match(appSource, /setTowerLoadout/);
   assert.match(appSource, /tower-fight/);
   assert.match(appSource, /shuffled into every combat/);

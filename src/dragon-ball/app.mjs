@@ -146,10 +146,15 @@ function renderHeader() {
 }
 
 function renderTimeline() {
-  const startAge = state.age <= 20 ? 6 : Math.min(86, Math.max(6, state.age - 7));
-  return `<div class="age-timeline">${Array.from({ length: 15 }, (_, index) => startAge + index).map((age) => `
-    <span class="${age < state.age ? 'done' : age === state.age ? 'active' : ''}">${age}${age === 100 ? '∞' : ''}</span>
-  `).join('')}</div>`;
+  return `
+    <div class="age-progress-heading">
+      <div><p>Campaign Ages 6–100</p><strong>Age ${state.age} / 100</strong></div>
+      <span>${state.age === 100 ? `Eternal Saga Cycle ${state.ageCycle + 1}` : `${100 - state.age} ages until the Eternal Saga`}</span>
+    </div>
+    <div class="age-timeline" aria-label="Campaign ages 6 through 100">${Array.from({ length: 95 }, (_, index) => index + 6).map((age) => `
+      <span class="${age < state.age ? 'done' : age === state.age ? 'active' : ''}">${age}${age === 100 ? '∞' : ''}</span>
+    `).join('')}</div>
+  `;
 }
 
 function encounterIcon(type) {

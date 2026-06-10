@@ -77,7 +77,11 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .saga-banner { min-height: 190px; overflow: hidden; display: grid; grid-template-columns: 1fr 250px; align-items: center; padding: 25px 35px; color: white; background: linear-gradient(110deg,var(--orange-dark),var(--orange) 60%,var(--gold)); border: 4px solid var(--line); box-shadow: 8px 8px 0 var(--line); }
 .saga-banner h2 { font-size: clamp(2rem,5vw,4rem); margin: 2px 0; text-transform: uppercase; font-style: italic; }
 .saga-banner img { width: 250px; height: 230px; object-fit: cover; object-position: center 18%; justify-self: center; align-self: end; border-left: 4px solid #fff5; filter: saturate(1.08) contrast(1.04); }
-.age-timeline { display: flex; overflow-x: auto; gap: 0; padding: 12px 0; }
+.age-progress-heading { display: flex; justify-content: space-between; align-items: end; gap: 18px; padding: 12px 16px; color: white; background: var(--blue-dark); border: 3px solid var(--line); border-bottom: 0; }
+.age-progress-heading p { margin: 0; color: var(--gold); font-size: .68rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.age-progress-heading strong { display: block; margin-top: 3px; font-size: 1.2rem; text-transform: uppercase; }
+.age-progress-heading > span { font-size: .78rem; opacity: .78; text-align: right; }
+.age-timeline { display: flex; overflow-x: auto; gap: 0; padding: 12px 0 16px; border: 3px solid var(--line); border-top: 0; background: #e8ebf2; scrollbar-color: var(--orange) #c8ced9; }
 .age-timeline span { flex: 1 0 48px; min-width: 48px; height: 48px; display: grid; place-items: center; border: 3px solid var(--line); border-right: 0; background: white; font-weight: 1000; }
 .age-timeline span:last-child { border-right: 3px solid var(--line); }
 .age-timeline .done { background: var(--blue); color: white; }
@@ -275,7 +279,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .db-nav { overflow-x: auto; padding: 0; }
   .db-nav button, .db-nav a { flex: 0 0 auto; padding: 14px; }
   .saga-banner { grid-template-columns: 1fr 110px; padding: 18px; min-height: 145px; }
-  .saga-banner img { height: 150px; }
+  .saga-banner img { width: 110px; height: 150px; }
   .encounter-node { grid-template-columns: 52px 1fr; }
   .encounter-node .encounter-line { display: none; }
   .encounter-node > button { grid-column: 1/-1; }
@@ -317,6 +321,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .saga-banner h2 { font-size: 1.65rem; }
   .saga-banner span { font-size: .78rem; }
   .age-up-panel { align-items: stretch; flex-direction: column; }
+  .age-progress-heading { align-items: flex-start; flex-direction: column; }
+  .age-progress-heading > span { text-align: left; }
   .collection-summary { align-items: start; flex-direction: column; }
   .mini-card-grid, .card-gallery { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
   .db-card.compact { min-height: 220px; }
