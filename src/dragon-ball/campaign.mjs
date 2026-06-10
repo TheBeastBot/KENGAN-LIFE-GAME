@@ -29,6 +29,19 @@ export function createRewardDraft(state, kind, sourceId = 'reward') {
   }
   const owned = new Set(Object.keys(state.collection ?? {}));
   pool.sort((a, b) => Number(owned.has(a.id)) - Number(owned.has(b.id)));
+  if (kind === 'special' || kind === 'legendary') {
+    const forms = pool.filter((item) => item.type === 'form');
+    if (forms.length) {
+      const unownedForms = forms.filter((item) => !owned.has(item.id));
+      const formPool = unownedForms.length ? unownedForms : forms;
+      const chosenForm = sample(formPool, 1, hashSeed(state.seed, state.age, sourceId, 'form'))[0];
+      const otherCards = pool.filter((item) => item.id !== chosenForm.id && item.type !== 'form');
+      return [
+        chosenForm.id,
+        ...sample(otherCards, 2, hashSeed(state.seed, state.age, sourceId, state.history.length, 'others')).map((item) => item.id),
+      ];
+    }
+  }
   return sample(pool, 3, hashSeed(state.seed, state.age, sourceId, state.history.length)).map((item) => item.id);
 }
 

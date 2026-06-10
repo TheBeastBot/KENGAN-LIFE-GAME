@@ -61,6 +61,7 @@ export function startDragonBallCombat(state, encounterId) {
       maxKi,
       focus: 0,
       spirit: state.stats.spirit,
+      retainBlock: 0,
       weak: 0,
       burn: 0,
       activeForm: null,
@@ -87,7 +88,11 @@ function scaledDamage(state, combat, base) {
   return Math.max(1, Math.round(raw * multiplier * weakMultiplier - combat.enemy.defense * 0.45));
 }
 
-function dealToEnemy(combat, amount) {
+function dealToEnemy(combat, amount, ignoreBlock = false) {
+  if (ignoreBlock) {
+    combat.enemy.health = Math.max(0, combat.enemy.health - amount);
+    return amount;
+  }
   const blocked = Math.min(combat.enemy.block, amount);
   combat.enemy.block -= blocked;
   const dealt = Math.max(0, amount - blocked);
@@ -104,19 +109,37 @@ export function playCombatCard(state, handIndex) {
   if (!item || item.type === 'injury' || item.cost > combat.player.ki) return state;
   combat.player.ki -= item.cost;
   combat.hand.splice(handIndex, 1);
-  combat.discardPile.push(id);
+  (item.effect.exhaust ? combat.exhaustPile : combat.discardPile).push(id);
   let message = item.name;
   if (item.effect.damage) {
-    const dealt = dealToEnemy(combat, scaledDamage(next, combat, item.effect.damage));
-    message += ` dealt ${dealt}`;
+    const missingHealth = combat.player.maxHealth - combat.player.health;
+    const focusDamage = combat.player.focus * (item.effect.damagePerFocus ?? 0);
+    const baseDamage = item.effect.damage + Math.round(missingHealth * (item.effect.missingHealthDamage ?? 0)) + focusDamage;
+    let totalDealt = 0;
+    for (let hit = 0; hit < (item.effect.hits ?? 1); hit += 1) {
+      totalDealt += dealToEnemy(combat, scaledDamage(next, combat, baseDamage), item.effect.ignoreBlock);
+    }
+    if (item.effect.consumeFocus) combat.player.focus = 0;
+    message += ` dealt ${totalDealt}`;
   }
   if (item.effect.block) combat.player.block += item.effect.block + Math.round(next.stats.defense * 0.35);
   if (item.effect.heal) combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + item.effect.heal + Math.round(next.stats.spirit * 0.25));
+  if (item.effect.healPercent) combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + Math.ceil(combat.player.maxHealth * item.effect.healPercent));
   if (item.effect.draw) drawCards(combat, item.effect.draw);
+  if (item.effect.maxKi) {
+    combat.player.maxKi += item.effect.maxKi;
+    combat.player.ki += item.effect.maxKi;
+  }
   if (item.effect.ki) combat.player.ki = Math.min(combat.player.maxKi + 2, combat.player.ki + item.effect.ki);
+  if (item.effect.spirit) combat.player.spirit = Math.min(next.stats.spirit + 5, combat.player.spirit + item.effect.spirit);
   if (item.effect.focus) combat.player.focus += item.effect.focus;
   if (item.effect.weak) combat.enemy.weak += item.effect.weak;
   if (item.effect.clear) combat.player[item.effect.clear] = 0;
+  if (item.effect.clearAll) {
+    combat.player.weak = 0;
+    combat.player.burn = 0;
+  }
+  if (item.effect.retainBlock) combat.player.retainBlock = Math.max(combat.player.retainBlock, item.effect.retainBlock);
   if (item.type === 'form') {
     combat.player.activeForm = item.id;
     message += ' transformed';
@@ -153,6 +176,7 @@ export function endCombatTurn(state) {
     const effectiveBlock = Math.round(combat.player.block * (1 - (intent.pierce ?? 0)));
     const blocked = Math.min(effectiveBlock, raw);
     const damage = raw - blocked;
+    combat.player.block = Math.max(0, combat.player.block - blocked);
     combat.player.health = Math.max(0, combat.player.health - damage);
     if (intent.weak) combat.player.weak += intent.weak;
     if (intent.burn) combat.player.burn += intent.burn;
@@ -164,7 +188,8 @@ export function endCombatTurn(state) {
     combat.player.burn = Math.max(0, combat.player.burn - 1);
   }
   if (state.origin === 'namekian') combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + 3);
-  combat.player.block = 0;
+  combat.player.block = Math.round(combat.player.block * combat.player.retainBlock);
+  combat.player.retainBlock = 0;
   const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   if (form?.effect.drain) {
     combat.player.spirit = Math.max(0, combat.player.spirit - form.effect.drain);

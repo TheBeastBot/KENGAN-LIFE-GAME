@@ -103,6 +103,48 @@ test('encounter and reward generation is deterministic for a seed', () => {
   assert.deepEqual(createRewardDraft(one, 'special', 'same'), createRewardDraft(two, 'special', 'same'));
 });
 
+test('special drafts reserve a slot for an eligible compatible form', () => {
+  for (const origin of Object.keys(ORIGINS)) {
+    const state = { ...createDragonBallRun({ origin, seed: 100 }), age: 12 };
+    const draft = createRewardDraft(state, 'special', `form-${origin}`);
+    assert.equal(draft.length, 3);
+    assert.ok(draft.some((id) => CARDS[id].type === 'form'));
+    assert.ok(draft.every((id) => !CARDS[id].origins?.length || CARDS[id].origins.includes(origin)));
+  }
+});
+
+test('special drafts prioritize unowned forms over duplicate transformations', () => {
+  const state = {
+    ...createDragonBallRun({ origin: 'saiyan', seed: 101 }),
+    age: 14,
+    collection: {
+      ...createDragonBallRun({ origin: 'saiyan', seed: 101 }).collection,
+      'form-saiyan-1': 1,
+      'form-saiyan-2': 1,
+      'form-saiyan-3': 1,
+    },
+  };
+  const draft = createRewardDraft(state, 'special', 'unowned-form');
+  assert.ok(draft.includes('form-saiyan-4') || draft.includes('form-saiyan-5'));
+});
+
+test('unique technique catalog includes cards with distinct combat mechanics', () => {
+  const expected = [
+    'unique-vanishing-assault', 'unique-guard-breaker', 'unique-last-stand',
+    'unique-spirit-conversion', 'unique-perfect-barrier', 'unique-senzu-bean',
+    'unique-galaxy-gambit', 'unique-limit-breaker',
+  ];
+  for (const id of expected) assert.ok(CARDS[id], `${id} should exist`);
+  assert.ok(CARDS['unique-vanishing-assault'].effect.hits > 1);
+  assert.equal(CARDS['unique-guard-breaker'].effect.ignoreBlock, true);
+  assert.ok(CARDS['unique-last-stand'].effect.missingHealthDamage > 0);
+  assert.ok(CARDS['unique-spirit-conversion'].effect.spirit > 0);
+  assert.ok(CARDS['unique-perfect-barrier'].effect.retainBlock > 0);
+  assert.ok(CARDS['unique-senzu-bean'].effect.healPercent > 0);
+  assert.ok(CARDS['unique-galaxy-gambit'].effect.exhaust);
+  assert.ok(CARDS['unique-limit-breaker'].effect.maxKi > 0);
+});
+
 test('mentor stat rewards apply permanently and never enter collection or deck', () => {
   let state = createDragonBallRun({ seed: 22 });
   const mentor = state.encounters.find((item) => item.type === 'mentor');
@@ -214,6 +256,80 @@ test('playing cards spends Ki and applies damage block healing and forms', () =>
   state.activeCombat.player.ki = 3;
   state = playCombatCard(state, 0);
   assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-1');
+});
+
+test('unique cards support multi-hit, block piercing, missing-health damage, and exhaust', () => {
+  let state = createDragonBallRun({ seed: 55 });
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.ki = 10;
+  state.activeCombat.player.health = Math.floor(state.activeCombat.player.maxHealth / 2);
+  state.activeCombat.enemy.health = 500;
+  state.activeCombat.enemy.maxHealth = 500;
+  state.activeCombat.enemy.block = 0;
+  state.activeCombat.hand = [
+    'unique-vanishing-assault',
+    'unique-guard-breaker',
+    'unique-last-stand',
+    'unique-galaxy-gambit',
+  ];
+
+  const healthBeforeMulti = state.activeCombat.enemy.health;
+  state = playCombatCard(state, 0);
+  assert.ok(healthBeforeMulti - state.activeCombat.enemy.health >= 2);
+
+  state.activeCombat.enemy.block = 40;
+  const blockBeforePierce = state.activeCombat.enemy.block;
+  const healthBeforePierce = state.activeCombat.enemy.health;
+  state = playCombatCard(state, 0);
+  assert.equal(state.activeCombat.enemy.block, blockBeforePierce);
+  assert.ok(state.activeCombat.enemy.health < healthBeforePierce);
+
+  state.activeCombat.enemy.block = 0;
+  const healthBeforeLastStand = state.activeCombat.enemy.health;
+  state = playCombatCard(state, 0);
+  assert.ok(state.activeCombat.enemy.health < healthBeforeLastStand);
+
+  state = playCombatCard(state, 0);
+  assert.ok(state.activeCombat.exhaustPile.includes('unique-galaxy-gambit'));
+  assert.equal(state.activeCombat.discardPile.includes('unique-galaxy-gambit'), false);
+});
+
+test('unique support cards restore Spirit, retain Block, fully heal, and raise Ki capacity', () => {
+  let state = createDragonBallRun({ seed: 56 });
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.ki = 10;
+  state.activeCombat.player.spirit = 0;
+  state.activeCombat.player.health = 1;
+  state.activeCombat.hand = [
+    'unique-spirit-conversion',
+    'unique-perfect-barrier',
+    'unique-senzu-bean',
+    'unique-limit-breaker',
+  ];
+  state = playCombatCard(state, 0);
+  assert.ok(state.activeCombat.player.spirit > 0);
+  state = playCombatCard(state, 0);
+  assert.ok(state.activeCombat.player.retainBlock > 0);
+  state = playCombatCard(state, 0);
+  assert.equal(state.activeCombat.player.health, state.activeCombat.player.maxHealth);
+  state.activeCombat.player.ki = 3;
+  const oldMaxKi = state.activeCombat.player.maxKi;
+  state = playCombatCard(state, 0);
+  assert.equal(state.activeCombat.player.maxKi, oldMaxKi + 1);
+});
+
+test('Perfect Barrier carries only unused Block into the next turn', () => {
+  let state = createDragonBallRun({ seed: 57 });
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.hand = ['unique-perfect-barrier'];
+  state.activeCombat.player.ki = 2;
+  state = playCombatCard(state, 0);
+  state.activeCombat.intent = { type: 'attack', label: 'Light Test Strike', damage: 5 };
+  state = endCombatTurn(state);
+  assert.equal(state.activeCombat.player.block, 9);
 });
 
 test('discard pile reshuffles when the draw pile is empty', () => {

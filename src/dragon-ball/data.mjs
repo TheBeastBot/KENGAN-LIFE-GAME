@@ -104,6 +104,25 @@ const utilityCards = Object.entries(utilityNames).flatMap(([type, names]) => nam
   );
 }));
 
+const uniqueCards = [
+  card('unique-vanishing-assault', 'Vanishing Assault', 'move', 2, 'Strike 3 times for 6 damage.', { damage: 6, hits: 3 }, { rarity: 'rare', minAge: 9 }),
+  card('unique-guard-breaker', 'Guard Breaker Cannon', 'move', 2, 'Deal 16 damage directly through Block.', { damage: 16, ignoreBlock: true }, { rarity: 'rare', minAge: 10 }),
+  card('unique-last-stand', 'Last Stand Rush', 'move', 1, 'Deal 8 damage plus 35% of your missing Health.', { damage: 8, missingHealthDamage: 0.35 }, { rarity: 'epic', minAge: 13, origins: ['saiyan', 'earthling'] }),
+  card('unique-spirit-conversion', 'Spirit Conversion', 'support', 0, 'Restore 4 Spirit and gain 1 Ki.', { spirit: 4, ki: 1 }, { rarity: 'uncommon', minAge: 8 }),
+  card('unique-perfect-barrier', 'Perfect Barrier', 'counter', 2, 'Gain 18 Block and retain 50% of unused Block next turn.', { block: 18, retainBlock: 0.5 }, { rarity: 'epic', minAge: 14, origins: ['android', 'earthling'] }),
+  card('unique-senzu-bean', 'Senzu Bean', 'heal', 2, 'Fully restore Health and clear Weak and Burn. Exhaust.', { healPercent: 1, clearAll: true, exhaust: true }, { rarity: 'legendary', minAge: 15 }),
+  card('unique-galaxy-gambit', 'Galaxy Gambit', 'move', 3, 'Deal 38 damage. Exhaust.', { damage: 38, exhaust: true }, { rarity: 'epic', minAge: 14 }),
+  card('unique-limit-breaker', 'Limit Breaker', 'support', 2, 'Gain 1 maximum Ki this battle, refill 3 Ki, and gain 2 Focus.', { maxKi: 1, ki: 3, focus: 2 }, { rarity: 'legendary', minAge: 17 }),
+  card('unique-instant-transmission', 'Instant Transmission', 'counter', 1, 'Gain 10 Block and draw 3 cards.', { block: 10, draw: 3 }, { rarity: 'rare', minAge: 11 }),
+  card('unique-fusion-dance', 'Fusion Dance', 'support', 2, 'Gain 4 Focus and draw 2 cards. Exhaust.', { focus: 4, draw: 2, exhaust: true }, { rarity: 'legendary', minAge: 18 }),
+  card('unique-zenkai-surge', 'Zenkai Surge', 'heal', 1, 'Heal 25% of maximum Health and gain 2 Focus.', { healPercent: 0.25, focus: 2 }, { rarity: 'epic', minAge: 13, origins: ['saiyan'] }),
+  card('unique-turtle-wave', 'Turtle Wave Reversal', 'counter', 2, 'Gain 14 Block, then deal 12 damage through Block.', { block: 14, damage: 12, ignoreBlock: true }, { rarity: 'epic', minAge: 14, origins: ['earthling'] }),
+  card('unique-namekian-resolve', 'Namekian Resolve', 'heal', 1, 'Heal 35% of maximum Health and restore 3 Spirit.', { healPercent: 0.35, spirit: 3 }, { rarity: 'epic', minAge: 14, origins: ['namekian'] }),
+  card('unique-reactor-overdrive', 'Reactor Overdrive', 'support', 1, 'Gain 2 maximum Ki this battle and draw 2 cards. Exhaust.', { maxKi: 2, ki: 2, draw: 2, exhaust: true }, { rarity: 'epic', minAge: 15, origins: ['android'] }),
+  card('unique-dragon-rush', 'Dragon Rush Chain', 'move', 2, 'Strike 4 times for 5 damage and apply 2 Weak.', { damage: 5, hits: 4, weak: 2 }, { rarity: 'epic', minAge: 15 }),
+  card('unique-final-flashpoint', 'Final Flashpoint', 'move', 3, 'Deal 28 damage plus 2 damage per Focus. Consume all Focus.', { damage: 28, damagePerFocus: 2, consumeFocus: true }, { rarity: 'legendary', minAge: 18, cooldownAges: 1 }),
+];
+
 const forms = [
   ['form-saiyan-1', 'Great Ape Control', ['saiyan'], 8, 1.35, 1.05, 1],
   ['form-saiyan-2', 'Kaioken', ['saiyan', 'earthling'], 9, 1.4, 1.15, 1],
@@ -151,7 +170,7 @@ export const INJURY_CARDS = [
 ];
 
 export const CARDS = Object.fromEntries(
-  [...starterCards, ...moveCards, ...utilityCards, ...formCards, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
+  [...starterCards, ...moveCards, ...utilityCards, ...uniqueCards, ...formCards, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
 );
 
 export const COMBAT_CARD_IDS = Object.values(CARDS).filter((item) => CARD_TYPES.includes(item.type) && item.type !== 'injury').map((item) => item.id);
