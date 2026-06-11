@@ -40,6 +40,7 @@ export function generateTowerEncounter(state, floor = state.tower?.currentFloor 
   const cycle = Math.floor((safeFloor - 1) / TOWER_ENEMY_NAMES.length);
   const baseName = TOWER_ENEMY_NAMES[(safeFloor - 1) % TOWER_ENEMY_NAMES.length];
   const suffix = cycle ? ` Ascended ${cycle + 1}` : '';
+  const deepFloorPower = Math.pow(Math.max(0, safeFloor - 10), 1.6) * 4;
   return {
     id: `tower-floor-${safeFloor}`,
     source: 'tower',
@@ -48,7 +49,7 @@ export function generateTowerEncounter(state, floor = state.tower?.currentFloor 
     type: boss ? 'specialFight' : 'fighter',
     name: `${baseName}${suffix}`,
     difficulty: Math.max(1, Math.ceil(safeFloor / 3)),
-    enemyPower: Math.round(36 + safeFloor * 15 + Math.pow(safeFloor, 1.22) * 3),
+    enemyPower: Math.round(36 + safeFloor * 15 + Math.pow(safeFloor, 1.22) * 3 + deepFloorPower),
     reward: 'tower',
   };
 }

@@ -22,7 +22,11 @@ export function encountersForAge(age, cycle = 0) {
   const era = Math.floor((safeAge - 6) / 15);
   const cycleSuffix = safeAge === 100 ? `-cycle-${safeCycle}` : '';
   const title = safeAge === 100 ? `Eternal ${safeCycle + 1}` : LATE_SAGA_TIERS[Math.min(LATE_SAGA_TIERS.length - 1, era - 1)];
-  const agePower = 28 + (safeAge - 6) * 12 + safeCycle * 85;
+  const lateAge = safeAge - 20;
+  const eternalPower = safeCycle
+    ? safeCycle * 400 + Math.pow(safeCycle + 1, 1.35) * 80
+    : 0;
+  const agePower = 280 + lateAge * 18 + Math.pow(lateAge, 1.55) * 4 + eternalPower;
 
   return template.map((encounter, index) => {
     const special = encounter.type === 'specialFight';
@@ -34,7 +38,7 @@ export function encountersForAge(age, cycle = 0) {
       name: training
         ? `${encounter.name} · ${title} Teaching`
         : `${encounter.name} · ${title} Challenger`,
-      difficulty: training ? 0 : Math.max(3, Math.ceil((safeAge - 15) / 10) + (special ? 2 : 0) + safeCycle),
+      difficulty: training ? 0 : 3 + Math.ceil(lateAge / 5) + (special ? 2 : 0) + safeCycle * 2,
       enemyPower: training ? 0 : Math.round(agePower * (special ? 1.5 : 1)),
       reward: special ? 'legendary' : encounter.reward,
     };

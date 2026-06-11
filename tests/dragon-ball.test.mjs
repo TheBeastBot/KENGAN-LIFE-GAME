@@ -131,6 +131,48 @@ test('late campaign ages remix authored encounters through age 100', () => {
   assert.match(sagaNameForAge(100, 2), /Eternal/);
 });
 
+test('post-20 campaign enemies become dramatically stronger through age 100', () => {
+  const base = createDragonBallRun({ seed: 20321 });
+  const enemyAt = (age, cycle = 0) => {
+    const encounters = encountersForAge(age, cycle);
+    const state = { ...base, age, ageCycle: cycle, encounters };
+    return enemyForEncounter(state, encounters.find((item) => item.type === 'fighter'));
+  };
+  const ages = [20, 21, 35, 50, 75, 100];
+  const enemies = ages.map((age) => enemyAt(age));
+  for (let index = 1; index < enemies.length; index += 1) {
+    assert.ok(enemies[index].maxHealth > enemies[index - 1].maxHealth, `age ${ages[index]} Health did not increase`);
+    assert.ok(enemies[index].power > enemies[index - 1].power, `age ${ages[index]} Power did not increase`);
+    assert.ok(enemies[index].defense > enemies[index - 1].defense, `age ${ages[index]} Defense did not increase`);
+    assert.ok(enemies[index].speed > enemies[index - 1].speed, `age ${ages[index]} Speed did not increase`);
+  }
+  assert.ok(enemies.at(-1).maxHealth >= enemies[0].maxHealth * 40);
+  assert.ok(enemies.at(-1).power >= enemies[0].power * 12);
+  const eternalOne = enemyAt(100, 0);
+  const eternalFour = enemyAt(100, 3);
+  assert.ok(eternalFour.power >= eternalOne.power * 1.25);
+  assert.ok(eternalFour.maxHealth >= eternalOne.maxHealth * 1.25);
+});
+
+test('Infinite Tower difficulty accelerates heavily on deep floors', () => {
+  const state = { ...createDragonBallRun({ seed: 20322 }), age: 20 };
+  const floors = [1, 10, 25, 50, 100];
+  const encounters = floors.map((floor) => generateTowerEncounter(state, floor));
+  for (let floor = 2; floor <= 120; floor += 1) {
+    assert.ok(
+      generateTowerEncounter(state, floor).enemyPower > generateTowerEncounter(state, floor - 1).enemyPower,
+      `tower floor ${floor} did not become stronger`
+    );
+  }
+  assert.ok(encounters[2].enemyPower >= encounters[1].enemyPower * 3);
+  assert.ok(encounters[3].enemyPower >= encounters[2].enemyPower * 2.5);
+  assert.ok(encounters[4].enemyPower >= encounters[3].enemyPower * 2.5);
+  const shallowEnemy = enemyForEncounter(state, encounters[1]);
+  const deepEnemy = enemyForEncounter(state, encounters[4]);
+  assert.ok(deepEnemy.power >= shallowEnemy.power * 15);
+  assert.ok(deepEnemy.maxHealth >= shallowEnemy.maxHealth * 15);
+});
+
 test('age 100 creates repeatable Eternal Saga cycles without ending the run', () => {
   let state = createDragonBallRun({ seed: 2032 });
   state = {
