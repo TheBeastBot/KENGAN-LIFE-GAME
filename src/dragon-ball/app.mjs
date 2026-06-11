@@ -10,6 +10,9 @@ import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './p
 import {
   claimTowerReward, generateTowerEncounter, setTowerLoadout, startTowerRun, towerCardAtRank,
 } from './tower.mjs';
+import {
+  createCombatAudio, createSequenceController, loadCombatPreferences, saveCombatPreferences,
+} from './combat-presentation.mjs';
 
 const app = document.querySelector('#dragon-ball-app');
 let state = loadDragonBallGame();
@@ -19,6 +22,13 @@ let selectedCardId = null;
 let setupOrigin = 'saiyan';
 let setupName = '';
 let toast = '';
+let combatStage = null;
+let combatStageIndex = 0;
+let combatStageCount = 0;
+let sequenceViewState = null;
+const prefersReducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+let combatPreferences = loadCombatPreferences(globalThis.localStorage, prefersReducedMotion);
+const combatAudio = createCombatAudio();
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -75,6 +85,33 @@ function update(next, message = '') {
   toast = message;
   saveDragonBallGame(state);
   render();
+}
+
+const sequenceController = createSequenceController({
+  getMotion: () => combatPreferences.motion,
+  onStage(stage, index = 0, count = 0) {
+    combatStage = stage;
+    combatStageIndex = index;
+    combatStageCount = count;
+    render();
+  },
+  onSound(sound) {
+    combatAudio.play(sound, combatPreferences.sound);
+  },
+  onCommit(next) {
+    combatStage = null;
+    combatStageIndex = 0;
+    combatStageCount = 0;
+    sequenceViewState = null;
+    update(next);
+    globalThis.setTimeout?.(() => document.querySelector('[data-action="end-turn"]')?.focus(), 0);
+  },
+});
+
+function presentCombatAction(previous, next, action, { showResolvedCombat = false } = {}) {
+  if (next === previous) return;
+  sequenceViewState = showResolvedCombat ? next : previous;
+  sequenceController.start({ previous, next, action });
 }
 
 function cardTone(item) {
@@ -403,44 +440,76 @@ function renderTower() {
   `;
 }
 
-function renderCombat() {
-  const combat = state.activeCombat;
+function renderCombat(combatState = state) {
+  const combat = combatState.activeCombat;
   const activeForm = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
+  const displayFormId = combatStage?.kind === 'transform' ? combatStage.formId : combat.player.activeForm;
+  const displayForm = displayFormId ? CARDS[displayFormId] : activeForm;
   const playerPercent = combat.player.health / combat.player.maxHealth * 100;
   const enemyPercent = combat.enemy.health / combat.enemy.maxHealth * 100;
+  const locked = sequenceController.locked;
+  const stageClass = combatStage ? `combat-stage-${combatStage.kind}` : '';
   return `
-    <main class="combat-screen">
+    <main class="combat-screen motion-${combatPreferences.motion} ${stageClass} ${locked ? 'sequence-active' : ''} ${playerPercent <= 25 ? 'low-health' : ''}">
       <section class="combat-arena">
-        <div class="combatant enemy">
+        <div class="combatant enemy" data-combat-target="enemy">
           <div><p>Enemy Intent</p><h2>${escapeHtml(combat.intent.label)}</h2><span>${combat.intent.damage ? `${combat.intent.damage} incoming damage${combat.intent.pierce ? ` / ${Math.round(combat.intent.pierce * 100)}% Block pierce` : ''}` : `${combat.intent.block} Block`}</span></div>
           <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
         </div>
-        <div class="impact-orb"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
-        <div class="combatant player ${combat.player.activeForm ? 'transformed' : ''}">
-          <img src="${characterArt(state.origin, combat.player.activeForm)}" alt="${escapeHtml(combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name)}">
-          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${activeForm?.name ?? ORIGINS[state.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}${activeForm?.effect.dodgeChance ? ` / Dodge ${Math.round(activeForm.effect.dodgeChance * 100)}%` : ''}</span></div>
+        ${combatStage ? renderCombatEffect(combatStage) : ''}
+        <div class="combatant player ${displayFormId ? 'transformed' : ''}" data-combat-target="player">
+          <img src="${characterArt(combatState.origin, displayFormId)}" alt="${escapeHtml(displayForm?.name ?? ORIGINS[combatState.origin].name)}">
+          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(combatState.name)}</h2><span>${displayForm?.name ?? ORIGINS[combatState.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}${displayForm?.effect.dodgeChance ? ` / Dodge ${Math.round(displayForm.effect.dodgeChance * 100)}%` : ''}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
         </div>
       </section>
       <section class="combat-controls">
         <header>
           <div><span>KI</span>${Array.from({ length: combat.player.maxKi + 2 }, (_, index) => `<i class="${index < combat.player.ki ? 'full' : ''}"></i>`).join('')}</div>
-          <button data-action="end-turn">End Turn</button>
+          <div class="combat-settings" aria-label="Combat presentation settings">
+            ${['full', 'reduced', 'off'].map((mode) => `<button class="${combatPreferences.motion === mode ? 'active' : ''}" data-action="motion-${mode}">${label(mode)}</button>`).join('')}
+            <button class="${combatPreferences.sound ? 'active' : ''}" data-action="toggle-sound">Sound ${combatPreferences.sound ? 'On' : 'Off'}</button>
+          </div>
+          <button data-action="end-turn" ${locked ? 'disabled' : ''}>End Turn</button>
         </header>
         <div class="combat-hand">
           ${combat.hand.map((id, index) => {
-            const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, state.tower.cards[id]) : CARDS[id];
+            const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, combatState.tower.cards[id]) : CARDS[id];
             return renderCard(item, {
               action: `play-${index}`,
-              disabled: item.type === 'injury' || item.cost > combat.player.ki,
-              badge: item.towerOnly ? `Tower Rank ${state.tower.cards[id]}` : '',
+              disabled: locked || item.type === 'injury' || item.cost > combat.player.ki,
+              badge: item.towerOnly ? `Tower Rank ${combatState.tower.cards[id]}` : '',
             });
           }).join('')}
         </div>
         <div class="combat-log">${combat.log.slice(0, 4).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}</div>
       </section>
     </main>
+  `;
+}
+
+function renderCombatEffect(stage) {
+  const number = stage.value > 0
+    ? `<strong class="combat-float-number">${stage.kind === 'heal' || stage.kind === 'guard' || stage.kind === 'support' ? '+' : '-'}${stage.value}</strong>`
+    : '';
+  const card = stage.cardId ? CARDS[stage.cardId] : null;
+  return `
+    <div class="combat-effect-layer" aria-live="polite" aria-atomic="true">
+      <div class="combat-speed-lines"></div>
+      <div class="combat-aura"></div>
+      <div class="combat-beam"><i></i></div>
+      <div class="combat-impact"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
+      <div class="combat-afterimage"></div>
+      ${card ? `<div class="combat-card-callout"><img src="${cardArt(card)}" alt=""><b>${escapeHtml(card.name)}</b></div>` : ''}
+      <div class="combat-effect-copy">
+        <b>${escapeHtml(stage.label ?? '')}</b>
+        ${number}
+        ${stage.hits > 1 ? `<span>${stage.hits} HIT COMBO</span>` : ''}
+      </div>
+      <div class="combat-particles">${Array.from({ length: 12 }, (_, index) => `<i style="--particle:${index}"></i>`).join('')}</div>
+      <button class="combat-skip" data-action="skip-sequence">Skip ${combatStageIndex + 1}/${combatStageCount}</button>
+    </div>
   `;
 }
 
@@ -483,8 +552,9 @@ function renderDetail() {
 
 function render() {
   if (!state) return renderSetup();
-  if (state.activeCombat) {
-    app.innerHTML = renderCombat();
+  const visualState = sequenceViewState ?? state;
+  if (visualState.activeCombat) {
+    app.innerHTML = renderCombat(visualState);
     return;
   }
   const content = activeTab === 'deck' ? renderDeck()
@@ -523,6 +593,22 @@ function handleAction(action) {
     return;
   }
   if (!state) return;
+  if (action === 'skip-sequence') {
+    sequenceController.skip();
+    return;
+  }
+  if (action.startsWith('motion-')) {
+    if (sequenceController.locked) sequenceController.flush();
+    combatPreferences = saveCombatPreferences({ ...combatPreferences, motion: action.replace('motion-', '') });
+    render();
+    return;
+  }
+  if (action === 'toggle-sound') {
+    combatPreferences = saveCombatPreferences({ ...combatPreferences, sound: !combatPreferences.sound });
+    if (combatPreferences.sound) combatAudio.play('charge', true);
+    render();
+    return;
+  }
   if (action === 'tower-start') {
     const next = startTowerRun(state);
     update(next, next === state ? 'The Infinite Tower is currently unavailable.' : 'Infinite Tower run started.');
@@ -530,7 +616,8 @@ function handleAction(action) {
   }
   if (action === 'tower-fight') {
     const encounter = generateTowerEncounter(state);
-    update(startDragonBallCombat(state, encounter.id));
+    const next = startDragonBallCombat(state, encounter.id);
+    presentCombatAction(state, next, { type: 'battleStart' }, { showResolvedCombat: true });
     return;
   }
   if (action.startsWith('tower-add-')) {
@@ -548,7 +635,12 @@ function handleAction(action) {
   if (action.startsWith('encounter-')) {
     const id = action.replace('encounter-', '');
     const encounter = state.encounters.find((item) => item.id === id);
-    update(['fighter', 'specialFight'].includes(encounter?.type) ? startDragonBallCombat(state, id) : beginEncounter(state, id));
+    if (['fighter', 'specialFight'].includes(encounter?.type)) {
+      const next = startDragonBallCombat(state, id);
+      presentCombatAction(state, next, { type: 'battleStart' }, { showResolvedCombat: true });
+    } else {
+      update(beginEncounter(state, id));
+    }
     return;
   }
   if (action === 'age-up') {
@@ -564,11 +656,17 @@ function handleAction(action) {
     return;
   }
   if (action.startsWith('play-')) {
-    update(playCombatCard(state, Number(action.replace('play-', ''))));
+    if (sequenceController.locked) return;
+    const handIndex = Number(action.replace('play-', ''));
+    const id = state.activeCombat?.hand?.[handIndex];
+    const card = CARDS[id]?.towerOnly ? towerCardAtRank(id, state.tower.cards[id]) : CARDS[id];
+    const next = playCombatCard(state, handIndex);
+    presentCombatAction(state, next, { type: 'card', card });
     return;
   }
   if (action === 'end-turn') {
-    update(endCombatTurn(state));
+    if (sequenceController.locked) return;
+    presentCombatAction(state, endCombatTurn(state), { type: 'enemyTurn' });
     return;
   }
   if (action.startsWith('recover-')) {
@@ -632,5 +730,7 @@ document.addEventListener('click', (event) => {
 document.addEventListener('input', (event) => {
   if (event.target.id === 'db-name') setupName = event.target.value;
 });
+
+globalThis.addEventListener?.('beforeunload', () => sequenceController.flush());
 
 render();

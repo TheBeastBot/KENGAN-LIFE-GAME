@@ -20,6 +20,10 @@ import {
   claimTowerReward, createTowerState, generateTowerEncounter, setTowerLoadout,
   startTowerRun, towerCardAtRank, towerRewardDraft, validateTowerLoadout,
 } from '../src/dragon-ball/tower.mjs';
+import {
+  COMBAT_PREFS_KEY, buildCombatSequence, createCombatAudio, createSequenceController,
+  loadCombatPreferences, saveCombatPreferences,
+} from '../src/dragon-ball/combat-presentation.mjs';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -916,6 +920,156 @@ test('Dragon Ball persistence uses only its independent save key', () => {
   assert.equal(storage.snapshot()['underground-life-sim-save-v1'], '{"legacy":true}');
 });
 
+test('combat sequences classify Dragon Ball card and enemy effects', () => {
+  const base = createDragonBallRun({ origin: 'saiyan', seed: 712 });
+  const encounter = base.encounters.find((item) => item.type === 'fighter');
+  const started = startDragonBallCombat(base, encounter.id);
+  const withCard = (id, mutate = () => {}) => {
+    const before = structuredClone(started);
+    before.activeCombat.hand = [id];
+    before.activeCombat.player.ki = 10;
+    mutate(before);
+    return [before, playCombatCard(before, 0)];
+  };
+  const kinds = (before, after, action) => buildCombatSequence(before, after, action).map((stage) => stage.kind);
+
+  let pair = withCard('driving-kick');
+  assert.deepEqual(kinds(...pair, { type: 'card', card: CARDS['driving-kick'] }).slice(0, 2), ['card-focus', 'physical-attack']);
+  pair = withCard('ki-bolt');
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['ki-bolt'] }).includes('ki-attack'));
+  pair = withCard('unique-vanishing-assault');
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['unique-vanishing-assault'] }).includes('multi-hit'));
+  pair = withCard('guard-stance');
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['guard-stance'] }).includes('guard'));
+  pair = withCard('battle-breath', (state) => { state.activeCombat.player.health -= 20; });
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['battle-breath'] }).includes('heal'));
+  pair = withCard('center-yourself');
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['center-yourself'] }).includes('support'));
+  pair = withCard('form-saiyan-3');
+  assert.ok(kinds(...pair, { type: 'card', card: CARDS['form-saiyan-3'] }).includes('transform'));
+
+  const enemyBefore = structuredClone(started);
+  enemyBefore.activeCombat.intent = { type: 'attack', label: 'Heavy Ki Blast', damage: 20, burn: 1 };
+  const enemyAfter = endCombatTurn(enemyBefore);
+  assert.ok(kinds(enemyBefore, enemyAfter, { type: 'enemyTurn' }).includes('enemy-ki'));
+
+  const dodgeBefore = structuredClone(started);
+  dodgeBefore.activeCombat.player.activeForm = 'form-saiyan-9';
+  dodgeBefore.activeCombat.intent = { type: 'attack', label: 'Rush Attack', damage: 20 };
+  while (!attackIsDodged(dodgeBefore.activeCombat)) dodgeBefore.activeCombat.seed += 1;
+  const dodgeAfter = endCombatTurn(dodgeBefore);
+  assert.ok(kinds(dodgeBefore, dodgeAfter, { type: 'enemyTurn' }).includes('dodge'));
+
+  const ultimateBefore = structuredClone(started);
+  ultimateBefore.activeCombat.intent = { type: 'attack', label: 'Limit-Breaking Ultimate', damage: 40, burn: 1, weak: 1 };
+  const ultimateAfter = endCombatTurn(ultimateBefore);
+  assert.equal(buildCombatSequence(ultimateBefore, ultimateAfter, { type: 'enemyTurn' })[0].kind, 'ultimate-warning');
+});
+
+test('combat sequences expose status, victory, defeat, and transformation preview stages', () => {
+  const base = createDragonBallRun({ origin: 'saiyan', seed: 713 });
+  const encounter = base.encounters.find((item) => item.type === 'fighter');
+  let before = startDragonBallCombat(base, encounter.id);
+  before.activeCombat.hand = ['form-saiyan-3'];
+  before.activeCombat.player.ki = 10;
+  let after = playCombatCard(before, 0);
+  const transform = buildCombatSequence(before, after, { type: 'card', card: CARDS['form-saiyan-3'] });
+  assert.equal(transform.find((stage) => stage.kind === 'transform').formId, 'form-saiyan-3');
+
+  before = startDragonBallCombat(base, encounter.id);
+  before.activeCombat.hand = ['heavy-palm'];
+  before.activeCombat.player.ki = 10;
+  after = playCombatCard(before, 0);
+  assert.ok(buildCombatSequence(before, after, { type: 'card', card: CARDS['heavy-palm'] }).some((stage) => stage.kind === 'status'));
+
+  before = startDragonBallCombat(base, encounter.id);
+  before.activeCombat.hand = ['driving-kick'];
+  before.activeCombat.player.ki = 10;
+  before.activeCombat.enemy.health = 1;
+  after = playCombatCard(before, 0);
+  assert.ok(buildCombatSequence(before, after, { type: 'card', card: CARDS['driving-kick'] }).some((stage) => stage.kind === 'victory'));
+
+  before = startDragonBallCombat(base, encounter.id);
+  before.activeCombat.player.health = 1;
+  before.activeCombat.intent = { type: 'attack', label: 'Final Blow', damage: 999 };
+  after = endCombatTurn(before);
+  assert.ok(buildCombatSequence(before, after, { type: 'enemyTurn' }).some((stage) => stage.kind === 'defeat'));
+});
+
+test('combat preferences persist separately and honor reduced motion defaults', () => {
+  const empty = memoryStorage();
+  assert.deepEqual(loadCombatPreferences(empty, false), { motion: 'full', sound: false });
+  assert.deepEqual(loadCombatPreferences(empty, true), { motion: 'reduced', sound: false });
+  saveCombatPreferences({ motion: 'off', sound: true }, empty);
+  assert.deepEqual(loadCombatPreferences(empty, true), { motion: 'off', sound: true });
+  assert.ok(empty.snapshot()[COMBAT_PREFS_KEY]);
+  assert.equal(empty.snapshot()[DRAGON_BALL_SAVE_KEY], undefined);
+  const invalid = memoryStorage({ [COMBAT_PREFS_KEY]: '{"motion":"wild","sound":"yes"}' });
+  assert.deepEqual(loadCombatPreferences(invalid, false), { motion: 'full', sound: false });
+});
+
+test('sequence controller locks input and commits resolved state exactly once', () => {
+  const timers = [];
+  const commits = [];
+  const stages = [];
+  const controller = createSequenceController({
+    getMotion: () => 'full',
+    setTimer(callback) { timers.push(callback); return timers.length; },
+    clearTimer() {},
+    onStage(stage) { if (stage) stages.push(stage.kind); },
+    onCommit(next) { commits.push(next); },
+  });
+  controller.start({
+    previous: { activeCombat: {} },
+    next: { marker: 'resolved', activeCombat: {} },
+    action: { type: 'card', card: CARDS['driving-kick'] },
+  });
+  assert.equal(controller.locked, true);
+  assert.equal(stages[0], 'card-focus');
+  controller.skip();
+  controller.skip();
+  assert.equal(controller.locked, false);
+  assert.equal(commits.length, 1);
+  assert.equal(commits[0].marker, 'resolved');
+});
+
+test('off-motion sequence controller commits immediately', () => {
+  let committed = null;
+  const controller = createSequenceController({
+    getMotion: () => 'off',
+    onCommit(next) { committed = next; },
+  });
+  controller.start({
+    previous: { activeCombat: {} },
+    next: { marker: 'instant', activeCombat: {} },
+    action: { type: 'card', card: CARDS['driving-kick'] },
+  });
+  assert.equal(controller.locked, false);
+  assert.equal(committed.marker, 'instant');
+});
+
+test('combat audio remains lazy and only initializes after enabled playback', () => {
+  let contexts = 0;
+  const fakeContext = {
+    currentTime: 0,
+    destination: {},
+    createOscillator() {
+      return { frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {}, type: '' };
+    },
+    createGain() {
+      return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} };
+    },
+    resume() {},
+  };
+  const audio = createCombatAudio({ contextFactory: () => { contexts += 1; return fakeContext; } });
+  audio.play('impact', false);
+  assert.equal(contexts, 0);
+  audio.play('impact', true);
+  assert.equal(contexts, 1);
+  audio.play('heal', true);
+  assert.equal(contexts, 1);
+});
+
 test('Dragon Ball page and original game expose separate launcher links and themed UI', async () => {
   const [html, appSource, originalSource, css] = await Promise.all([
     readFile(new URL('../dragon-ball.html', import.meta.url), 'utf8'),
@@ -950,13 +1104,18 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /form-saiyan-ssj1\.jpg/);
   assert.match(appSource, /form-saiyan-ssj2\.jpg/);
   assert.match(appSource, /form-saiyan-ssj3\.jpg/);
-  assert.match(appSource, /characterArt\(state\.origin, combat\.player\.activeForm\)/);
+  assert.match(appSource, /characterArt\(combatState\.origin, displayFormId\)/);
   assert.match(appSource, /card-strike\.jpg/);
   assert.match(appSource, /card-ki\.jpg/);
   assert.match(css, /--orange:\s*#f47b20/);
   assert.match(css, /ui-hero\.jpg/);
   assert.match(css, /ui-arena\.jpg/);
   assert.match(css, /transformed-pulse/);
+  assert.match(css, /combat-effect-layer/);
+  assert.match(css, /combat-stage-ki-attack/);
+  assert.match(css, /combat-stage-transform/);
+  assert.match(css, /combat-stage-dodge/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /\.recovery-grid/);
   assert.match(css, /\.tower-screen/);
   assert.match(css, /\.tower-card-grid/);
