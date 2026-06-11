@@ -11,7 +11,7 @@ import {
   createDragonBallRun, normalizeDragonBallState, setDeck, validateDeck,
 } from '../src/dragon-ball/state.mjs';
 import {
-  endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
+  attackIsDodged, endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
 } from '../src/dragon-ball/combat.mjs';
 import {
   clearDragonBallGame, loadDragonBallGame, saveDragonBallGame,
@@ -564,6 +564,77 @@ test('playing cards spends Ki and applies damage block healing and forms', () =>
   state.activeCombat.player.ki = 3;
   state = playCombatCard(state, 0);
   assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-1');
+});
+
+test('Ultra Instinct Sign has a deterministic seventy percent attack dodge chance', () => {
+  const results = Array.from({ length: 1000 }, (_, seed) => attackIsDodged({
+    seed,
+    turn: 3,
+    encounter: { id: 'ui-dodge-test' },
+    player: { activeForm: 'form-saiyan-9' },
+  }));
+  const dodges = results.filter(Boolean).length;
+  assert.ok(dodges >= 680 && dodges <= 720, `expected about 700 dodges, received ${dodges}`);
+  assert.equal(attackIsDodged({
+    seed: 1,
+    turn: 1,
+    encounter: { id: 'normal-form' },
+    player: { activeForm: 'form-saiyan-8' },
+  }), false);
+  assert.equal(CARDS['form-saiyan-9'].effect.dodgeChance, 0.7);
+  assert.match(CARDS['form-saiyan-9'].text, /70%/);
+});
+
+test('Ultra Instinct dodge prevents attack damage, debuffs, and Block loss', () => {
+  let state = { ...createDragonBallRun({ origin: 'saiyan', seed: 4 }), age: 20 };
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.activeForm = 'form-saiyan-9';
+  state.activeCombat.player.block = 12;
+  state.activeCombat.intent = { type: 'attack', label: 'Dodge Test', damage: 999, weak: 2, burn: 2, pierce: 1 };
+  while (!attackIsDodged(state.activeCombat)) {
+    state.activeCombat.seed += 1;
+  }
+  const health = state.activeCombat.player.health;
+  state = endCombatTurn(state);
+  assert.equal(state.activeCombat.player.health, health);
+  assert.equal(state.activeCombat.player.block, 0);
+  assert.equal(state.activeCombat.player.weak, 0);
+  assert.equal(state.activeCombat.player.burn, 0);
+  assert.match(state.activeCombat.log[0], /dodges/);
+});
+
+test('Ultra Instinct pays its two Ki upkeep without consuming Spirit', () => {
+  let state = { ...createDragonBallRun({ origin: 'saiyan', seed: 42 }), age: 20 };
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.activeForm = 'form-saiyan-9';
+  state.activeCombat.player.maxKi = 5;
+  state.activeCombat.player.ki = 0;
+  state.activeCombat.player.spirit = 12;
+  state.activeCombat.intent = { type: 'guard', label: 'Wait', block: 0 };
+  state = endCombatTurn(state);
+  assert.equal(state.activeCombat.player.ki, 3);
+  assert.equal(state.activeCombat.player.spirit, 12);
+  assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-9');
+});
+
+test('Speed reduces incoming damage and grants an extra opening card at thirty', () => {
+  const base = createDragonBallRun({ seed: 441 });
+  const encounter = base.encounters.find((item) => item.type === 'fighter');
+  const fast = { ...base, stats: { ...base.stats, speed: 30 } };
+  const started = startDragonBallCombat(fast, encounter.id);
+  assert.equal(started.activeCombat.hand.length, 6);
+
+  const makeHit = (speed) => {
+    let state = startDragonBallCombat({ ...base, stats: { ...base.stats, speed } }, encounter.id);
+    state.activeCombat.player.block = 0;
+    state.activeCombat.intent = { type: 'attack', label: 'Speed Test', damage: 50 };
+    const before = state.activeCombat.player.health;
+    state = endCombatTurn(state);
+    return before - state.activeCombat.player.health;
+  };
+  assert.ok(makeHit(30) < makeHit(0));
 });
 
 test('unique cards support multi-hit, block piercing, missing-health damage, and exhaust', () => {

@@ -155,7 +155,7 @@ const forms = [
   ['form-saiyan-6', 'Super Saiyan 3 (SSJ3)', ['saiyan'], 16, 2.35, 1.35, 2],
   ['form-saiyan-7', 'Super Saiyan God', ['saiyan'], 18, 2.55, 1.7, 1],
   ['form-saiyan-8', 'Super Saiyan Blue', ['saiyan'], 19, 2.8, 1.85, 1],
-  ['form-saiyan-9', 'Ultra Instinct Sign', ['saiyan', 'earthling'], 20, 3.0, 2.1, 2],
+  ['form-saiyan-9', 'Ultra Instinct Sign', ['saiyan', 'earthling'], 20, 3.0, 2.1, 2, 0.7],
   ['form-earth-1', 'Turtle School Mastery', ['earthling'], 8, 1.25, 1.3, 0],
   ['form-earth-2', 'Crane School Mastery', ['earthling'], 10, 1.35, 1.4, 0],
   ['form-earth-3', 'Four Witches Technique', ['earthling'], 12, 1.55, 1.25, 1],
@@ -171,9 +171,9 @@ const forms = [
   ['form-android-4', 'Limitless Core', ['android'], 19, 2.7, 2.1, 0],
 ];
 
-const formCards = forms.map(([id, name, origins, minAge, powerMultiplier, defenseMultiplier, drain]) =>
-  card(id, name, 'form', 2, `Transform: x${powerMultiplier} Power, x${defenseMultiplier} Defense${drain ? `, drain ${drain} Ki each turn` : ''}.`,
-    { powerMultiplier, defenseMultiplier, drain }, { origins, minAge, rarity: minAge >= 18 ? 'legendary' : minAge >= 14 ? 'epic' : 'rare' }));
+const formCards = forms.map(([id, name, origins, minAge, powerMultiplier, defenseMultiplier, drain, dodgeChance = 0]) =>
+  card(id, name, 'form', 2, `Transform: x${powerMultiplier} Power, x${defenseMultiplier} Defense${dodgeChance ? `, ${Math.round(dodgeChance * 100)}% dodge chance` : ''}${drain ? `, drain ${drain} Ki each turn` : ''}.`,
+    { powerMultiplier, defenseMultiplier, drain, dodgeChance }, { origins, minAge, rarity: minAge >= 18 ? 'legendary' : minAge >= 14 ? 'epic' : 'rare' }));
 
 const statCards = STAT_KEYS.flatMap((stat) => [1, 2, 3, 4, 5].map((tier) => ({
   id: `stat-${stat}-${tier}`,

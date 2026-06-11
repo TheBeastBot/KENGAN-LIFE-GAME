@@ -405,6 +405,7 @@ function renderTower() {
 
 function renderCombat() {
   const combat = state.activeCombat;
+  const activeForm = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   const playerPercent = combat.player.health / combat.player.maxHealth * 100;
   const enemyPercent = combat.enemy.health / combat.enemy.maxHealth * 100;
   return `
@@ -418,7 +419,7 @@ function renderCombat() {
         <div class="impact-orb"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
         <div class="combatant player ${combat.player.activeForm ? 'transformed' : ''}">
           <img src="${characterArt(state.origin, combat.player.activeForm)}" alt="${escapeHtml(combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name)}">
-          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${combat.player.activeForm ? CARDS[combat.player.activeForm].name : ORIGINS[state.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}</span></div>
+          <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(state.name)}</h2><span>${activeForm?.name ?? ORIGINS[state.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}${activeForm?.effect.dodgeChance ? ` / Dodge ${Math.round(activeForm.effect.dodgeChance * 100)}%` : ''}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
         </div>
       </section>

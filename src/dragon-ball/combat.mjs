@@ -1,6 +1,6 @@
 import { CARDS, ORIGINS } from './data.mjs';
 import { enemyForEncounter } from './campaign.mjs';
-import { hashSeed, shuffle } from './random.mjs';
+import { createRng, hashSeed, shuffle } from './random.mjs';
 import { recordCombatDefeat, recordCombatVictory, validateDeck } from './state.mjs';
 import {
   generateTowerEncounter, recordTowerDefeat, recordTowerVictory, towerCardAtRank,
@@ -42,6 +42,14 @@ export function enemyIntent(combat) {
     });
   }
   return patterns[(combat.turn - 1 + combat.enemy.phase) % patterns.length];
+}
+
+export function attackIsDodged(combat) {
+  const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
+  const dodgeChance = form?.effect.dodgeChance ?? 0;
+  if (dodgeChance <= 0) return false;
+  const roll = createRng(hashSeed(combat.seed, combat.turn, combat.encounter.id, 'dodge'))();
+  return roll < dodgeChance;
 }
 
 export function startDragonBallCombat(state, encounterId) {
@@ -180,6 +188,9 @@ export function endCombatTurn(state) {
     combat.enemy.block += intent.block;
     combat.enemy.phase += intent.focus ?? 0;
     combat.log.unshift(`${combat.enemy.name} gains ${intent.block} Block.`);
+  } else if (attackIsDodged(combat)) {
+    const form = CARDS[combat.player.activeForm];
+    combat.log.unshift(`${next.name} dodges ${combat.enemy.name}'s ${intent.label} with ${form.name}.`);
   } else {
     const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
     const defenseMultiplier = (form?.effect.defenseMultiplier ?? 1) * (form ? 1 + (combat.player.formBoost ?? 0) : 1);
@@ -206,10 +217,6 @@ export function endCombatTurn(state) {
   combat.player.block = Math.round(combat.player.block * (combat.player.retainBlock ?? 0));
   combat.player.retainBlock = 0;
   const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
-  if (form?.effect.drain) {
-    combat.player.spirit = Math.max(0, combat.player.spirit - form.effect.drain);
-    if (combat.player.spirit === 0) combat.player.activeForm = null;
-  }
   if (combat.player.health <= 0) {
     return combat.encounter.source === 'tower'
       ? recordTowerDefeat(next, combat.encounter)
@@ -218,7 +225,7 @@ export function endCombatTurn(state) {
   combat.enemy.weak = Math.max(0, combat.enemy.weak - 1);
   combat.player.weak = Math.max(0, combat.player.weak - 1);
   combat.turn += 1;
-  combat.player.ki = combat.player.maxKi;
+  combat.player.ki = Math.max(0, combat.player.maxKi - (form?.effect.drain ?? 0));
   drawCards(combat, 5);
   combat.intent = enemyIntent(combat);
   next.currentHealth = clamp(combat.player.health, 0, next.stats.health);
