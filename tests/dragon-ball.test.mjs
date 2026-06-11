@@ -1115,6 +1115,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(css, /combat-stage-ki-attack/);
   assert.match(css, /combat-stage-transform/);
   assert.match(css, /combat-stage-dodge/);
+  assert.match(css, /\.combat-card-callout\s*\{[^}]*max-width:\s*calc\(100% - 32px\)/s);
+  assert.match(css, /\.combat-effect-copy\s*\{[^}]*width:\s*calc\(100% - 32px\)/s);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /\.recovery-grid/);
   assert.match(css, /\.tower-screen/);
