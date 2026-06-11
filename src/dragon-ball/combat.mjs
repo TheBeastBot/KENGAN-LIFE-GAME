@@ -120,6 +120,22 @@ function dealToEnemy(combat, amount, ignoreBlock = false) {
   return dealt;
 }
 
+function lateEnemyPressure(state, encounter) {
+  const lateAge = clamp((state.age - 20) / 80, 0, 1);
+  const eternalCycle = state.age >= 100 ? Math.max(0, state.ageCycle ?? 0) : 0;
+  const towerDepth = clamp(((encounter.towerFloor ?? 0) - 10) / 90, 0, 1);
+  return {
+    defensePenetration: clamp(Math.max(
+      lateAge * 0.65 + eternalCycle * 0.03,
+      towerDepth * 0.8
+    ), 0, 0.9),
+    minimumDamageRatio: clamp(Math.max(
+      lateAge * 0.3 + eternalCycle * 0.03,
+      towerDepth * 0.45
+    ), 0, 0.75),
+  };
+}
+
 export function playCombatCard(state, handIndex) {
   if (!state.activeCombat) return state;
   const next = clone(state);
@@ -196,9 +212,13 @@ export function endCombatTurn(state) {
     const defenseMultiplier = (form?.effect.defenseMultiplier ?? 1) * (form ? 1 + (combat.player.formBoost ?? 0) : 1);
     const weakMultiplier = combat.enemy.weak > 0 ? 0.75 : 1;
     const speedMitigation = Math.min(0.2, state.stats.speed * 0.003);
-    const raw = Math.max(1, Math.round(
-      intent.damage * weakMultiplier * (1 - speedMitigation) - state.stats.defense * 0.3 * defenseMultiplier
-    ));
+    const pressure = lateEnemyPressure(state, combat.encounter);
+    const incomingDamage = intent.damage * weakMultiplier * (1 - speedMitigation);
+    const defenseReduction = state.stats.defense * 0.3 * defenseMultiplier * (1 - pressure.defensePenetration);
+    const raw = Math.max(1, Math.round(Math.max(
+      incomingDamage - defenseReduction,
+      incomingDamage * pressure.minimumDamageRatio
+    )));
     const effectiveBlock = Math.round(combat.player.block * (1 - (intent.pierce ?? 0)));
     const blocked = Math.min(effectiveBlock, raw);
     const damage = raw - blocked;

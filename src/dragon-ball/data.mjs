@@ -155,7 +155,7 @@ const forms = [
   ['form-saiyan-6', 'Super Saiyan 3 (SSJ3)', ['saiyan'], 16, 2.35, 1.35, 2],
   ['form-saiyan-7', 'Super Saiyan God', ['saiyan'], 18, 2.55, 1.7, 1],
   ['form-saiyan-8', 'Super Saiyan Blue', ['saiyan'], 19, 2.8, 1.85, 1],
-  ['form-saiyan-9', 'Ultra Instinct Sign', ['saiyan', 'earthling'], 20, 3.0, 2.1, 2, 0.7],
+  ['form-saiyan-9', 'Ultra Instinct Sign', ['saiyan', 'earthling'], 20, 3.0, 2.1, 2, 0.3],
   ['form-earth-1', 'Turtle School Mastery', ['earthling'], 8, 1.25, 1.3, 0],
   ['form-earth-2', 'Crane School Mastery', ['earthling'], 10, 1.35, 1.4, 0],
   ['form-earth-3', 'Four Witches Technique', ['earthling'], 12, 1.55, 1.25, 1],

@@ -608,7 +608,7 @@ test('playing cards spends Ki and applies damage block healing and forms', () =>
   assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-1');
 });
 
-test('Ultra Instinct Sign has a deterministic seventy percent attack dodge chance', () => {
+test('Ultra Instinct Sign has a deterministic thirty percent attack dodge chance', () => {
   const results = Array.from({ length: 1000 }, (_, seed) => attackIsDodged({
     seed,
     turn: 3,
@@ -616,15 +616,15 @@ test('Ultra Instinct Sign has a deterministic seventy percent attack dodge chanc
     player: { activeForm: 'form-saiyan-9' },
   }));
   const dodges = results.filter(Boolean).length;
-  assert.ok(dodges >= 680 && dodges <= 720, `expected about 700 dodges, received ${dodges}`);
+  assert.ok(dodges >= 280 && dodges <= 320, `expected about 300 dodges, received ${dodges}`);
   assert.equal(attackIsDodged({
     seed: 1,
     turn: 1,
     encounter: { id: 'normal-form' },
     player: { activeForm: 'form-saiyan-8' },
   }), false);
-  assert.equal(CARDS['form-saiyan-9'].effect.dodgeChance, 0.7);
-  assert.match(CARDS['form-saiyan-9'].text, /70%/);
+  assert.equal(CARDS['form-saiyan-9'].effect.dodgeChance, 0.3);
+  assert.match(CARDS['form-saiyan-9'].text, /30%/);
 });
 
 test('Ultra Instinct dodge prevents attack damage, debuffs, and Block loss', () => {
@@ -677,6 +677,41 @@ test('Speed reduces incoming damage and grants an extra opening card at thirty',
     return before - state.activeCombat.player.health;
   };
   assert.ok(makeHit(30) < makeHit(0));
+});
+
+test('late campaign and deep tower attacks stay dangerous against extreme Defense', () => {
+  const damageTaken = ({ age, encounter, tower }) => {
+    const base = createDragonBallRun({ origin: 'android', seed: 442 });
+    let state = {
+      ...base,
+      age,
+      currentHealth: 100000,
+      stats: { ...base.stats, health: 100000, defense: 10000, speed: 0 },
+      encounters: encounter.source === 'tower' ? base.encounters : [encounter],
+      tower: tower ?? base.tower,
+    };
+    state = startDragonBallCombat(state, encounter.id);
+    state.activeCombat.intent = { type: 'attack', label: 'Scaling Test', damage: 1000 };
+    const before = state.activeCombat.player.health;
+    state = endCombatTurn(state);
+    return before - state.activeCombat.player.health;
+  };
+
+  const age20Encounter = encountersForAge(20).find((item) => item.type === 'fighter');
+  const age100Encounter = encountersForAge(100).find((item) => item.type === 'fighter');
+  const towerBase = { ...createDragonBallRun({ seed: 443 }), age: 20 };
+  const towerEncounter = generateTowerEncounter(towerBase, 100);
+  const age20Damage = damageTaken({ age: 20, encounter: age20Encounter });
+  const age100Damage = damageTaken({ age: 100, encounter: age100Encounter });
+  const towerDamage = damageTaken({
+    age: 20,
+    encounter: towerEncounter,
+    tower: { ...towerBase.tower, active: true, currentFloor: 100 },
+  });
+
+  assert.equal(age20Damage, 1);
+  assert.ok(age100Damage >= 300, `expected age 100 to deal at least 300, received ${age100Damage}`);
+  assert.ok(towerDamage >= 450, `expected tower floor 100 to deal at least 450, received ${towerDamage}`);
 });
 
 test('unique cards support multi-hit, block piercing, missing-health damage, and exhaust', () => {
