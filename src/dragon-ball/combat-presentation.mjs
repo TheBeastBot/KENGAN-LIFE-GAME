@@ -41,7 +41,7 @@ function cardStages(previous, next, card) {
     label: card.name,
     cardId: card.id,
     sound: card.type === 'form' ? 'charge' : null,
-    duration: 180,
+    duration: 700,
   })];
   const enemyDamage = Math.max(0, (before?.enemy?.health ?? 0) - (after?.enemy?.health ?? 0));
   const healed = Math.max(0, (after?.player?.health ?? 0) - (before?.player?.health ?? 0));

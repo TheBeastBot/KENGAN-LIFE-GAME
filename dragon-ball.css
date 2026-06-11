@@ -382,10 +382,21 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .combatant { min-height: 240px; grid-template-columns: 1fr 110px; padding: 15px; }
   .combatant.player { grid-template-columns: 110px 1fr; }
   .combatant img { width: 110px; height: 180px; }
+  .combat-stage-card-focus .combat-effect-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 125;
+    height: 100dvh;
+    padding-top: max(env(safe-area-inset-top),16px);
+    padding-bottom: max(env(safe-area-inset-bottom),16px);
+    overflow: hidden;
+    background: radial-gradient(circle at center,#0a326a44,#020817aa);
+  }
   .combat-effect-copy { position: absolute; top: 42%; }
   .combat-effect-copy > b { font-size: clamp(1.55rem,8vw,3.2rem); }
-  .combat-card-callout { bottom: 7%; width: min(150px,calc(100% - 40px)); padding: 6px; box-shadow: 5px 6px 0 #0008; }
-  .combat-card-callout img { height: 82px; }
+  .combat-stage-card-focus .combat-effect-copy { top: max(calc(env(safe-area-inset-top) + 72px),16%); left: 16px; }
+  .combat-stage-card-focus .combat-card-callout { top: 45%; bottom: auto; width: min(210px,calc(100vw - 48px)); padding: 6px; box-shadow: 5px 6px 0 #0008; }
+  .combat-stage-card-focus .combat-card-callout img { height: min(29dvh,180px); object-fit: contain; background: #020817; }
   .combat-card-callout b { padding-top: 5px; font-size: .8rem; line-height: 1.05; overflow-wrap: anywhere; }
   .combat-aura { width: 180px; height: 300px; }
   .combat-beam { left: 13%; right: 13%; height: 34px; }

@@ -966,6 +966,23 @@ test('combat sequences classify Dragon Ball card and enemy effects', () => {
   assert.equal(buildCombatSequence(ultimateBefore, ultimateAfter, { type: 'enemyTurn' })[0].kind, 'ultimate-warning');
 });
 
+test('full-motion card reveals leave enough time for mobile rendering', () => {
+  const card = CARDS['tower-card-2'];
+  const previous = createDragonBallRun({ seed: 703 });
+  const next = structuredClone(previous);
+  previous.activeCombat = {
+    player: { health: 100, block: 0, ki: 3, focus: 0 },
+    enemy: { health: 100 },
+  };
+  next.activeCombat = {
+    player: { health: 100, block: 0, ki: 1, focus: 0 },
+    enemy: { health: 72 },
+  };
+  const [reveal] = buildCombatSequence(previous, next, { type: 'card', card });
+  assert.equal(reveal.kind, 'card-focus');
+  assert.ok(reveal.duration >= 700);
+});
+
 test('combat sequences expose status, victory, defeat, and transformation preview stages', () => {
   const base = createDragonBallRun({ origin: 'saiyan', seed: 713 });
   const encounter = base.encounters.find((item) => item.type === 'fighter');
@@ -1117,6 +1134,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(css, /combat-stage-dodge/);
   assert.match(css, /\.combat-card-callout\s*\{[^}]*max-width:\s*calc\(100% - 32px\)/s);
   assert.match(css, /\.combat-effect-copy\s*\{[^}]*width:\s*calc\(100% - 32px\)/s);
+  assert.match(css, /\.combat-stage-card-focus \.combat-effect-layer\s*\{[^}]*position:\s*fixed/s);
+  assert.match(css, /padding-top:\s*max\(env\(safe-area-inset-top\),16px\)/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /\.recovery-grid/);
   assert.match(css, /\.tower-screen/);
