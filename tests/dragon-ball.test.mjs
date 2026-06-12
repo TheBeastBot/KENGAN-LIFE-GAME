@@ -867,6 +867,24 @@ test('Age Up is gated by all encounters and clears injuries while reducing coold
   assert.equal(state.currentHealth, state.stats.health);
 });
 
+test('Age Up preserves an active Infinite Tower climb', () => {
+  let state = createDragonBallRun({ seed: 92 });
+  state = {
+    ...state,
+    age: 12,
+    encounters: encountersForAge(12),
+    tower: { ...state.tower, active: true, currentFloor: 14, highestFloor: 18 },
+  };
+  state.clearedEncounterIds = state.encounters.map((item) => item.id);
+  assert.equal(canAgeUp(state), true);
+  state = beginAgeReward(state);
+  state = advanceAfterAgeDraft(state, state.pendingDraft.options[0]);
+  assert.equal(state.age, 13);
+  assert.equal(state.tower.active, true);
+  assert.equal(state.tower.currentFloor, 14);
+  assert.equal(state.tower.highestFloor, 18);
+});
+
 test('age 20 reward advances into the extended campaign', () => {
   let state = createDragonBallRun({ seed: 102 });
   state = {
@@ -1108,6 +1126,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /length:\s*95/);
   assert.match(appSource, /setTowerLoadout/);
   assert.match(appSource, /tower-fight/);
+  assert.match(appSource, /tower-age-up/);
+  assert.match(appSource, /Age Up Without Ending The Climb/);
   assert.match(appSource, /shuffled into every combat/);
   assert.match(appSource, /Recovery Center/);
   assert.match(appSource, /buyRecoveryService/);

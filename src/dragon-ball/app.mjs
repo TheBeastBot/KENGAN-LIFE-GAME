@@ -353,6 +353,8 @@ function renderTower() {
   const equipped = new Set(state.tower.loadout);
   const ownedIds = TOWER_CARD_IDS.filter((id) => state.tower.cards[id]);
   const nextBoss = boss ? floor : floor + (5 - floor % 5);
+  const clearedCount = state.encounters.filter((item) => state.clearedEncounterIds.includes(item.id)).length;
+  const ageReady = canAgeUp(state);
   return `
     <section class="tower-screen">
       <article class="tower-hero">
@@ -416,6 +418,15 @@ function renderTower() {
           <p class="tower-loadout-note">Equipped cards are shuffled into every combat alongside your normal deck and Injury cards. They never count toward the 20-card limit.</p>
         </article>
       </div>
+
+      <article class="age-up-panel tower-age-up ${ageReady ? 'ready' : ''}">
+        <div>
+          <p>Campaign Progress During Tower Run</p>
+          <h3>${clearedCount}/${state.encounters.length} Encounters Cleared</h3>
+          <span>${ageReady ? 'Age Up Without Ending The Climb. Your floor and Tower progress will be preserved.' : 'Clear the remaining campaign encounters, then return here to Age Up without ending this climb.'}</span>
+        </div>
+        <button class="db-primary" data-action="age-up" ${ageReady ? '' : 'disabled'}>${state.age === 100 ? 'Next Eternal Saga' : 'Age Up'}</button>
+      </article>
 
       <article class="tower-collection-panel">
         <header>

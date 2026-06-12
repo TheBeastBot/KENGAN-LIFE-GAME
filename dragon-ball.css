@@ -218,6 +218,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .tower-loadout-note { margin-top: auto; padding-top: 16px; font-size: .78rem; line-height: 1.45; }
 .tower-collection-panel > header { margin-bottom: 18px; }
 .tower-card-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 15px; }
+.tower-age-up { margin: 22px 0; }
 .tower-locked { min-height: 500px; display: grid; place-content: center; justify-items: center; text-align: center; padding: 35px; color: white; border: 4px solid #8e41dc; background: radial-gradient(circle,#422071,#090d25 65%); }
 .tower-locked .tower-sigil { width: 110px; height: 110px; display: grid; place-items: center; color: var(--gold); border: 5px solid #e8bcff; border-radius: 50%; font-size: 4rem; font-weight: 1000; box-shadow: 0 0 35px #b24dff; }
 .tower-locked p { margin: 24px 0 0; color: #e8bcff; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
