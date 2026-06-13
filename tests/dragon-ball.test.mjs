@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { access, readFile } from 'node:fs/promises';
 
 import {
   CARDS, COMBAT_CARD_IDS, DRAGON_BALL_SAVE_KEY, ENCOUNTERS_BY_AGE,
-  LEGENDARY_SAIYAN_CARD_IDS, LEGENDARY_SAIYAN_FORM_IDS, ORIGINS,
+  LEGENDARY_SAIYAN_CARD_IDS, LEGENDARY_SAIYAN_FORM_IDS, ORIGINS, TOWER_CARD_IDS,
 } from '../src/dragon-ball/data.mjs';
 import {
   createRewardDraft, encountersForAge, enemyForEncounter, legendarySaiyanEncountersForAge,
@@ -119,6 +120,36 @@ test('Legendary Saiyan portraits and exclusive card illustrations are stored loc
   ];
   await Promise.all(files.map((file) =>
     access(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+});
+
+test('every Infinite Tower card has unique locally stored artwork', async () => {
+  const files = [
+    'card-tower-infinite-breaker.jpg',
+    'card-tower-hundred-floor-rush.jpg',
+    'card-tower-abyss-reversal.jpg',
+    'card-tower-immortal-senzu.jpg',
+    'card-tower-limitless-reactor.jpg',
+    'card-tower-phantom-floor.jpg',
+    'card-tower-desperation-nova.jpg',
+    'card-tower-spirit-fountain.jpg',
+    'card-tower-ascension-pulse.jpg',
+    'card-tower-sky-splitting-beam.jpg',
+    'card-tower-pressure-collapse.jpg',
+    'card-tower-perfect-recovery.jpg',
+    'card-tower-dragon-staircase.jpg',
+    'card-tower-unbroken-guard.jpg',
+    'card-tower-form-resonance.jpg',
+    'card-tower-zero-mortal-flash.jpg',
+    'card-tower-temporal-reset.jpg',
+    'card-tower-tower-zenkai.jpg',
+    'card-tower-absolute-counter.jpg',
+    'card-tower-endless-horizon.jpg',
+  ];
+  const images = await Promise.all(files.map((file) =>
+    readFile(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+  const hashes = images.map((image) => createHash('sha256').update(image).digest('hex'));
+  assert.equal(files.length, TOWER_CARD_IDS.length);
+  assert.equal(new Set(hashes).size, TOWER_CARD_IDS.length);
 });
 
 test('standard Saiyans cannot draft or equip Legendary lineage cards', () => {
@@ -1284,6 +1315,9 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /const SAIYAN_FORM_ART/);
   assert.match(appSource, /const LEGENDARY_SAIYAN_FORM_ART/);
   assert.match(appSource, /const LEGENDARY_SAIYAN_CARD_ART/);
+  assert.match(appSource, /const TOWER_CARD_ART/);
+  assert.match(appSource, /card-tower-infinite-breaker\.jpg/);
+  assert.match(appSource, /card-tower-endless-horizon\.jpg/);
   assert.match(appSource, /renderLineageReveal/);
   assert.match(appSource, /acknowledge-lineage/);
   assert.match(appSource, /Unbound Growth/);

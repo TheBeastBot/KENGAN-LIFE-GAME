@@ -70,6 +70,28 @@ const LEGENDARY_SAIYAN_CARD_ART = {
   'legendary-eruption-counter': 'card-legendary-eruption-counter.jpg',
   'legendary-cataclysm': 'card-legendary-cataclysm.jpg',
 };
+const TOWER_CARD_ART = {
+  'tower-card-1': 'card-tower-infinite-breaker.jpg',
+  'tower-card-2': 'card-tower-hundred-floor-rush.jpg',
+  'tower-card-3': 'card-tower-abyss-reversal.jpg',
+  'tower-card-4': 'card-tower-immortal-senzu.jpg',
+  'tower-card-5': 'card-tower-limitless-reactor.jpg',
+  'tower-card-6': 'card-tower-phantom-floor.jpg',
+  'tower-card-7': 'card-tower-desperation-nova.jpg',
+  'tower-card-8': 'card-tower-spirit-fountain.jpg',
+  'tower-card-9': 'card-tower-ascension-pulse.jpg',
+  'tower-card-10': 'card-tower-sky-splitting-beam.jpg',
+  'tower-card-11': 'card-tower-pressure-collapse.jpg',
+  'tower-card-12': 'card-tower-perfect-recovery.jpg',
+  'tower-card-13': 'card-tower-dragon-staircase.jpg',
+  'tower-card-14': 'card-tower-unbroken-guard.jpg',
+  'tower-card-15': 'card-tower-form-resonance.jpg',
+  'tower-card-16': 'card-tower-zero-mortal-flash.jpg',
+  'tower-card-17': 'card-tower-temporal-reset.jpg',
+  'tower-card-18': 'card-tower-tower-zenkai.jpg',
+  'tower-card-19': 'card-tower-absolute-counter.jpg',
+  'tower-card-20': 'card-tower-endless-horizon.jpg',
+};
 
 function hasLegendaryLineage(target = state) {
   return target?.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE;
@@ -96,6 +118,7 @@ function characterArt(originId = state?.origin ?? setupOrigin, activeFormId = nu
 
 function cardArt(item) {
   if (!item) return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
+  if (TOWER_CARD_ART[item.id]) return `${GENERATED_ASSET_ROOT}/${TOWER_CARD_ART[item.id]}`;
   if (LEGENDARY_SAIYAN_CARD_ART[item.id]) return `${GENERATED_ASSET_ROOT}/${LEGENDARY_SAIYAN_CARD_ART[item.id]}`;
   if (item.type === 'form' && saiyanFormArt(item.id)) return saiyanFormArt(item.id);
   if (item.type === 'form') return `${GENERATED_ASSET_ROOT}/card-form.jpg`;
