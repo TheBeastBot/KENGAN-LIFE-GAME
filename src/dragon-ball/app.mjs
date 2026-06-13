@@ -179,7 +179,7 @@ function renderSetup() {
               <img src="${originArt(item.id)}" alt="">
               <strong>${item.name}</strong>
               <span>${item.passive}</span>
-              <small>${item.passiveText}${item.id === 'saiyan' ? ' Each new Saiyan has a 20% chance to awaken the Legendary Super Saiyan lineage.' : ''}</small>
+              <small>${item.passiveText}${item.id === 'saiyan' ? ' Each new Saiyan has a 50% chance to awaken the Legendary Super Saiyan lineage.' : ''}</small>
             </button>
           `).join('')}
         </div>
@@ -603,7 +603,7 @@ function renderLineageReveal() {
     <section class="lineage-reveal" role="dialog" aria-modal="true" aria-labelledby="lineage-reveal-title">
       <div class="lineage-energy"></div>
       <article>
-        <p>One Warrior In Five</p>
+        <p>One Warrior In Two</p>
         <img src="${GENERATED_ASSET_ROOT}/origin-saiyan-legendary.jpg" alt="Legendary Super Saiyan ${escapeHtml(state.name)}">
         <span class="lineage-badge">Rare Lineage Awakened</span>
         <h2 id="lineage-reveal-title">Legendary Super Saiyan</h2>

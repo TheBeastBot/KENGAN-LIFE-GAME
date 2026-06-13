@@ -48,10 +48,10 @@ test('Dragon Ball catalog provides large authored campaign content', () => {
   }
 });
 
-test('new Saiyan runs deterministically roll a twenty percent Legendary lineage', () => {
+test('new Saiyan runs deterministically roll a fifty percent Legendary lineage', () => {
   const results = Array.from({ length: 1000 }, (_, seed) => createDragonBallRun({ origin: 'saiyan', seed }));
   const legendary = results.filter((state) => state.saiyanLineage === 'legendary-super-saiyan');
-  assert.ok(legendary.length >= 170 && legendary.length <= 230, `expected roughly 20%, received ${legendary.length / 10}%`);
+  assert.ok(legendary.length >= 450 && legendary.length <= 550, `expected roughly 50%, received ${legendary.length / 10}%`);
   for (let seed = 0; seed < 100; seed += 1) {
     assert.equal(
       createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage,
@@ -661,7 +661,7 @@ test('tower defeat adds an Injury, records the highest floor, and resets the run
 });
 
 test('harder enemy curve requires multiple turns and gives bosses a major advantage', () => {
-  const early = createDragonBallRun({ seed: 45 });
+  const early = createDragonBallRun({ seed: 45, lineageOverride: 'standard' });
   const earlyFight = early.encounters.find((item) => item.type === 'fighter');
   const earlyEnemy = enemyForEncounter(early, earlyFight);
   assert.ok(earlyEnemy.maxHealth > early.stats.health);

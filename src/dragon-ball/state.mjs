@@ -75,7 +75,7 @@ export function createDragonBallRun({
   const numericSeed = Number(seed);
   const runSeed = Number.isFinite(numericSeed) ? numericSeed : Date.now();
   const rolledLineage = selected.id === 'saiyan' &&
-    createRng(hashSeed(runSeed, LEGENDARY_SAIYAN_LINEAGE))() < 0.2
+    createRng(hashSeed(runSeed, LEGENDARY_SAIYAN_LINEAGE))() < 0.5
     ? LEGENDARY_SAIYAN_LINEAGE
     : selected.id === 'saiyan' ? 'standard' : null;
   const saiyanLineage = selected.id === 'saiyan'
