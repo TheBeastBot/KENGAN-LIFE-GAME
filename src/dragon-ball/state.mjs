@@ -1,7 +1,9 @@
 import {
-  CARDS, COMBAT_CARD_IDS, DRAGON_BALL_VERSION, INJURY_CARDS, ORIGINS, STAT_KEYS,
+  CARDS, COMBAT_CARD_IDS, DRAGON_BALL_VERSION, INJURY_CARDS, LEGENDARY_SAIYAN_LINEAGE,
+  ORIGINS, STAT_KEYS,
 } from './data.mjs';
-import { createRewardDraft, encountersForAge } from './campaign.mjs';
+import { createRewardDraft, encountersForAge, legendarySaiyanEncountersForAge } from './campaign.mjs';
+import { createRng, hashSeed } from './random.mjs';
 import { createTowerState, normalizeTowerState } from './tower.mjs';
 
 const clone = (value) => structuredClone(value);
@@ -58,28 +60,58 @@ export function combatRewardFor(state, encounter) {
   return Math.round(base * (encounter.type === 'specialFight' ? 2 : 1));
 }
 
-export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = Date.now() } = {}) {
+export function createDragonBallRun({
+  name = 'Hero', origin = 'saiyan', seed = Date.now(), lineageOverride,
+} = {}) {
   const selected = ORIGINS[origin] ?? ORIGINS.saiyan;
+  const numericSeed = Number(seed);
+  const runSeed = Number.isFinite(numericSeed) ? numericSeed : Date.now();
+  const rolledLineage = selected.id === 'saiyan' &&
+    createRng(hashSeed(runSeed, LEGENDARY_SAIYAN_LINEAGE))() < 0.2
+    ? LEGENDARY_SAIYAN_LINEAGE
+    : selected.id === 'saiyan' ? 'standard' : null;
+  const saiyanLineage = selected.id === 'saiyan'
+    ? (lineageOverride === LEGENDARY_SAIYAN_LINEAGE ? LEGENDARY_SAIYAN_LINEAGE
+      : lineageOverride === 'standard' ? 'standard' : rolledLineage)
+    : null;
+  const legendary = saiyanLineage === LEGENDARY_SAIYAN_LINEAGE;
+  const stats = {
+    ...selected.stats,
+    ...(legendary ? {
+      health: selected.stats.health + 18,
+      power: selected.stats.power + 4,
+      defense: selected.stats.defense + 2,
+      ki: selected.stats.ki + 2,
+    } : {}),
+  };
+  const deck = selected.deck.map((id) => legendary && id === 'tail-sweep' ? 'legendary-primal-roar' : id);
   return {
     version: DRAGON_BALL_VERSION,
-    seed: Number(seed) || Date.now(),
+    seed: runSeed,
     name: String(name).trim().slice(0, 24) || 'Hero',
     origin: selected.id,
+    saiyanLineage,
+    lineageRevealPending: legendary,
     age: 6,
     ageCycle: 0,
     zeni: 80,
-    stats: { ...selected.stats },
-    currentHealth: selected.stats.health,
-    collection: Object.fromEntries([...new Set(selected.deck)].map((id) => [id, selected.deck.filter((cardId) => cardId === id).length])),
-    deck: [...selected.deck],
+    stats,
+    currentHealth: stats.health,
+    collection: Object.fromEntries([...new Set(deck)].map((id) => [id, deck.filter((cardId) => cardId === id).length])),
+    deck,
     injuries: [],
     cooldowns: {},
     tower: createTowerState(),
-    encounters: encountersForAge(6),
+    encounters: legendary ? legendarySaiyanEncountersForAge(6) : encountersForAge(6),
     clearedEncounterIds: [],
     pendingDraft: null,
     activeCombat: null,
-    history: [{ type: 'origin', text: `${selected.name} journey begun at age 6.` }],
+    history: [{
+      type: legendary ? 'lineage' : 'origin',
+      text: legendary
+        ? `${selected.name} journey begun at age 6. The Legendary Super Saiyan lineage has awakened.`
+        : `${selected.name} journey begun at age 6.`,
+    }],
     completed: false,
     ending: null,
   };
@@ -88,24 +120,34 @@ export function createDragonBallRun({ name = 'Hero', origin = 'saiyan', seed = D
 export function normalizeDragonBallState(input) {
   if (!input || typeof input !== 'object') return null;
   const origin = ORIGINS[input.origin] ? input.origin : 'saiyan';
-  const fallback = createDragonBallRun({ name: input.name, origin, seed: input.seed });
+  const saiyanLineage = origin === 'saiyan' && input.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE
+    ? LEGENDARY_SAIYAN_LINEAGE
+    : origin === 'saiyan' ? 'standard' : null;
+  const fallback = createDragonBallRun({
+    name: input.name, origin, seed: input.seed, lineageOverride: saiyanLineage,
+  });
   const age = clamp(Math.floor(input.age ?? 6), 6, 100);
   const ageCycle = age === 100 ? Math.max(0, Math.floor(Number(input.ageCycle) || 0)) : 0;
   const stats = Object.fromEntries(STAT_KEYS.map((key) => [key, Math.max(1, Math.floor(input.stats?.[key] ?? fallback.stats[key]))]));
   const collection = {};
   for (const [id, count] of Object.entries(input.collection ?? {})) {
-    if (CARDS[id] && !CARDS[id].towerOnly && CARDS[id].type !== 'stat' && CARDS[id].type !== 'injury') {
+    if (CARDS[id] && !CARDS[id].towerOnly && CARDS[id].type !== 'stat' && CARDS[id].type !== 'injury' &&
+      (!CARDS[id].lineages?.length || CARDS[id].lineages.includes(saiyanLineage))) {
       collection[id] = clamp(Math.floor(count), 1, 9);
     }
   }
   for (const id of fallback.deck) collection[id] = Math.max(collection[id] ?? 0, fallback.deck.filter((cardId) => cardId === id).length);
   const deck = Array.isArray(input.deck) ? input.deck.filter((id) => CARDS[id] && collection[id]) : fallback.deck;
-  const validation = validateDeck({ ...fallback, origin, age, collection, cooldowns: input.cooldowns ?? {} }, deck);
+  const validation = validateDeck({
+    ...fallback, origin, saiyanLineage, age, collection, cooldowns: input.cooldowns ?? {},
+  }, deck);
   return {
     ...fallback,
     ...input,
     version: DRAGON_BALL_VERSION,
     origin,
+    saiyanLineage,
+    lineageRevealPending: saiyanLineage === LEGENDARY_SAIYAN_LINEAGE && Boolean(input.lineageRevealPending),
     age,
     ageCycle,
     zeni: input.zeni === undefined ? fallback.zeni : Math.max(0, Math.floor(Number(input.zeni) || 0)),
@@ -116,7 +158,11 @@ export function normalizeDragonBallState(input) {
     injuries: Array.isArray(input.injuries) ? input.injuries.filter((id) => INJURY_CARDS.some((item) => item.id === id)).slice(0, 5) : [],
     cooldowns: Object.fromEntries(Object.entries(input.cooldowns ?? {}).filter(([id, value]) => CARDS[id] && Number(value) > 0).map(([id, value]) => [id, Math.floor(value)])),
     tower: normalizeTowerState(input.tower),
-    encounters: Array.isArray(input.encounters) && input.encounters.length ? input.encounters : encountersForAge(age, ageCycle),
+    encounters: Array.isArray(input.encounters) && input.encounters.length
+      ? input.encounters
+      : saiyanLineage === LEGENDARY_SAIYAN_LINEAGE
+        ? legendarySaiyanEncountersForAge(age, ageCycle)
+        : encountersForAge(age, ageCycle),
     clearedEncounterIds: Array.isArray(input.clearedEncounterIds) ? input.clearedEncounterIds : [],
     pendingDraft: input.pendingDraft?.options?.length === 3 ? input.pendingDraft : null,
     activeCombat: input.activeCombat ?? null,
@@ -137,6 +183,7 @@ export function validateDeck(state, deck = state.deck) {
     if (!state.collection[id]) return { valid: false, reason: `${item.name} is not owned.` };
     if ((item.minAge ?? 6) > state.age) return { valid: false, reason: `${item.name} requires age ${item.minAge}.` };
     if (item.origins?.length && !item.origins.includes(state.origin)) return { valid: false, reason: `${item.name} is incompatible with this origin.` };
+    if (item.lineages?.length && !item.lineages.includes(state.saiyanLineage)) return { valid: false, reason: `${item.name} requires the Legendary Super Saiyan lineage.` };
     if ((state.cooldowns[id] ?? 0) > 0) return { valid: false, reason: `${item.name} is cooling down for ${state.cooldowns[id]} Age Ups.` };
     counts[id] = (counts[id] ?? 0) + 1;
     const limit = item.type === 'form' || item.rarity === 'legendary' ? 1 : Math.min(2, state.collection[id]);
@@ -221,7 +268,9 @@ export function advanceAfterAgeDraft(state, cardId) {
     currentHealth: claimed.stats.health,
     injuries: [],
     cooldowns,
-    encounters: encountersForAge(nextAge, nextCycle),
+    encounters: claimed.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE
+      ? legendarySaiyanEncountersForAge(nextAge, nextCycle)
+      : encountersForAge(nextAge, nextCycle),
     clearedEncounterIds: [],
     completed: false,
     ending: null,

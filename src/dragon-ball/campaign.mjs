@@ -1,4 +1,6 @@
-import { AGE_REWARD_NAMES, CARDS, ENCOUNTERS_BY_AGE, STAT_CARD_IDS } from './data.mjs';
+import {
+  AGE_REWARD_NAMES, CARDS, ENCOUNTERS_BY_AGE, LEGENDARY_SAIYAN_LINEAGE, STAT_CARD_IDS,
+} from './data.mjs';
 import { hashSeed, sample } from './random.mjs';
 
 const LATE_SAGA_TIERS = ['Ascended', 'Legacy', 'Master', 'Divine', 'Eternal', 'Infinite'];
@@ -45,6 +47,35 @@ export function encountersForAge(age, cycle = 0) {
   });
 }
 
+const LEGENDARY_MILESTONES = {
+  8: { name: 'The Great Ape Within', type: 'specialMentor' },
+  11: { name: 'Awakening of the Green Legend', type: 'specialFight' },
+  14: { name: 'Berserker Control Trial', type: 'specialMentor' },
+  17: { name: 'The Unbreakable Legendary Rival', type: 'specialFight' },
+  20: { name: 'Gods Tremble Before the Legend', type: 'specialFight' },
+};
+
+export function legendarySaiyanEncountersForAge(age, cycle = 0) {
+  const encounters = encountersForAge(age, cycle);
+  const templateAge = age <= 20 ? age : 6 + ((age - 6) % 15);
+  const milestone = LEGENDARY_MILESTONES[templateAge];
+  if (!milestone) return encounters;
+  const replaceIndex = encounters.findIndex((item) => item.type === milestone.type);
+  if (replaceIndex < 0) return encounters;
+  const source = encounters[replaceIndex];
+  encounters[replaceIndex] = {
+    ...source,
+    id: `${source.id}-legendary-lineage`,
+    name: age > 20 ? `${milestone.name} · Ascended Echo` : milestone.name,
+    type: milestone.type,
+    reward: 'legendarySaiyan',
+    legendarySaiyanMilestone: true,
+    difficulty: milestone.type === 'specialFight' ? Math.max(3, source.difficulty + 1) : 0,
+    enemyPower: milestone.type === 'specialFight' ? Math.round(source.enemyPower * 1.3) : 0,
+  };
+  return encounters;
+}
+
 export function cardIsEligible(card, state, { includeStats = false, legendary = false } = {}) {
   if (!card) return false;
   if (card.towerOnly) return false;
@@ -52,6 +83,7 @@ export function cardIsEligible(card, state, { includeStats = false, legendary = 
   if (card.type === 'injury') return false;
   if ((card.minAge ?? 6) > state.age) return false;
   if (card.origins?.length && !card.origins.includes(state.origin)) return false;
+  if (card.lineages?.length && !card.lineages.includes(state.saiyanLineage)) return false;
   if (legendary && card.rarity !== 'legendary') return false;
   return true;
 }
@@ -60,6 +92,9 @@ export function createRewardDraft(state, kind, sourceId = 'reward') {
   let pool;
   if (kind === 'stat') {
     pool = STAT_CARD_IDS.map((id) => CARDS[id]).filter((item) => (item.minAge ?? 6) <= state.age + 3);
+  } else if (kind === 'legendarySaiyan') {
+    pool = Object.values(CARDS).filter((item) =>
+      item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) && cardIsEligible(item, state));
   } else {
     const legendary = kind === 'legendary';
     pool = Object.values(CARDS).filter((item) => cardIsEligible(item, state, { legendary }));
@@ -70,7 +105,7 @@ export function createRewardDraft(state, kind, sourceId = 'reward') {
   }
   const owned = new Set(Object.keys(state.collection ?? {}));
   pool.sort((a, b) => Number(owned.has(a.id)) - Number(owned.has(b.id)));
-  if (kind === 'special' || kind === 'legendary') {
+  if (kind === 'special' || kind === 'legendary' || kind === 'legendarySaiyan') {
     const forms = pool.filter((item) => item.type === 'form');
     if (forms.length) {
       const unownedForms = forms.filter((item) => !owned.has(item.id));

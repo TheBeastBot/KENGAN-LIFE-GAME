@@ -1,4 +1,4 @@
-import { CARDS, ORIGINS } from './data.mjs';
+import { CARDS, LEGENDARY_SAIYAN_LINEAGE, ORIGINS } from './data.mjs';
 import { enemyForEncounter } from './campaign.mjs';
 import { createRng, hashSeed, shuffle } from './random.mjs';
 import { recordCombatDefeat, recordCombatVictory, validateDeck } from './state.mjs';
@@ -61,7 +61,8 @@ export function startDragonBallCombat(state, encounterId) {
   const validation = validateDeck(state);
   if (!validation.valid) return state;
   const seed = hashSeed(state.seed, encounter.id, state.history.length);
-  const originKi = ORIGINS[state.origin].id === 'android' ? 4 : 3;
+  const originKi = ORIGINS[state.origin].id === 'android' ||
+    state.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE ? 4 : 3;
   const maxKi = originKi + Math.min(2, Math.floor(state.stats.ki / 20));
   const combat = {
     seed,
@@ -226,7 +227,9 @@ export function endCombatTurn(state) {
     combat.player.health = Math.max(0, combat.player.health - damage);
     if (intent.weak) combat.player.weak += intent.weak;
     if (intent.burn) combat.player.burn += intent.burn;
-    if (state.origin === 'saiyan' && damage > 0) combat.player.focus += 1;
+    if (state.origin === 'saiyan' && damage > 0) {
+      combat.player.focus += state.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE ? 2 : 1;
+    }
     combat.log.unshift(`${combat.enemy.name} uses ${intent.label} for ${damage} damage.`);
   }
   if (combat.player.burn > 0) {

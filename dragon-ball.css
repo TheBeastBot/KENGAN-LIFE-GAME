@@ -62,6 +62,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .fighter-title p { color: var(--gold); font-weight: 900; text-transform: uppercase; font-size: .72rem; letter-spacing: .12em; }
 .fighter-title h1 { font-size: 1.9rem; text-transform: uppercase; font-style: italic; }
 .fighter-title span { opacity: .75; font-size: .85rem; }
+.legendary-header { border-bottom-color: #85ff38; background: linear-gradient(110deg,#03150d,#08391f 55%,#153d0b); box-shadow: inset 0 -18px 36px #70ff3b18; }
+.legendary-header .fighter-title img { border-color: #b5ff4a; box-shadow: 0 0 22px #6dff3b; }
+.legendary-header .fighter-title p, .legendary-header .header-meter strong { color: #b5ff4a; }
 .header-meter span { font-weight: 900; font-size: .8rem; }
 .header-meter strong { display: block; margin-top: 7px; color: var(--gold); font-size: .85rem; text-transform: uppercase; }
 .header-meter i, .combat-health i { height: 14px; display: block; background: #020815; border: 2px solid white; transform: skew(-12deg); margin-top: 5px; overflow: hidden; }
@@ -90,6 +93,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .encounter-node { position: relative; display: grid; grid-template-columns: 64px 1fr auto; gap: 18px; align-items: center; background: white; border: 3px solid var(--line); padding: 18px; box-shadow: 5px 5px 0 #18223a22; }
 .encounter-node.specialFight { border-color: #9e192d; background: #fff1f1; }
 .encounter-node.specialMentor { border-color: var(--blue); background: #edf5ff; }
+.encounter-node.legendary-milestone { border-color: #47a91e; background: linear-gradient(110deg,#f8ffe8,#d7ffb5); box-shadow: 5px 5px 0 #235b16; }
+.encounter-node.legendary-milestone .encounter-icon { background: #3f9e1a; box-shadow: 0 0 18px #76ff3c; }
 .encounter-node.cleared { opacity: .58; background: #dff6df; }
 .encounter-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--blue); border: 4px solid var(--line); font-weight: 1000; }
 .specialFight .encounter-icon { background: #bd1935; }
@@ -125,6 +130,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .db-card.counter { background: linear-gradient(150deg,#f1e5ff,#c38cff); }
 .db-card.stat { background: linear-gradient(150deg,#fff8df,#f6ce52); }
 .db-card.legendary { border-color: #9a5415; box-shadow: 0 0 18px #ffb300,5px 5px 0 #512400; }
+.db-card.legendary-lineage { color: #f7ffe9; background: linear-gradient(155deg,#15380b,#071c18 68%,#06102a); border-color: #91ff42; box-shadow: 0 0 25px #61ff37aa,5px 5px 0 #07180b; }
+.db-card.legendary-lineage .db-card-top i { background: #51b824; box-shadow: 0 0 12px #8cff4e; }
+.db-card.legendary-lineage .db-card-type { color: #baff78; }
+.db-card.legendary-lineage .db-card-badge { color: #09210c; background: #a8ff5c; }
 .db-card.tower-card { color: white; background: linear-gradient(155deg,#221251,#061d48 72%); border-color: #c991ff; box-shadow: 0 0 22px #7e35de88,5px 5px 0 #130629; }
 .db-card.tower-card .db-card-top i { background: #8e41dc; }
 .db-card.tower-card .db-card-type { color: #efceff; }
@@ -234,6 +243,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .combatant.player { grid-template-columns: 180px 1fr; }
 .combatant img { width: 180px; height: 260px; object-fit: cover; object-position: center 20%; justify-self: center; border: 4px solid #fff; clip-path: polygon(9% 0,100% 0,91% 100%,0 100%); filter: drop-shadow(0 0 18px #55c7ff); transition: filter .25s ease, transform .25s ease; }
 .combatant.player.transformed img { animation: transformed-pulse 1.1s ease-in-out infinite alternate; }
+.combat-screen:has(.combatant.player img[src*="form-legendary"]) .combat-arena { box-shadow: inset 0 0 90px #61ff35aa; }
+.combat-screen:has(.combatant.player img[src*="form-legendary"]) .combatant.player img {
+  filter: drop-shadow(0 0 18px #fff) drop-shadow(0 0 34px #69ff35);
+}
 .combatant.enemy img { transform: scaleX(-1); filter: drop-shadow(0 0 18px #ff663f); }
 .combatant h2 { margin: 4px 0; text-transform: uppercase; font-style: italic; }
 .combatant p { color: var(--gold); font-weight: 900; text-transform: uppercase; }
@@ -348,6 +361,19 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .combat-log p { margin: 0; background: #ffffff12; padding: 7px 10px; font-size: .78rem; }
 
 .draft-overlay, .detail-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: #041127eF; overflow-y: auto; }
+.lineage-reveal { position: fixed; inset: 0; z-index: 180; min-height: 100dvh; display: grid; place-items: center; overflow: hidden; padding: max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom)); color: white; text-align: center; background: radial-gradient(circle at 50% 48%,#79ff4a66 0 12%,#0c542dcc 38%,#020817fa 72%); }
+.lineage-reveal::before, .lineage-reveal::after { content:""; position:absolute; inset:-30%; background: repeating-conic-gradient(from 0deg,transparent 0 8deg,#a5ff5d44 9deg 10deg,transparent 11deg 18deg); animation: lineage-rays 7s linear infinite; }
+.lineage-reveal::after { animation-direction: reverse; animation-duration: 11s; filter: blur(3px); }
+.lineage-reveal article { position: relative; z-index: 2; width: min(560px,100%); display: grid; justify-items: center; padding: clamp(20px,4vw,38px); border: 4px solid #b6ff60; background: linear-gradient(155deg,#071c16e8,#082a19ef 60%,#07132ee8); box-shadow: 0 0 70px #6cff3e99,10px 12px 0 #010705aa; }
+.lineage-reveal article > p:first-child { margin: 0 0 8px; color: #d9ff92; font-size: .72rem; font-weight: 1000; letter-spacing: .2em; text-transform: uppercase; }
+.lineage-reveal img { width: min(270px,65vw); height: min(330px,42dvh); object-fit: cover; object-position: center 18%; border: 4px solid white; box-shadow: 0 0 32px #7dff48; }
+.lineage-reveal h2 { max-width: 500px; margin: 9px 0 4px; color: white; font-size: clamp(2.1rem,8vw,4.7rem); font-style: italic; line-height: .82; text-transform: uppercase; text-shadow: 5px 5px 0 #07120c; }
+.lineage-reveal strong { color: #adff57; letter-spacing: .17em; }
+.lineage-reveal article > p:last-of-type { max-width: 440px; line-height: 1.45; }
+.lineage-badge { margin-top: -14px; padding: 7px 12px; color: #09200c; background: #b5ff55; border: 3px solid #fff; font-size: .7rem; font-weight: 1000; letter-spacing: .12em; text-transform: uppercase; transform: rotate(-2deg); }
+.lineage-energy { position:absolute; width:min(680px,140vw); aspect-ratio:1; border-radius:50%; background: radial-gradient(circle,transparent 30%,#aaff5770 48%,transparent 67%); filter: blur(4px); animation: lineage-energy 1.1s ease-in-out infinite alternate; }
+@keyframes lineage-rays { to { transform:rotate(360deg); } }
+@keyframes lineage-energy { to { transform:scale(1.18); filter:brightness(1.7) blur(2px); } }
 .draft-rays { position: absolute; width: 900px; height: 900px; background: repeating-conic-gradient(#f7c531 0 7deg,transparent 7deg 15deg); opacity: .18; animation: spin 18s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .draft-panel { position: relative; z-index: 2; width: min(900px,100%); text-align: center; color: white; }

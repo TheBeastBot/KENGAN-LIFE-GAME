@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 import {
-  CARDS, COMBAT_CARD_IDS, DRAGON_BALL_SAVE_KEY, ENCOUNTERS_BY_AGE, ORIGINS,
+  CARDS, COMBAT_CARD_IDS, DRAGON_BALL_SAVE_KEY, ENCOUNTERS_BY_AGE,
+  LEGENDARY_SAIYAN_CARD_IDS, LEGENDARY_SAIYAN_FORM_IDS, ORIGINS,
 } from '../src/dragon-ball/data.mjs';
-import { createRewardDraft, encountersForAge, enemyForEncounter, sagaNameForAge } from '../src/dragon-ball/campaign.mjs';
+import {
+  createRewardDraft, encountersForAge, enemyForEncounter, legendarySaiyanEncountersForAge,
+  sagaNameForAge,
+} from '../src/dragon-ball/campaign.mjs';
 import {
   advanceAfterAgeDraft, beginAgeReward, beginEncounter, canAgeUp, claimDraftCard,
   createDragonBallRun, normalizeDragonBallState, setDeck, validateDeck,
@@ -42,6 +46,96 @@ test('Dragon Ball catalog provides large authored campaign content', () => {
   for (let age = 6; age <= 20; age += 1) {
     assert.ok([3, 4].includes(ENCOUNTERS_BY_AGE[age].length));
   }
+});
+
+test('new Saiyan runs deterministically roll a twenty percent Legendary lineage', () => {
+  const results = Array.from({ length: 1000 }, (_, seed) => createDragonBallRun({ origin: 'saiyan', seed }));
+  const legendary = results.filter((state) => state.saiyanLineage === 'legendary-super-saiyan');
+  assert.ok(legendary.length >= 170 && legendary.length <= 230, `expected roughly 20%, received ${legendary.length / 10}%`);
+  for (let seed = 0; seed < 100; seed += 1) {
+    assert.equal(
+      createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage,
+      createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage
+    );
+  }
+  assert.equal(createDragonBallRun({ origin: 'earthling', seed: 1 }).saiyanLineage, null);
+});
+
+test('Legendary Saiyans receive permanent starter bonuses, reveal state, and Primal Roar', () => {
+  const legendarySeed = Array.from({ length: 100 }, (_, seed) => seed)
+    .find((seed) => createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage === 'legendary-super-saiyan');
+  const state = createDragonBallRun({ origin: 'saiyan', seed: legendarySeed });
+  assert.deepEqual(state.stats, { health: 110, power: 16, defense: 9, speed: 9, ki: 11, spirit: 7 });
+  assert.equal(state.currentHealth, 110);
+  assert.equal(state.lineageRevealPending, true);
+  assert.ok(state.deck.includes('legendary-primal-roar'));
+  assert.ok(!state.deck.includes('tail-sweep'));
+  assert.equal(state.collection['legendary-primal-roar'], 1);
+  assert.match(state.history[0].text, /Legendary Super Saiyan/);
+});
+
+test('legacy Saiyan saves normalize to standard lineage without rerolling', () => {
+  const legacy = createDragonBallRun({ origin: 'saiyan', seed: 3 });
+  delete legacy.saiyanLineage;
+  delete legacy.lineageRevealPending;
+  const normalized = normalizeDragonBallState(legacy);
+  assert.equal(normalized.saiyanLineage, 'standard');
+  assert.equal(normalized.lineageRevealPending, false);
+});
+
+test('Legendary Saiyan cards and forms are a complete lineage-exclusive package', () => {
+  assert.equal(LEGENDARY_SAIYAN_FORM_IDS.length, 5);
+  assert.equal(LEGENDARY_SAIYAN_CARD_IDS.length, 10);
+  assert.deepEqual(LEGENDARY_SAIYAN_FORM_IDS.map((id) => CARDS[id].minAge), [8, 11, 14, 17, 20]);
+  assert.ok([...LEGENDARY_SAIYAN_CARD_IDS, ...LEGENDARY_SAIYAN_FORM_IDS]
+    .every((id) => CARDS[id].lineages?.includes('legendary-super-saiyan')));
+});
+
+test('Legendary Saiyan portraits and exclusive card illustrations are stored locally', async () => {
+  const files = [
+    'origin-saiyan-legendary.jpg',
+    'form-legendary-ikari.jpg',
+    'form-legendary-ssj.jpg',
+    'form-legendary-controlled.jpg',
+    'form-legendary-full-power.jpg',
+    'form-legendary-god.jpg',
+    ...LEGENDARY_SAIYAN_CARD_IDS.map((id) => `card-${id}.jpg`),
+  ];
+  await Promise.all(files.map((file) =>
+    access(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+});
+
+test('standard Saiyans cannot draft or equip Legendary lineage cards', () => {
+  const standardSeed = Array.from({ length: 100 }, (_, seed) => seed)
+    .find((seed) => createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage === 'standard');
+  const standard = { ...createDragonBallRun({ origin: 'saiyan', seed: standardSeed }), age: 20 };
+  const legendary = {
+    ...standard,
+    saiyanLineage: 'legendary-super-saiyan',
+    collection: { ...standard.collection, 'legendary-primal-roar': 1 },
+  };
+  assert.equal(validateDeck({ ...standard, collection: { ...standard.collection, 'legendary-primal-roar': 1 } },
+    [...standard.deck.slice(0, 9), 'legendary-primal-roar']).valid, false);
+  assert.equal(validateDeck(legendary, [...legendary.deck.slice(0, 9), 'legendary-primal-roar']).valid, true);
+  for (let index = 0; index < 20; index += 1) {
+    assert.ok(!createRewardDraft(standard, 'legendary', `standard-${index}`)
+      .some((id) => CARDS[id].lineages?.includes('legendary-super-saiyan')));
+  }
+});
+
+test('Legendary milestone ages replace one encounter and draft exclusive rewards', () => {
+  for (const age of [8, 11, 14, 17, 20, 23, 26]) {
+    const standard = encountersForAge(age);
+    const legendary = legendarySaiyanEncountersForAge(age, 0);
+    assert.equal(legendary.length, standard.length);
+    assert.equal(legendary.filter((item) => item.legendarySaiyanMilestone).length, 1);
+  }
+  const base = createDragonBallRun({ origin: 'saiyan', seed: 1 });
+  const state = { ...base, age: 20, saiyanLineage: 'legendary-super-saiyan' };
+  const draft = createRewardDraft(state, 'legendarySaiyan', 'lineage-milestone');
+  assert.equal(draft.length, 3);
+  assert.ok(draft.every((id) => CARDS[id].lineages?.includes('legendary-super-saiyan')));
+  assert.ok(draft.some((id) => CARDS[id].type === 'form'));
 });
 
 test('Infinite Tower provides thirty enemies and twenty exclusive cards', async () => {
@@ -591,7 +685,7 @@ test('special fights gain an enraging block-piercing ultimate', () => {
 });
 
 test('playing cards spends Ki and applies damage block healing and forms', () => {
-  let state = createDragonBallRun({ origin: 'saiyan', seed: 55 });
+  let state = createDragonBallRun({ origin: 'saiyan', seed: 55, lineageOverride: 'standard' });
   const encounter = state.encounters.find((item) => item.type === 'fighter');
   state = startDragonBallCombat(state, encounter.id);
   state.activeCombat.hand = ['driving-kick', 'guard-stance', 'battle-breath', 'form-saiyan-1'];
@@ -610,6 +704,40 @@ test('playing cards spends Ki and applies damage block healing and forms', () =>
   state.activeCombat.player.ki = 3;
   state = playCombatCard(state, 0);
   assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-1');
+});
+
+test('Legendary Saiyan Unbound Growth grants extra maximum Ki and two Focus after damage', () => {
+  const seed = Array.from({ length: 100 }, (_, value) => value)
+    .find((value) => createDragonBallRun({ origin: 'saiyan', seed: value }).saiyanLineage === 'legendary-super-saiyan');
+  let state = createDragonBallRun({ origin: 'saiyan', seed });
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  assert.equal(state.activeCombat.player.maxKi, 4);
+  state.activeCombat.player.block = 0;
+  state.activeCombat.player.focus = 0;
+  state.activeCombat.intent = { type: 'attack', label: 'Lineage Test', damage: 10 };
+  state = endCombatTurn(state);
+  assert.equal(state.activeCombat.player.focus, 2);
+});
+
+test('Legendary forms replace one another and apply their authored multipliers', () => {
+  const seed = Array.from({ length: 100 }, (_, value) => value)
+    .find((value) => createDragonBallRun({ origin: 'saiyan', seed: value }).saiyanLineage === 'legendary-super-saiyan');
+  let state = { ...createDragonBallRun({ origin: 'saiyan', seed }), age: 20 };
+  state.collection = {
+    ...state.collection,
+    'form-legendary-ikari': 1,
+    'form-legendary-god': 1,
+  };
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.hand = ['form-legendary-ikari', 'form-legendary-god'];
+  state.activeCombat.player.ki = 6;
+  state = playCombatCard(state, 0);
+  assert.equal(state.activeCombat.player.activeForm, 'form-legendary-ikari');
+  state = playCombatCard(state, 0);
+  assert.equal(state.activeCombat.player.activeForm, 'form-legendary-god');
+  assert.equal(CARDS[state.activeCombat.player.activeForm].effect.powerMultiplier, 4.5);
 });
 
 test('Ultra Instinct Sign has a deterministic thirty percent attack dodge chance', () => {
@@ -1138,6 +1266,14 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /assets\/dragon-ball\/generated/);
   assert.match(appSource, /origin-\$\{originId\}\.jpg/);
   assert.match(appSource, /const SAIYAN_FORM_ART/);
+  assert.match(appSource, /const LEGENDARY_SAIYAN_FORM_ART/);
+  assert.match(appSource, /const LEGENDARY_SAIYAN_CARD_ART/);
+  assert.match(appSource, /renderLineageReveal/);
+  assert.match(appSource, /acknowledge-lineage/);
+  assert.match(appSource, /Unbound Growth/);
+  assert.match(appSource, /LEGENDARY_SAIYAN_LINEAGE/);
+  assert.match(css, /\.lineage-reveal/);
+  assert.match(css, /\.legendary-lineage/);
   assert.match(appSource, /form-saiyan-ssj1\.jpg/);
   assert.match(appSource, /form-saiyan-ssj2\.jpg/);
   assert.match(appSource, /form-saiyan-ssj3\.jpg/);

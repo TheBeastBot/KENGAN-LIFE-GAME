@@ -1,4 +1,6 @@
-import { CARDS, ORIGINS, STAT_KEYS, TOWER_CARD_IDS } from './data.mjs';
+import {
+  CARDS, LEGENDARY_SAIYAN_LINEAGE, ORIGINS, STAT_KEYS, TOWER_CARD_IDS,
+} from './data.mjs';
 import {
   RECOVERY_SERVICES, advanceAfterAgeDraft, beginAgeReward, beginEncounter,
   buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
@@ -49,13 +51,39 @@ const SAIYAN_FORM_ART = {
   'form-saiyan-8': 'form-saiyan-blue.jpg',
   'form-saiyan-9': 'form-saiyan-ui-sign.jpg',
 };
+const LEGENDARY_SAIYAN_FORM_ART = {
+  'form-legendary-ikari': 'form-legendary-ikari.jpg',
+  'form-legendary-ssj': 'form-legendary-ssj.jpg',
+  'form-legendary-controlled': 'form-legendary-controlled.jpg',
+  'form-legendary-full-power': 'form-legendary-full-power.jpg',
+  'form-legendary-god': 'form-legendary-god.jpg',
+};
+const LEGENDARY_SAIYAN_CARD_ART = {
+  'legendary-primal-roar': 'card-legendary-primal-roar.jpg',
+  'legendary-green-erasure': 'card-legendary-green-erasure.jpg',
+  'legendary-berserker-rush': 'card-legendary-berserker-rush.jpg',
+  'legendary-gigantic-breaker': 'card-legendary-gigantic-breaker.jpg',
+  'legendary-omega-blaster': 'card-legendary-omega-blaster.jpg',
+  'legendary-unbreakable-aura': 'card-legendary-unbreakable-aura.jpg',
+  'legendary-berserker-regeneration': 'card-legendary-berserker-regeneration.jpg',
+  'legendary-limitless-fury': 'card-legendary-limitless-fury.jpg',
+  'legendary-eruption-counter': 'card-legendary-eruption-counter.jpg',
+  'legendary-cataclysm': 'card-legendary-cataclysm.jpg',
+};
 
-function originArt(originId = state?.origin ?? setupOrigin) {
+function hasLegendaryLineage(target = state) {
+  return target?.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE;
+}
+
+function originArt(originId = state?.origin ?? setupOrigin, lineage = state?.saiyanLineage) {
+  if (originId === 'saiyan' && lineage === LEGENDARY_SAIYAN_LINEAGE) {
+    return `${GENERATED_ASSET_ROOT}/origin-saiyan-legendary.jpg`;
+  }
   return `${GENERATED_ASSET_ROOT}/origin-${originId}.jpg`;
 }
 
 function saiyanFormArt(formId) {
-  const fileName = SAIYAN_FORM_ART[formId];
+  const fileName = LEGENDARY_SAIYAN_FORM_ART[formId] ?? SAIYAN_FORM_ART[formId];
   return fileName ? `${GENERATED_ASSET_ROOT}/${fileName}` : null;
 }
 
@@ -68,6 +96,7 @@ function characterArt(originId = state?.origin ?? setupOrigin, activeFormId = nu
 
 function cardArt(item) {
   if (!item) return `${GENERATED_ASSET_ROOT}/card-support.jpg`;
+  if (LEGENDARY_SAIYAN_CARD_ART[item.id]) return `${GENERATED_ASSET_ROOT}/${LEGENDARY_SAIYAN_CARD_ART[item.id]}`;
   if (item.type === 'form' && saiyanFormArt(item.id)) return saiyanFormArt(item.id);
   if (item.type === 'form') return `${GENERATED_ASSET_ROOT}/card-form.jpg`;
   if (item.type === 'heal') return `${GENERATED_ASSET_ROOT}/card-heal.jpg`;
@@ -115,7 +144,7 @@ function presentCombatAction(previous, next, action, { showResolvedCombat = fals
 }
 
 function cardTone(item) {
-  return `${item.type} ${item.rarity ?? 'common'} ${item.towerOnly ? 'tower-card' : ''}`;
+  return `${item.type} ${item.rarity ?? 'common'} ${item.towerOnly ? 'tower-card' : ''} ${item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) ? 'legendary-lineage' : ''}`;
 }
 
 function renderCard(item, { action = '', disabled = false, badge = '', compact = false } = {}) {
@@ -139,7 +168,7 @@ function renderSetup() {
         <img class="db-mark" src="./assets/dragon-ball/dragon-mark.svg" alt="">
         <p class="eyebrow">A Separate Card-Battling Campaign</p>
         <h1>Dragon Ball<br><span>Deck Builder</span></h1>
-        <p>Build a fighter from age 6 to 20. Draft techniques, master transformations, and survive the Final Sky Championship.</p>
+        <p>Build a fighter from age 6 through the Eternal Saga. Draft techniques, master transformations, and climb forever.</p>
         <a class="text-link" href="./index.html">Return to Underground Life Sim</a>
       </section>
       <section class="db-setup-panel">
@@ -150,7 +179,7 @@ function renderSetup() {
               <img src="${originArt(item.id)}" alt="">
               <strong>${item.name}</strong>
               <span>${item.passive}</span>
-              <small>${item.passiveText}</small>
+              <small>${item.passiveText}${item.id === 'saiyan' ? ' Each new Saiyan has a 20% chance to awaken the Legendary Super Saiyan lineage.' : ''}</small>
             </button>
           `).join('')}
         </div>
@@ -166,11 +195,12 @@ function renderSetup() {
 
 function renderHeader() {
   const origin = ORIGINS[state.origin];
+  const legendary = hasLegendaryLineage();
   return `
-    <header class="db-header">
+    <header class="db-header ${legendary ? 'legendary-header' : ''}">
       <div class="fighter-title">
         <img src="${originArt()}" alt="">
-        <div><p>${origin.name} / Age ${state.age}</p><h1>${escapeHtml(state.name)}</h1><span>${origin.passive}</span></div>
+        <div><p>${legendary ? 'Legendary Super Saiyan' : origin.name} / Age ${state.age}</p><h1>${escapeHtml(state.name)}</h1><span>${legendary ? 'Unbound Growth · +1 Max Ki · +2 Focus when damaged' : origin.passive}</span></div>
       </div>
       <div class="header-meter">
         <span>HP ${state.currentHealth}/${state.stats.health}</span>
@@ -212,7 +242,7 @@ function renderJourney() {
         ${state.encounters.map((encounter, index) => {
           const done = cleared.has(encounter.id);
           return `
-            <article class="encounter-node ${encounter.type} ${done ? 'cleared' : ''}">
+            <article class="encounter-node ${encounter.type} ${encounter.legendarySaiyanMilestone ? 'legendary-milestone' : ''} ${done ? 'cleared' : ''}">
               <div class="encounter-line"></div>
               <span class="encounter-icon">${done ? 'OK' : encounterIcon(encounter.type)}</span>
               <div>
@@ -237,7 +267,9 @@ function renderDeck() {
   const deckCounts = state.deck.reduce((map, id) => ({ ...map, [id]: (map[id] ?? 0) + 1 }), {});
   const eligible = Object.keys(state.collection).filter((id) => {
     const item = CARDS[id];
-    return item && !item.towerOnly && item.type !== 'stat' && (!item.origins?.length || item.origins.includes(state.origin));
+    return item && !item.towerOnly && item.type !== 'stat' &&
+      (!item.origins?.length || item.origins.includes(state.origin)) &&
+      (!item.lineages?.length || item.lineages.includes(state.saiyanLineage));
   });
   const validation = validateDeck(state);
   return `
@@ -269,13 +301,16 @@ function renderDeck() {
 }
 
 function renderCollection() {
-  const all = Object.values(CARDS).filter((item) => item.type !== 'injury' && !item.towerOnly);
-  const filtered = all.filter((item) => collectionFilter === 'all' || item.type === collectionFilter);
+  const all = Object.values(CARDS).filter((item) =>
+    item.type !== 'injury' && !item.towerOnly &&
+    (!item.lineages?.length || item.lineages.includes(state.saiyanLineage)));
+  const filtered = all.filter((item) => collectionFilter === 'all' || item.type === collectionFilter ||
+    (collectionFilter === 'legendaryLineage' && item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE)));
   const owned = filtered.filter((item) => item.type === 'stat' ? false : state.collection[item.id]);
   return `
     <section>
       <article class="collection-summary"><div><p>Technique Archive</p><h2>${Object.keys(state.collection).length}/${all.filter((item) => item.type !== 'stat').length} Combat Cards</h2></div><span>Stat cards are consumed immediately and never enter the deck.</span></article>
-      <div class="filter-row">${['all', 'move', 'form', 'heal', 'support', 'counter'].map((type) => `<button class="${collectionFilter === type ? 'active' : ''}" data-filter="${type}">${label(type)}</button>`).join('')}</div>
+      <div class="filter-row">${['all', 'move', 'form', 'heal', 'support', 'counter', ...(hasLegendaryLineage() ? ['legendaryLineage'] : [])].map((type) => `<button class="${collectionFilter === type ? 'active' : ''}" data-filter="${type}">${type === 'legendaryLineage' ? 'Legendary Lineage' : label(type)}</button>`).join('')}</div>
       <div class="card-gallery">${owned.map((item) => renderCard(item, { badge: `Owned x${state.collection[item.id]}` })).join('') || '<p class="empty-copy">No owned cards match this filter yet.</p>'}</div>
     </section>
   `;
@@ -529,14 +564,16 @@ function renderDraft() {
   const towerDraft = ['towerStat', 'towerCard'].includes(draft.kind);
   const title = draft.kind === 'towerCard'
     ? (draft.options.every((id) => CARDS[id].type === 'stat') ? 'Choose a Master Stat' : 'Choose a Tower Card')
-    : draft.kind === 'towerStat' ? 'Choose a Permanent Stat' : 'Choose One Card';
+    : draft.kind === 'towerStat' ? 'Choose a Permanent Stat'
+      : draft.kind === 'legendarySaiyan' ? 'Choose a Legendary Awakening'
+        : 'Choose One Card';
   return `
     <section class="draft-overlay">
       <div class="draft-rays"></div>
       <article class="draft-panel">
         <p>${towerDraft ? `Infinite Tower Floor ${draft.towerFloor} Cleared` : draft.ageAdvance ? `Age ${state.age} Complete` : 'Encounter Reward'}</p>
         <h2>${title}</h2>
-        <span>${draft.kind === 'towerCard' ? 'New cards unlock permanently. Owned cards gain a rank, up to Rank 5.' : draft.ageAdvance ? 'This reward closes the chapter and advances time.' : 'The other two cards will disappear.'}</span>
+        <span>${draft.kind === 'towerCard' ? 'New cards unlock permanently. Owned cards gain a rank, up to Rank 5.' : draft.kind === 'legendarySaiyan' ? 'This reward belongs only to the Legendary Super Saiyan lineage.' : draft.ageAdvance ? 'This reward closes the chapter and advances time.' : 'The other two cards will disappear.'}</span>
         <div class="draft-grid">${draft.options.map((id) => {
           const rank = state.tower?.cards?.[id] ?? 0;
           const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, Math.min(5, rank + 1)) : CARDS[id];
@@ -555,7 +592,24 @@ function renderDetail() {
     <section class="detail-overlay" data-action="close-detail">
       <article class="detail-panel">
         ${renderCard(item)}
-        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Earned only in Infinite Tower / Rank ${item.towerRank} / Usable in every combat` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}`}</small><button data-action="close-detail">Close</button></div>
+        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Earned only in Infinite Tower / Rank ${item.towerRank} / Usable in every combat` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}${item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) ? ' / Legendary Super Saiyan lineage only' : ''}`}</small><button data-action="close-detail">Close</button></div>
+      </article>
+    </section>
+  `;
+}
+
+function renderLineageReveal() {
+  return `
+    <section class="lineage-reveal" role="dialog" aria-modal="true" aria-labelledby="lineage-reveal-title">
+      <div class="lineage-energy"></div>
+      <article>
+        <p>One Warrior In Five</p>
+        <img src="${GENERATED_ASSET_ROOT}/origin-saiyan-legendary.jpg" alt="Legendary Super Saiyan ${escapeHtml(state.name)}">
+        <span class="lineage-badge">Rare Lineage Awakened</span>
+        <h2 id="lineage-reveal-title">Legendary Super Saiyan</h2>
+        <strong>UNBOUND GROWTH</strong>
+        <p>Start every battle with +1 maximum Ki and gain 2 Focus whenever unblocked damage reaches you.</p>
+        <button class="db-primary" data-action="acknowledge-lineage">Unleash The Legend</button>
       </article>
     </section>
   `;
@@ -585,6 +639,7 @@ function render() {
     </main>
     ${state.pendingDraft ? renderDraft() : ''}
     ${selectedCardId ? renderDetail() : ''}
+    ${state.lineageRevealPending ? renderLineageReveal() : ''}
     ${toast ? `<div class="db-toast">${escapeHtml(toast)}</div>` : ''}
   `;
 }
@@ -604,6 +659,10 @@ function handleAction(action) {
     return;
   }
   if (!state) return;
+  if (action === 'acknowledge-lineage') {
+    update({ ...state, lineageRevealPending: false }, 'The Legendary Super Saiyan lineage is active.');
+    return;
+  }
   if (action === 'skip-sequence') {
     sequenceController.skip();
     return;

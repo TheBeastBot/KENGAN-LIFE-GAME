@@ -1,5 +1,6 @@
 export const DRAGON_BALL_SAVE_KEY = 'dragon-ball-deck-builder-save-v1';
-export const DRAGON_BALL_VERSION = 1;
+export const DRAGON_BALL_VERSION = 2;
+export const LEGENDARY_SAIYAN_LINEAGE = 'legendary-super-saiyan';
 export const STAT_KEYS = ['health', 'power', 'defense', 'speed', 'ki', 'spirit'];
 export const CARD_TYPES = ['move', 'form', 'heal', 'support', 'counter', 'injury'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
@@ -123,6 +124,19 @@ const uniqueCards = [
   card('unique-final-flashpoint', 'Final Flashpoint', 'move', 3, 'Deal 28 damage plus 2 damage per Focus. Consume all Focus.', { damage: 28, damagePerFocus: 2, consumeFocus: true }, { rarity: 'legendary', minAge: 18, cooldownAges: 1 }),
 ];
 
+const legendarySaiyanCards = [
+  card('legendary-primal-roar', 'Primal Roar', 'support', 0, 'Gain 2 Focus and 1 Ki.', { focus: 2, ki: 1 }, { rarity: 'rare', lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-green-erasure', 'Green Erasure Cannon', 'move', 2, 'Deal 24 damage and apply 2 Weak.', { damage: 24, weak: 2 }, { rarity: 'epic', minAge: 8, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-berserker-rush', 'Berserker Meteor Rush', 'move', 2, 'Strike 5 times for 8 damage.', { damage: 8, hits: 5 }, { rarity: 'epic', minAge: 11, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-gigantic-breaker', 'Gigantic Breaker', 'move', 2, 'Deal 34 damage directly through Block.', { damage: 34, ignoreBlock: true }, { rarity: 'legendary', minAge: 14, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-omega-blaster', 'Omega Blaster', 'move', 3, 'Deal 55 damage and apply 3 Weak. Cooldown 1 Age Up.', { damage: 55, weak: 3 }, { rarity: 'legendary', minAge: 17, cooldownAges: 1, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-unbreakable-aura', 'Unbreakable Emerald Aura', 'counter', 1, 'Gain 24 Block, retain 75% unused Block, and draw 1.', { block: 24, retainBlock: 0.75, draw: 1 }, { rarity: 'epic', minAge: 11, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-berserker-regeneration', 'Berserker Regeneration', 'heal', 1, 'Heal 40% of maximum Health and gain 3 Focus.', { healPercent: 0.4, focus: 3 }, { rarity: 'legendary', minAge: 14, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-limitless-fury', 'Limitless Fury', 'support', 1, 'Gain 2 maximum Ki, refill 3 Ki, and draw 2 cards. Exhaust.', { maxKi: 2, ki: 3, draw: 2, exhaust: true }, { rarity: 'legendary', minAge: 17, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-eruption-counter', 'Emerald Eruption Counter', 'counter', 2, 'Gain 20 Block and deal 22 damage through Block.', { block: 20, damage: 22, ignoreBlock: true }, { rarity: 'legendary', minAge: 17, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-cataclysm', 'Legendary Cataclysm', 'move', 3, 'Deal 48 damage plus 60% of missing Health. Exhaust. Cooldown 2 Age Ups.', { damage: 48, missingHealthDamage: 0.6, exhaust: true }, { rarity: 'legendary', minAge: 20, cooldownAges: 2, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+];
+
 const towerCards = [
   card('tower-card-1', 'Infinite Breaker', 'move', 2, 'Deal 22 damage through Block.', { damage: 22, ignoreBlock: true }, { rarity: 'legendary', towerOnly: true }),
   card('tower-card-2', 'Hundred-Floor Rush', 'move', 2, 'Strike 4 times for 7 damage.', { damage: 7, hits: 4 }, { rarity: 'legendary', towerOnly: true }),
@@ -175,6 +189,18 @@ const formCards = forms.map(([id, name, origins, minAge, powerMultiplier, defens
   card(id, name, 'form', 2, `Transform: x${powerMultiplier} Power, x${defenseMultiplier} Defense${dodgeChance ? `, ${Math.round(dodgeChance * 100)}% dodge chance` : ''}${drain ? `, drain ${drain} Ki each turn` : ''}.`,
     { powerMultiplier, defenseMultiplier, drain, dodgeChance }, { origins, minAge, rarity: minAge >= 18 ? 'legendary' : minAge >= 14 ? 'epic' : 'rare' }));
 
+const legendarySaiyanForms = [
+  ['form-legendary-ikari', 'Wrathful Ikari', 8, 1.8, 1.35, 0],
+  ['form-legendary-ssj', 'Legendary Super Saiyan', 11, 2.4, 1.6, 0],
+  ['form-legendary-controlled', 'Controlled Legendary Super Saiyan', 14, 3.0, 2.0, 0],
+  ['form-legendary-full-power', 'Full Power Legendary Super Saiyan', 17, 3.7, 2.5, 1],
+  ['form-legendary-god', 'Legendary God Berserker', 20, 4.5, 3.1, 1, 0.15],
+].map(([id, name, minAge, powerMultiplier, defenseMultiplier, drain, dodgeChance = 0]) =>
+  card(id, name, 'form', 2,
+    `Transform: x${powerMultiplier} Power, x${defenseMultiplier} Defense${dodgeChance ? `, ${Math.round(dodgeChance * 100)}% dodge chance` : ''}${drain ? `, drain ${drain} Ki each turn` : ''}.`,
+    { powerMultiplier, defenseMultiplier, drain, dodgeChance },
+    { origins: ['saiyan'], lineages: [LEGENDARY_SAIYAN_LINEAGE], minAge, rarity: minAge >= 17 ? 'legendary' : 'epic' }));
+
 const statCards = STAT_KEYS.flatMap((stat) => [1, 2, 3, 4, 5].map((tier) => ({
   id: `stat-${stat}-${tier}`,
   name: `${stat[0].toUpperCase()}${stat.slice(1)} Training ${tier}`,
@@ -193,12 +219,14 @@ export const INJURY_CARDS = [
 ];
 
 export const CARDS = Object.fromEntries(
-  [...starterCards, ...moveCards, ...utilityCards, ...uniqueCards, ...towerCards, ...formCards, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
+  [...starterCards, ...moveCards, ...utilityCards, ...uniqueCards, ...legendarySaiyanCards, ...towerCards, ...formCards, ...legendarySaiyanForms, ...statCards, ...INJURY_CARDS].map((item) => [item.id, item])
 );
 
 export const COMBAT_CARD_IDS = Object.values(CARDS).filter((item) => CARD_TYPES.includes(item.type) && item.type !== 'injury' && !item.towerOnly).map((item) => item.id);
 export const STAT_CARD_IDS = statCards.map((item) => item.id);
 export const TOWER_CARD_IDS = towerCards.map((item) => item.id);
+export const LEGENDARY_SAIYAN_CARD_IDS = legendarySaiyanCards.map((item) => item.id);
+export const LEGENDARY_SAIYAN_FORM_IDS = legendarySaiyanForms.map((item) => item.id);
 
 export const TOWER_ENEMY_NAMES = [
   'Stone-Fist Initiate', 'Crimson Dojo Hunter', 'Gravity Chamber Reject', 'Ki-Thief Marauder', 'Obsidian Gatekeeper',
