@@ -65,13 +65,29 @@ test('Legendary Saiyans receive permanent starter bonuses, reveal state, and Pri
   const legendarySeed = Array.from({ length: 100 }, (_, seed) => seed)
     .find((seed) => createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage === 'legendary-super-saiyan');
   const state = createDragonBallRun({ origin: 'saiyan', seed: legendarySeed });
-  assert.deepEqual(state.stats, { health: 110, power: 16, defense: 9, speed: 9, ki: 11, spirit: 7 });
-  assert.equal(state.currentHealth, 110);
+  assert.deepEqual(state.stats, { health: 127, power: 20, defense: 9, speed: 9, ki: 11, spirit: 7 });
+  assert.equal(state.currentHealth, 127);
   assert.equal(state.lineageRevealPending, true);
   assert.ok(state.deck.includes('legendary-primal-roar'));
   assert.ok(!state.deck.includes('tail-sweep'));
   assert.equal(state.collection['legendary-primal-roar'], 1);
   assert.match(state.history[0].text, /Legendary Super Saiyan/);
+});
+
+test('version two Legendary saves receive the stronger Health and Power once', () => {
+  const legacy = createDragonBallRun({
+    origin: 'saiyan', seed: 4, lineageOverride: 'legendary-super-saiyan',
+  });
+  legacy.version = 2;
+  legacy.stats.health = 110;
+  legacy.stats.power = 16;
+  legacy.currentHealth = 84;
+  const upgraded = normalizeDragonBallState(legacy);
+  assert.equal(upgraded.stats.health, 127);
+  assert.equal(upgraded.stats.power, 20);
+  assert.equal(upgraded.currentHealth, 101);
+  assert.deepEqual(normalizeDragonBallState(upgraded).stats, upgraded.stats);
+  assert.equal(normalizeDragonBallState(upgraded).currentHealth, 101);
 });
 
 test('legacy Saiyan saves normalize to standard lineage without rerolling', () => {
@@ -1271,6 +1287,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /renderLineageReveal/);
   assert.match(appSource, /acknowledge-lineage/);
   assert.match(appSource, /Unbound Growth/);
+  assert.match(appSource, /\+35 Health/);
+  assert.match(appSource, /\+8 Power/);
   assert.match(appSource, /LEGENDARY_SAIYAN_LINEAGE/);
   assert.match(css, /\.lineage-reveal/);
   assert.match(css, /\.legendary-lineage/);

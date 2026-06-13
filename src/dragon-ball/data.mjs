@@ -1,5 +1,5 @@
 export const DRAGON_BALL_SAVE_KEY = 'dragon-ball-deck-builder-save-v1';
-export const DRAGON_BALL_VERSION = 2;
+export const DRAGON_BALL_VERSION = 3;
 export const LEGENDARY_SAIYAN_LINEAGE = 'legendary-super-saiyan';
 export const STAT_KEYS = ['health', 'power', 'defense', 'speed', 'ki', 'spirit'];
 export const CARD_TYPES = ['move', 'form', 'heal', 'support', 'counter', 'injury'];

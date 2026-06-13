@@ -608,7 +608,7 @@ function renderLineageReveal() {
         <span class="lineage-badge">Rare Lineage Awakened</span>
         <h2 id="lineage-reveal-title">Legendary Super Saiyan</h2>
         <strong>UNBOUND GROWTH</strong>
-        <p>Start every battle with +1 maximum Ki and gain 2 Focus whenever unblocked damage reaches you.</p>
+        <p>Awaken with +35 Health and +8 Power. Start every battle with +1 maximum Ki and gain 2 Focus whenever unblocked damage reaches you.</p>
         <button class="db-primary" data-action="acknowledge-lineage">Unleash The Legend</button>
       </article>
     </section>

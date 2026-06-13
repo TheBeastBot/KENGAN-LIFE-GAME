@@ -8,6 +8,14 @@ import { createTowerState, normalizeTowerState } from './tower.mjs';
 
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const LEGENDARY_STARTING_BONUS = {
+  health: 35,
+  power: 8,
+  defense: 2,
+  ki: 2,
+};
+const LEGENDARY_V3_HEALTH_INCREASE = 17;
+const LEGENDARY_V3_POWER_INCREASE = 4;
 
 export const RECOVERY_SERVICES = {
   'capsule-patch': {
@@ -78,10 +86,10 @@ export function createDragonBallRun({
   const stats = {
     ...selected.stats,
     ...(legendary ? {
-      health: selected.stats.health + 18,
-      power: selected.stats.power + 4,
-      defense: selected.stats.defense + 2,
-      ki: selected.stats.ki + 2,
+      health: selected.stats.health + LEGENDARY_STARTING_BONUS.health,
+      power: selected.stats.power + LEGENDARY_STARTING_BONUS.power,
+      defense: selected.stats.defense + LEGENDARY_STARTING_BONUS.defense,
+      ki: selected.stats.ki + LEGENDARY_STARTING_BONUS.ki,
     } : {}),
   };
   const deck = selected.deck.map((id) => legendary && id === 'tail-sweep' ? 'legendary-primal-roar' : id);
@@ -126,9 +134,32 @@ export function normalizeDragonBallState(input) {
   const fallback = createDragonBallRun({
     name: input.name, origin, seed: input.seed, lineageOverride: saiyanLineage,
   });
+  const shouldUpgradeLegendaryStats = saiyanLineage === LEGENDARY_SAIYAN_LINEAGE &&
+    Math.floor(Number(input.version) || 0) < 3;
   const age = clamp(Math.floor(input.age ?? 6), 6, 100);
   const ageCycle = age === 100 ? Math.max(0, Math.floor(Number(input.ageCycle) || 0)) : 0;
   const stats = Object.fromEntries(STAT_KEYS.map((key) => [key, Math.max(1, Math.floor(input.stats?.[key] ?? fallback.stats[key]))]));
+  if (shouldUpgradeLegendaryStats) {
+    stats.health += LEGENDARY_V3_HEALTH_INCREASE;
+    stats.power += LEGENDARY_V3_POWER_INCREASE;
+  }
+  const currentHealth = clamp(
+    Math.floor(input.currentHealth ?? stats.health) +
+      (shouldUpgradeLegendaryStats ? LEGENDARY_V3_HEALTH_INCREASE : 0),
+    0,
+    stats.health
+  );
+  const activeCombat = input.activeCombat ? clone(input.activeCombat) : null;
+  if (shouldUpgradeLegendaryStats && activeCombat?.player) {
+    activeCombat.player.maxHealth = Math.max(1,
+      Math.floor(activeCombat.player.maxHealth ?? stats.health - LEGENDARY_V3_HEALTH_INCREASE) +
+        LEGENDARY_V3_HEALTH_INCREASE);
+    activeCombat.player.health = clamp(
+      Math.floor(activeCombat.player.health ?? currentHealth) + LEGENDARY_V3_HEALTH_INCREASE,
+      0,
+      activeCombat.player.maxHealth
+    );
+  }
   const collection = {};
   for (const [id, count] of Object.entries(input.collection ?? {})) {
     if (CARDS[id] && !CARDS[id].towerOnly && CARDS[id].type !== 'stat' && CARDS[id].type !== 'injury' &&
@@ -152,7 +183,7 @@ export function normalizeDragonBallState(input) {
     ageCycle,
     zeni: input.zeni === undefined ? fallback.zeni : Math.max(0, Math.floor(Number(input.zeni) || 0)),
     stats,
-    currentHealth: clamp(Math.floor(input.currentHealth ?? stats.health), 0, stats.health),
+    currentHealth,
     collection,
     deck: validation.valid ? [...deck] : [...fallback.deck],
     injuries: Array.isArray(input.injuries) ? input.injuries.filter((id) => INJURY_CARDS.some((item) => item.id === id)).slice(0, 5) : [],
@@ -165,7 +196,7 @@ export function normalizeDragonBallState(input) {
         : encountersForAge(age, ageCycle),
     clearedEncounterIds: Array.isArray(input.clearedEncounterIds) ? input.clearedEncounterIds : [],
     pendingDraft: input.pendingDraft?.options?.length === 3 ? input.pendingDraft : null,
-    activeCombat: input.activeCombat ?? null,
+    activeCombat,
     history: Array.isArray(input.history) ? input.history.slice(0, 100) : fallback.history,
     completed: false,
     ending: null,
