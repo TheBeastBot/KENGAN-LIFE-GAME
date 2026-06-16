@@ -299,6 +299,32 @@ test('post-20 campaign enemies become dramatically stronger through age 100', ()
   assert.ok(eternalFour.maxHealth >= eternalOne.maxHealth * 1.25);
 });
 
+test('campaign enemies transform and spike significantly every ten ages', () => {
+  const base = createDragonBallRun({ seed: 30301, lineageOverride: 'standard' });
+  const enemyAt = (age) => {
+    const encounters = encountersForAge(age);
+    const state = { ...base, age, encounters };
+    return enemyForEncounter(state, encounters.find((item) => item.type === 'fighter'));
+  };
+  const ages = [9, 10, 20, 30, 50, 100];
+  const enemies = ages.map((age) => enemyAt(age));
+  assert.equal(enemies[0].transformationName, '');
+  assert.equal(enemies[1].transformationName, 'Weighted Aura');
+  assert.equal(enemies[2].transformationName, 'Kaioken Overdrive');
+  assert.equal(enemies[3].transformationName, 'Ascended Form');
+  assert.equal(enemies[4].transformationName, 'God Ki Surge');
+  assert.match(enemies[5].transformationName, /Eternal Limit Break/);
+  assert.match(enemies[4].name, /\[God Ki Surge\]/);
+  for (let index = 2; index < enemies.length; index += 1) {
+    assert.ok(enemies[index].maxHealth >= enemies[index - 1].maxHealth * 1.18);
+    assert.ok(enemies[index].power >= enemies[index - 1].power * 1.12);
+  }
+  assert.ok(enemies[1].traits.some((trait) => trait.id === 'armor-breaker'));
+  assert.ok(enemies[2].traits.some((trait) => trait.id === 'ki-pressure'));
+  assert.ok(enemies[3].traits.some((trait) => trait.id === 'regeneration'));
+  assert.ok(enemies[4].traits.some((trait) => trait.id === 'burning-aura'));
+});
+
 test('Infinite Tower difficulty accelerates heavily on deep floors', () => {
   const state = { ...createDragonBallRun({ seed: 20322 }), age: 20 };
   const floors = [1, 10, 25, 50, 100];
@@ -316,6 +342,28 @@ test('Infinite Tower difficulty accelerates heavily on deep floors', () => {
   const deepEnemy = enemyForEncounter(state, encounters[4]);
   assert.ok(deepEnemy.power >= shallowEnemy.power * 15);
   assert.ok(deepEnemy.maxHealth >= shallowEnemy.maxHealth * 15);
+});
+
+test('tower enemies transform and spike significantly every five floors', () => {
+  const state = { ...createDragonBallRun({ seed: 30302 }), age: 20 };
+  const floors = [4, 5, 10, 15, 25, 50, 100];
+  const enemies = floors.map((floor) => enemyForEncounter(state, generateTowerEncounter(state, floor)));
+  assert.equal(enemies[0].transformationName, '');
+  assert.equal(enemies[1].transformationName, 'Iron Aura');
+  assert.equal(enemies[2].transformationName, 'Storm Kaioken');
+  assert.equal(enemies[3].transformationName, 'Shadow Ascension');
+  assert.equal(enemies[4].transformationName, 'Void Emperor State');
+  assert.match(enemies[5].transformationName, /Storm Kaioken Ascended/);
+  assert.match(enemies[6].transformationName, /Ascended/);
+  for (let index = 2; index < enemies.length; index += 1) {
+    assert.ok(enemies[index].maxHealth >= enemies[index - 1].maxHealth * 1.28);
+    assert.ok(enemies[index].power >= enemies[index - 1].power * 1.18);
+  }
+  assert.ok(enemies[1].traits.some((trait) => trait.id === 'tower-guard'));
+  assert.ok(enemies[2].traits.some((trait) => trait.id === 'pressure-field'));
+  assert.ok(enemies[3].traits.some((trait) => trait.id === 'endless-recovery'));
+  assert.ok(enemies[4].traits.some((trait) => trait.id === 'floor-rage'));
+  assert.ok(enemies[1].traits.some((trait) => trait.id === 'boss-ultimate-plus'));
 });
 
 test('age 100 creates repeatable Eternal Saga cycles without ending the run', () => {
@@ -663,6 +711,7 @@ test('every fifth tower floor fully heals and chains stat then unique rewards', 
   state.activeCombat.player.ki = 3;
   state.activeCombat.player.health = 20;
   state.activeCombat.enemy.health = 1;
+  state.activeCombat.enemy.block = 0;
   state = playCombatCard(state, 0);
   assert.equal(state.currentHealth, state.stats.health);
   assert.equal(state.pendingDraft.kind, 'towerStat');
@@ -729,6 +778,49 @@ test('special fights gain an enraging block-piercing ultimate', () => {
   assert.equal(firstUltimate.label, 'Limit-Breaking Ultimate');
   assert.equal(firstUltimate.pierce, 0.5);
   assert.ok(laterUltimate.damage > firstUltimate.damage);
+});
+
+test('enemy transformation traits visibly alter combat pressure', () => {
+  const base = createDragonBallRun({ seed: 30303, lineageOverride: 'standard' });
+  const transformedEncounter = encountersForAge(50).find((item) => item.type === 'fighter');
+  let transformed = {
+    ...base,
+    age: 50,
+    encounters: [transformedEncounter],
+  };
+  transformed = startDragonBallCombat(transformed, transformedEncounter.id);
+  assert.match(transformed.activeCombat.log[0], /enters God Ki Surge/);
+  assert.equal(transformed.activeCombat.player.ki, transformed.activeCombat.player.maxKi - 1);
+  transformed.activeCombat.player.health = 100000;
+  transformed.activeCombat.player.maxHealth = 100000;
+  transformed.activeCombat.enemy.health -= 50;
+  transformed.activeCombat.player.block = 100;
+  transformed.activeCombat.intent = { type: 'attack', label: 'Trait Test', damage: 200 };
+  const beforeHealth = transformed.activeCombat.player.health;
+  const beforeEnemyHealth = transformed.activeCombat.enemy.health;
+  transformed = endCombatTurn(transformed);
+  assert.ok(beforeHealth - transformed.activeCombat.player.health > 0, 'Armor Breaker should pierce heavy Block');
+  assert.ok(transformed.activeCombat.enemy.health > beforeEnemyHealth, 'Regeneration should heal the enemy');
+  assert.ok(transformed.activeCombat.log[0].includes('God Ki Surge') || transformed.activeCombat.log[1].includes('God Ki Surge'));
+
+  const towerBase = { ...createDragonBallRun({ seed: 30304 }), age: 20 };
+  const towerEncounter = generateTowerEncounter(towerBase, 25);
+  let tower = {
+    ...towerBase,
+    tower: { ...towerBase.tower, active: true, currentFloor: 25 },
+  };
+  tower = startDragonBallCombat(tower, towerEncounter.id);
+  assert.ok(tower.activeCombat.enemy.block > 0, 'Tower Guard should add starting Block');
+  tower.activeCombat.turn = 5;
+  const lateIntent = enemyIntent(tower.activeCombat);
+  tower.activeCombat.turn = 1;
+  const earlyIntent = enemyIntent(tower.activeCombat);
+  assert.ok(lateIntent.damage > earlyIntent.damage, 'Floor Rage should ramp later-turn damage');
+  const ultimate = tower.activeCombat.intent.label.includes('Ultimate')
+    ? tower.activeCombat.intent
+    : enemyIntent({ ...tower.activeCombat, turn: 5 });
+  assert.ok(ultimate.label.includes('Ultimate+'));
+  assert.ok(ultimate.pierce > 0.5);
 });
 
 test('playing cards spends Ki and applies damage block healing and forms', () => {

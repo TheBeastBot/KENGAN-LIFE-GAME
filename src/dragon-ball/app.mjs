@@ -6,7 +6,7 @@ import {
   buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
   recoveryServiceCost, setDeck, validateDeck,
 } from './state.mjs';
-import { sagaNameForAge } from './campaign.mjs';
+import { enemyForEncounter, sagaNameForAge } from './campaign.mjs';
 import { endCombatTurn, playCombatCard, startDragonBallCombat } from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
 import {
@@ -251,6 +251,12 @@ function encounterIcon(type) {
   return { fighter: 'F', mentor: 'M', specialMentor: 'SM', specialFight: '!' }[type] ?? '?';
 }
 
+function enemyPreviewLine(enemy, fallback) {
+  if (!enemy) return fallback;
+  const traits = enemy.traits?.length ? ` / Traits: ${enemy.traits.map((trait) => trait.name).join(', ')}` : '';
+  return `${enemy.transformationName ? `Transformation: ${enemy.transformationName} / ` : ''}${fallback}${traits}`;
+}
+
 function renderJourney() {
   const cleared = new Set(state.clearedEncounterIds);
   const sagaName = sagaNameForAge(state.age, state.ageCycle);
@@ -264,6 +270,9 @@ function renderJourney() {
       <div class="encounter-map">
         ${state.encounters.map((encounter, index) => {
           const done = cleared.has(encounter.id);
+          const enemyPreview = ['fighter', 'specialFight'].includes(encounter.type)
+            ? enemyForEncounter(state, encounter)
+            : null;
           return `
             <article class="encounter-node ${encounter.type} ${encounter.legendarySaiyanMilestone ? 'legendary-milestone' : ''} ${done ? 'cleared' : ''}">
               <div class="encounter-line"></div>
@@ -271,7 +280,7 @@ function renderJourney() {
               <div>
                 <p>${label(encounter.type)} / ${encounter.difficulty ? `Threat ${encounter.difficulty}` : 'Training'}</p>
                 <h3>${escapeHtml(encounter.name)}</h3>
-                <span>${encounter.type === 'mentor' ? 'Draft a permanent stat increase.' : encounter.type === 'specialMentor' ? 'Draft a move or transformation.' : `Power ${encounter.enemyPower}. Win a ${encounter.reward} draft and ${combatRewardFor(state, encounter)} Zeni.`}</span>
+                <span>${encounter.type === 'mentor' ? 'Draft a permanent stat increase.' : encounter.type === 'specialMentor' ? 'Draft a move or transformation.' : enemyPreviewLine(enemyPreview, `Power ${encounter.enemyPower}. Win a ${encounter.reward} draft and ${combatRewardFor(state, encounter)} Zeni.`)}</span>
               </div>
               <button data-action="encounter-${encounter.id}" ${done ? 'disabled' : ''}>${done ? 'Cleared' : encounter.type.includes('Mentor') || encounter.type === 'mentor' ? 'Train' : 'Fight'}</button>
             </article>
@@ -407,6 +416,7 @@ function renderTower() {
 
   const floor = state.tower.currentFloor;
   const encounter = generateTowerEncounter(state, floor);
+  const enemyPreview = enemyForEncounter(state, encounter);
   const boss = floor % 5 === 0;
   const equipped = new Set(state.tower.loadout);
   const ownedIds = TOWER_CARD_IDS.filter((id) => state.tower.cards[id]);
@@ -439,7 +449,7 @@ function renderTower() {
             <div>
               <p>${boss ? 'Limit-Breaking Ultimate Ready' : `Threat ${encounter.difficulty}`}</p>
               <h3>${escapeHtml(encounter.name)}</h3>
-              <span>${boss ? 'Enhanced stats, escalating AI, and a block-piercing ultimate attack.' : 'Stats and aggression increase continuously with every floor.'}</span>
+              <span>${enemyPreviewLine(enemyPreview, boss ? 'Enhanced stats, escalating AI, and a block-piercing ultimate attack.' : 'Stats and aggression increase continuously with every floor.')}</span>
             </div>
           </div>
           <div class="tower-run-health">

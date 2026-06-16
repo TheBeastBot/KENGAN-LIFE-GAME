@@ -4,6 +4,85 @@ import {
 import { hashSeed, sample } from './random.mjs';
 
 const LATE_SAGA_TIERS = ['Ascended', 'Legacy', 'Master', 'Divine', 'Eternal', 'Infinite'];
+const CAMPAIGN_TRANSFORMATIONS = [
+  '', 'Weighted Aura', 'Kaioken Overdrive', 'Ascended Form', 'Savage Awakening',
+  'God Ki Surge', 'Blue Flame State', 'Destroyer Aura', 'Ultra Instinct Echo', 'Eternal Limit Break',
+];
+const TOWER_TRANSFORMATIONS = [
+  '', 'Iron Aura', 'Storm Kaioken', 'Shadow Ascension', 'Gravity Break Form',
+  'Void Emperor State', 'God-Tower Awakening', 'Time-Fracture Form', 'Infinite Limit Break',
+];
+const CAMPAIGN_TRAITS = [
+  { id: 'armor-breaker', name: 'Armor Breaker' },
+  { id: 'ki-pressure', name: 'Ki Pressure' },
+  { id: 'regeneration', name: 'Regeneration' },
+  { id: 'combo-tempo', name: 'Combo Tempo' },
+  { id: 'burning-aura', name: 'Burning Aura' },
+];
+const TOWER_TRAITS = [
+  { id: 'tower-guard', name: 'Tower Guard' },
+  { id: 'pressure-field', name: 'Pressure Field' },
+  { id: 'endless-recovery', name: 'Endless Recovery' },
+  { id: 'floor-rage', name: 'Floor Rage' },
+];
+
+export function campaignEnemyTier(age) {
+  const safeAge = Math.max(6, Math.floor(Number(age) || 6));
+  return safeAge < 10 ? 0 : Math.floor(safeAge / 10);
+}
+
+export function towerEnemyTier(floor) {
+  const safeFloor = Math.max(1, Math.floor(Number(floor) || 1));
+  return Math.floor(safeFloor / 5);
+}
+
+function campaignTransformationName(tier) {
+  if (tier <= 0) return '';
+  if (tier < CAMPAIGN_TRANSFORMATIONS.length) return CAMPAIGN_TRANSFORMATIONS[tier];
+  return `Eternal Limit Break Ascended ${tier - CAMPAIGN_TRANSFORMATIONS.length + 2}`;
+}
+
+function towerTransformationName(tier) {
+  if (tier <= 0) return '';
+  const baseIndex = ((tier - 1) % (TOWER_TRANSFORMATIONS.length - 1)) + 1;
+  const ascension = Math.floor((tier - 1) / (TOWER_TRANSFORMATIONS.length - 1));
+  return `${TOWER_TRANSFORMATIONS[baseIndex]}${ascension ? ` Ascended ${ascension + 1}` : ''}`;
+}
+
+function traitsForEncounter(encounter, tier) {
+  if (!tier || !['fighter', 'specialFight'].includes(encounter.type)) return [];
+  if (encounter.source === 'tower') {
+    const traits = TOWER_TRAITS.slice(0, Math.min(TOWER_TRAITS.length, tier));
+    return encounter.type === 'specialFight'
+      ? [...traits, { id: 'boss-ultimate-plus', name: 'Boss Ultimate+' }]
+      : traits;
+  }
+  return CAMPAIGN_TRAITS.slice(0, Math.min(CAMPAIGN_TRAITS.length, tier));
+}
+
+function enemyEscalationFor(state, encounter) {
+  const tier = encounter.source === 'tower' ? towerEnemyTier(encounter.towerFloor) : campaignEnemyTier(state.age);
+  const tower = encounter.source === 'tower';
+  const transformationName = tower ? towerTransformationName(tier) : campaignTransformationName(tier);
+  const traits = traitsForEncounter(encounter, tier);
+  const healthMultiplier = tower
+    ? 1 + tier * 0.38 + Math.pow(tier, 1.18) * 0.09
+    : 1 + tier * 0.42 + Math.pow(tier, 1.2) * 0.1;
+  const powerMultiplier = tower
+    ? 1 + tier * 0.26 + Math.pow(tier, 1.14) * 0.06
+    : 1 + tier * 0.28 + Math.pow(tier, 1.12) * 0.06;
+  const defenseMultiplier = 1 + tier * (tower ? 0.16 : 0.14);
+  const speedMultiplier = 1 + tier * (tower ? 0.13 : 0.12);
+  return {
+    transformationTier: tier,
+    transformationName,
+    traits,
+    healthMultiplier,
+    powerMultiplier,
+    defenseMultiplier,
+    speedMultiplier,
+  };
+}
 
 export function sagaNameForAge(age, cycle = 0) {
   const safeAge = Math.max(6, Math.min(100, Math.floor(Number(age) || 6)));
@@ -125,17 +204,33 @@ export function enemyForEncounter(state, encounter) {
   const ageIndex = state.age - 6;
   const scale = 1.46 + ageIndex * 0.115;
   const special = encounter.type === 'specialFight';
-  const maxHealth = Math.round((58 + encounter.enemyPower * 0.72) * scale * (special ? 1.38 : 1));
-  const power = Math.round((10 + encounter.enemyPower * 0.13) * (special ? 1.22 : 1));
+  const escalation = enemyEscalationFor(state, encounter);
+  const traitIds = new Set(escalation.traits.map((trait) => trait.id));
+  const maxHealth = Math.round((58 + encounter.enemyPower * 0.72) * scale * (special ? 1.38 : 1) * escalation.healthMultiplier);
+  const power = Math.round((10 + encounter.enemyPower * 0.13) * (special ? 1.22 : 1) * escalation.powerMultiplier);
+  const displayName = escalation.transformationName ? `${encounter.name} [${escalation.transformationName}]` : encounter.name;
   return {
     id: encounter.id,
-    name: encounter.name,
+    name: displayName,
+    baseName: encounter.name,
     maxHealth,
     health: maxHealth,
     power,
-    defense: Math.round((3 + encounter.enemyPower * 0.043) * (special ? 1.2 : 1)),
-    speed: Math.round((6 + encounter.enemyPower * 0.05) * (special ? 1.12 : 1)),
+    defense: Math.round((3 + encounter.enemyPower * 0.043) * (special ? 1.2 : 1) * escalation.defenseMultiplier),
+    speed: Math.round((6 + encounter.enemyPower * 0.05) * (special ? 1.12 : 1) * escalation.speedMultiplier),
     special,
     phase: 0,
+    transformationName: escalation.transformationName,
+    transformationTier: escalation.transformationTier,
+    traits: escalation.traits,
+    blockPierceBonus: (traitIds.has('armor-breaker') ? 0.28 : 0) + (traitIds.has('pressure-field') ? 0.22 : 0),
+    regenPerTurn: traitIds.has('regeneration') ? Math.max(4, Math.round(maxHealth * 0.035)) : 0,
+    guardRegen: traitIds.has('endless-recovery') ? Math.max(5, Math.round(maxHealth * 0.025)) : 0,
+    powerRamp: traitIds.has('floor-rage') ? Math.max(2, Math.round(power * 0.09)) : 0,
+    comboTempo: traitIds.has('combo-tempo') ? 0.35 : 0,
+    burningAura: traitIds.has('burning-aura'),
+    kiPressure: traitIds.has('ki-pressure') ? 1 : 0,
+    startingBlock: traitIds.has('tower-guard') ? Math.max(12, Math.round((3 + encounter.enemyPower * 0.043) * 1.4)) : 0,
+    ultimatePlus: traitIds.has('boss-ultimate-plus'),
   };
 }

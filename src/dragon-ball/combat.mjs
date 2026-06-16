@@ -24,21 +24,26 @@ function drawCards(combat, count) {
 export function enemyIntent(combat) {
   const rage = Math.min(combat.enemy.special ? 0.55 : 0.38, Math.max(0, combat.turn - 1) * (combat.enemy.special ? 0.055 : 0.035));
   const towerPressure = Math.min(1.5, (combat.encounter.towerFloor ?? 0) * 0.008);
-  const pressure = 1 + rage + combat.enemy.phase * 0.04 + towerPressure;
+  const comboTempo = combat.turn >= 4 ? combat.enemy.comboTempo ?? 0 : 0;
+  const rampPower = Math.floor(Math.max(0, combat.turn - 1) / 2) * (combat.enemy.powerRamp ?? 0);
+  const effectivePower = combat.enemy.power + rampPower;
+  const pressure = 1 + rage + combat.enemy.phase * 0.04 + towerPressure + comboTempo;
+  const pierce = combat.enemy.blockPierceBonus ?? 0;
+  const labelPrefix = combat.enemy.transformationName ? `${combat.enemy.transformationName}: ` : '';
   const patterns = [
-    { type: 'attack', label: 'Rush Attack', damage: Math.round(combat.enemy.power * pressure) },
+    { type: 'attack', label: `${labelPrefix}${pierce ? 'Armor Breaker Rush' : 'Rush Attack'}`, damage: Math.round(effectivePower * pressure), pierce },
     { type: 'guard', label: 'Guard and Charge', block: 11 + Math.round(combat.enemy.defense * 1.2), focus: 1 },
-    { type: 'attack', label: 'Heavy Ki Blast', damage: Math.round(combat.enemy.power * 1.42 * pressure), burn: 1 },
-    { type: 'attack', label: 'Feinting Combo', damage: Math.round(combat.enemy.power * 0.9 * pressure), weak: 1 },
+    { type: 'attack', label: `${labelPrefix}Heavy Ki Blast`, damage: Math.round(effectivePower * 1.42 * pressure), burn: combat.enemy.burningAura ? 2 : 1, pierce },
+    { type: 'attack', label: `${labelPrefix}Feinting Combo`, damage: Math.round(effectivePower * 0.9 * pressure), weak: 1, pierce },
   ];
   if (combat.enemy.special) {
     patterns.push({
       type: 'attack',
-      label: 'Limit-Breaking Ultimate',
-      damage: Math.round(combat.enemy.power * 1.72 * pressure),
-      burn: 1,
-      weak: 1,
-      pierce: 0.5,
+      label: combat.enemy.ultimatePlus ? `${labelPrefix}Limit-Breaking Ultimate+` : 'Limit-Breaking Ultimate',
+      damage: Math.round(effectivePower * (combat.enemy.ultimatePlus ? 2.1 : 1.72) * pressure),
+      burn: combat.enemy.ultimatePlus ? 2 : 1,
+      weak: combat.enemy.ultimatePlus ? 2 : 1,
+      pierce: Math.min(0.9, 0.5 + (combat.enemy.ultimatePlus ? 0.25 : 0) + pierce),
     });
   }
   return patterns[(combat.turn - 1 + combat.enemy.phase) % patterns.length];
@@ -64,6 +69,9 @@ export function startDragonBallCombat(state, encounterId) {
   const originKi = ORIGINS[state.origin].id === 'android' ||
     state.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE ? 4 : 3;
   const maxKi = originKi + Math.min(2, Math.floor(state.stats.ki / 20));
+  const enemy = { ...enemyForEncounter(state, encounter), block: 0, weak: 0, burn: 0 };
+  enemy.block = enemy.startingBlock ?? 0;
+  const startingKi = Math.max(1, maxKi - (enemy.kiPressure ?? 0));
   const combat = {
     seed,
     encounter,
@@ -73,7 +81,7 @@ export function startDragonBallCombat(state, encounterId) {
       health: state.currentHealth,
       maxHealth: state.stats.health,
       block: 0,
-      ki: maxKi,
+      ki: startingKi,
       maxKi,
       focus: 0,
       spirit: state.stats.spirit,
@@ -83,7 +91,7 @@ export function startDragonBallCombat(state, encounterId) {
       activeForm: null,
       formBoost: 0,
     },
-    enemy: { ...enemyForEncounter(state, encounter), block: 0, weak: 0, burn: 0 },
+    enemy,
     drawPile: shuffle([
       ...state.deck,
       ...state.injuries,
@@ -93,7 +101,12 @@ export function startDragonBallCombat(state, encounterId) {
     exhaustPile: [],
     hand: [],
     cooldownsTriggered: {},
-    log: [`${encounter.name} steps into the arena.`],
+    log: [
+      enemy.transformationName
+        ? `${enemy.baseName ?? encounter.name} enters ${enemy.transformationName}.`
+        : `${encounter.name} steps into the arena.`,
+      ...(enemy.traits?.length ? [`Traits: ${enemy.traits.map((trait) => trait.name).join(', ')}.`] : []),
+    ],
     intent: null,
   };
   drawCards(combat, (state.origin === 'earthling' ? 6 : 5) + Math.min(1, Math.floor(state.stats.speed / 30)));
@@ -205,6 +218,11 @@ export function endCombatTurn(state) {
     combat.enemy.block += intent.block;
     combat.enemy.phase += intent.focus ?? 0;
     combat.log.unshift(`${combat.enemy.name} gains ${intent.block} Block.`);
+    if (combat.enemy.guardRegen) {
+      const healed = Math.min(combat.enemy.maxHealth, combat.enemy.health + combat.enemy.guardRegen) - combat.enemy.health;
+      combat.enemy.health += healed;
+      if (healed > 0) combat.log.unshift(`${combat.enemy.name}'s Endless Recovery heals ${healed}.`);
+    }
   } else if (attackIsDodged(combat)) {
     const form = CARDS[combat.player.activeForm];
     combat.log.unshift(`${next.name} dodges ${combat.enemy.name}'s ${intent.label} with ${form.name}.`);
@@ -231,6 +249,11 @@ export function endCombatTurn(state) {
       combat.player.focus += state.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE ? 2 : 1;
     }
     combat.log.unshift(`${combat.enemy.name} uses ${intent.label} for ${damage} damage.`);
+  }
+  if (combat.enemy.regenPerTurn && combat.enemy.health > 0) {
+    const healed = Math.min(combat.enemy.maxHealth, combat.enemy.health + combat.enemy.regenPerTurn) - combat.enemy.health;
+    combat.enemy.health += healed;
+    if (healed > 0) combat.log.unshift(`${combat.enemy.name} regenerates ${healed}.`);
   }
   if (combat.player.burn > 0) {
     combat.player.health = Math.max(0, combat.player.health - combat.player.burn * 2);
