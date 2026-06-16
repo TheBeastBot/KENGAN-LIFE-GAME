@@ -196,13 +196,18 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .tower-floor-panel, .tower-loadout-panel, .tower-collection-panel { background: white; border: 3px solid var(--line); padding: 22px; box-shadow: 5px 5px 0 #18223a25; }
 .tower-floor-panel { display: grid; gap: 18px; }
 .tower-floor-panel.boss-floor { background: linear-gradient(145deg,#fff,#ffe1e7); border-color: #9e192d; box-shadow: 7px 7px 0 #9e192d; }
+.tower-floor-panel.special-tower-enemy { background: linear-gradient(145deg,#fff,#fff8dd 52%,color-mix(in srgb,var(--tower-special,#f6b73c) 24%,#fff)); border-color: var(--tower-special,#f6b73c); box-shadow: 8px 8px 0 color-mix(in srgb,var(--tower-special,#f6b73c) 62%,#1a1434); }
+.tower-floor-panel.special-tower-enemy.boss-floor { background: linear-gradient(145deg,#fff0f6,#fff8dd 48%,color-mix(in srgb,var(--tower-special,#f6b73c) 32%,#fff)); }
 .tower-floor-panel > header, .tower-loadout-panel > header, .tower-collection-panel > header { display: flex; justify-content: space-between; align-items: center; gap: 18px; border-bottom: 3px solid var(--line); padding-bottom: 13px; }
 .tower-floor-panel header span { color: #7225a7; font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.tower-floor-panel.special-tower-enemy header span, .tower-floor-panel.special-tower-enemy .tower-enemy-preview p { color: color-mix(in srgb,var(--tower-special,#f6b73c) 72%,#441047); text-shadow: 1px 1px 0 #fff; }
 .tower-floor-panel h3, .tower-loadout-panel h3, .tower-collection-panel h3 { margin: 3px 0; font-size: 1.65rem; text-transform: uppercase; }
+.tower-floor-panel.special-tower-enemy .tower-enemy-preview h3 { color: color-mix(in srgb,var(--tower-special,#f6b73c) 72%,#15192d); text-shadow: 2px 2px 0 #fff, 3px 3px 0 #17172725; }
 .tower-floor-panel header > strong { color: var(--orange-dark); font-size: 2rem; text-align: right; }
 .tower-floor-panel header small { display: block; color: var(--ink); font-size: .62rem; text-transform: uppercase; }
 .tower-enemy-preview { display: grid; grid-template-columns: 135px 1fr; align-items: center; gap: 18px; }
 .tower-enemy-preview img { width: 135px; height: 155px; object-fit: cover; border: 3px solid var(--line); filter: hue-rotate(35deg) contrast(1.12); }
+.tower-floor-panel.special-tower-enemy .tower-enemy-preview img { border-color: var(--tower-special,#f6b73c); box-shadow: 0 0 0 4px #fff, 0 0 24px color-mix(in srgb,var(--tower-special,#f6b73c) 70%,transparent); filter: saturate(1.2) contrast(1.08); }
 .tower-enemy-preview p { margin: 0; color: #9e192d; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
 .tower-enemy-preview h3 { margin: 4px 0; }
 .tower-run-health { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }

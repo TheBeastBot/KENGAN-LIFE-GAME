@@ -132,6 +132,12 @@ function cardArt(item) {
     : `${GENERATED_ASSET_ROOT}/card-strike.jpg`;
 }
 
+function towerEnemyArt(encounter) {
+  return encounter?.specialTowerEnemyImage
+    ? `${GENERATED_ASSET_ROOT}/${encounter.specialTowerEnemyImage}`
+    : `${GENERATED_ASSET_ROOT}/card-strike.jpg`;
+}
+
 function update(next, message = '') {
   state = next;
   toast = message;
@@ -439,15 +445,15 @@ function renderTower() {
       </article>
 
       <div class="tower-dashboard">
-        <article class="tower-floor-panel ${boss ? 'boss-floor' : ''}">
+        <article class="tower-floor-panel ${boss ? 'boss-floor' : ''} ${encounter.specialTowerEnemy ? 'special-tower-enemy' : ''}" style="${encounter.specialTowerEnemyColor ? `--tower-special:${encounter.specialTowerEnemyColor};` : ''}">
           <header>
-            <div><span>${boss ? 'Boss Floor' : 'Next Challenger'}</span><h3>Floor ${floor}</h3></div>
+            <div><span>${encounter.specialTowerEnemy ? 'Special Tower Enemy' : boss ? 'Boss Floor' : 'Next Challenger'}</span><h3>Floor ${floor}</h3></div>
             <strong>${encounter.enemyPower}<small>Enemy Power</small></strong>
           </header>
           <div class="tower-enemy-preview">
-            <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
+            <img src="${towerEnemyArt(encounter)}" alt="${escapeHtml(encounter.name)}">
             <div>
-              <p>${boss ? 'Limit-Breaking Ultimate Ready' : `Threat ${encounter.difficulty}`}</p>
+              <p>${encounter.specialTowerEnemy ? 'Special Tower Enemy' : boss ? 'Limit-Breaking Ultimate Ready' : `Threat ${encounter.difficulty}`}</p>
               <h3>${escapeHtml(encounter.name)}</h3>
               <span>${enemyPreviewLine(enemyPreview, boss ? 'Enhanced stats, escalating AI, and a block-piercing ultimate attack.' : 'Stats and aggression increase continuously with every floor.')}</span>
             </div>

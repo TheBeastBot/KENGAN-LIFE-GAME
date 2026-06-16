@@ -23,7 +23,8 @@ import {
 } from '../src/dragon-ball/persistence.mjs';
 import {
   claimTowerReward, createTowerState, generateTowerEncounter, setTowerLoadout,
-  startTowerRun, towerCardAtRank, towerRewardDraft, validateTowerLoadout,
+  SPECIAL_TOWER_ENEMIES, specialTowerEnemyForFloor, startTowerRun,
+  towerCardAtRank, towerRewardDraft, validateTowerLoadout,
 } from '../src/dragon-ball/tower.mjs';
 import {
   COMBAT_PREFS_KEY, buildCombatSequence, createCombatAudio, createSequenceController,
@@ -152,6 +153,17 @@ test('every Infinite Tower card has unique locally stored artwork', async () => 
   assert.equal(new Set(hashes).size, TOWER_CARD_IDS.length);
 });
 
+test('special Infinite Tower enemies have deterministic unique local portraits', async () => {
+  const files = SPECIAL_TOWER_ENEMIES.map((enemy) => enemy.image);
+  const images = await Promise.all(files.map((file) =>
+    readFile(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+  const hashes = images.map((image) => createHash('sha256').update(image).digest('hex'));
+  assert.ok(SPECIAL_TOWER_ENEMIES.length >= 8);
+  assert.equal(new Set(SPECIAL_TOWER_ENEMIES.map((enemy) => enemy.name)).size, SPECIAL_TOWER_ENEMIES.length);
+  assert.equal(new Set(files).size, SPECIAL_TOWER_ENEMIES.length);
+  assert.equal(new Set(hashes).size, SPECIAL_TOWER_ENEMIES.length);
+});
+
 test('standard Saiyans cannot draft or equip Legendary lineage cards', () => {
   const standardSeed = Array.from({ length: 100 }, (_, seed) => seed)
     .find((seed) => createDragonBallRun({ origin: 'saiyan', seed }).saiyanLineage === 'standard');
@@ -191,6 +203,24 @@ test('Infinite Tower provides thirty enemies and twenty exclusive cards', async 
   assert.ok(TOWER_CARD_IDS.length >= 20);
   assert.ok(TOWER_CARD_IDS.every((id) => CARDS[id].towerOnly));
   assert.ok(TOWER_CARD_IDS.every((id) => !COMBAT_CARD_IDS.includes(id)));
+});
+
+test('special Infinite Tower enemies appear deterministically with highlighted metadata', () => {
+  const state = { ...createDragonBallRun({ seed: 204 }), age: 20 };
+  const normal = generateTowerEncounter(state, 6);
+  const firstSpecial = generateTowerEncounter(state, 7);
+  const repeatedSpecial = generateTowerEncounter(state, 7);
+  const bossSpecial = generateTowerEncounter(state, 25);
+  assert.equal(normal.specialTowerEnemy, false);
+  assert.equal(firstSpecial.specialTowerEnemy, true);
+  assert.equal(firstSpecial.specialTowerEnemyId, specialTowerEnemyForFloor(7).id);
+  assert.deepEqual(firstSpecial, repeatedSpecial);
+  assert.ok(SPECIAL_TOWER_ENEMIES.some((enemy) => firstSpecial.name.startsWith(enemy.name)));
+  assert.match(firstSpecial.specialTowerEnemyImage, /^enemy-tower-special-.+\.jpg$/);
+  assert.match(firstSpecial.specialTowerEnemyColor, /^#[0-9a-f]{6}$/i);
+  assert.ok(firstSpecial.enemyPower > normal.enemyPower * 1.2);
+  assert.equal(bossSpecial.specialTowerEnemy, true);
+  assert.equal(bossSpecial.type, 'specialFight');
 });
 
 test('tower unlocks at age 8 and generates deterministic endlessly scaling bosses', () => {
@@ -1408,6 +1438,10 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /const LEGENDARY_SAIYAN_FORM_ART/);
   assert.match(appSource, /const LEGENDARY_SAIYAN_CARD_ART/);
   assert.match(appSource, /const TOWER_CARD_ART/);
+  assert.match(appSource, /towerEnemyArt/);
+  assert.match(appSource, /specialTowerEnemyImage/);
+  assert.match(appSource, /special-tower-enemy/);
+  assert.match(appSource, /Special Tower Enemy/);
   assert.match(appSource, /card-tower-infinite-breaker\.jpg/);
   assert.match(appSource, /card-tower-endless-horizon\.jpg/);
   assert.match(appSource, /renderLineageReveal/);
@@ -1418,6 +1452,7 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /LEGENDARY_SAIYAN_LINEAGE/);
   assert.match(css, /\.lineage-reveal/);
   assert.match(css, /\.legendary-lineage/);
+  assert.match(css, /\.special-tower-enemy/);
   assert.match(appSource, /form-saiyan-ssj1\.jpg/);
   assert.match(appSource, /form-saiyan-ssj2\.jpg/);
   assert.match(appSource, /form-saiyan-ssj3\.jpg/);

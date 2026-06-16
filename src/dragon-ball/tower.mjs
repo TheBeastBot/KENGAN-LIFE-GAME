@@ -4,6 +4,64 @@ import { hashSeed, sample } from './random.mjs';
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export const SPECIAL_TOWER_ENEMIES = [
+  {
+    id: 'solar-crown-tyrant',
+    name: 'Solar Crown Tyrant',
+    image: 'enemy-tower-special-solar-crown-tyrant.jpg',
+    color: '#f6b73c',
+  },
+  {
+    id: 'void-lotus-assassin',
+    name: 'Void Lotus Assassin',
+    image: 'enemy-tower-special-void-lotus-assassin.jpg',
+    color: '#c45cff',
+  },
+  {
+    id: 'crimson-comet-brute',
+    name: 'Crimson Comet Brute',
+    image: 'enemy-tower-special-crimson-comet-brute.jpg',
+    color: '#ff4f5e',
+  },
+  {
+    id: 'chrono-mirror-sage',
+    name: 'Chrono Mirror Sage',
+    image: 'enemy-tower-special-chrono-mirror-sage.jpg',
+    color: '#62d7ff',
+  },
+  {
+    id: 'emerald-oni-champion',
+    name: 'Emerald Oni Champion',
+    image: 'enemy-tower-special-emerald-oni-champion.jpg',
+    color: '#42f584',
+  },
+  {
+    id: 'storm-halo-android',
+    name: 'Storm Halo Android',
+    image: 'enemy-tower-special-storm-halo-android.jpg',
+    color: '#4f8cff',
+  },
+  {
+    id: 'obsidian-dragon-herald',
+    name: 'Obsidian Dragon Herald',
+    image: 'enemy-tower-special-obsidian-dragon-herald.jpg',
+    color: '#f06adf',
+  },
+  {
+    id: 'celestial-gravity-king',
+    name: 'Celestial Gravity King',
+    image: 'enemy-tower-special-celestial-gravity-king.jpg',
+    color: '#ffd85e',
+  },
+];
+
+export function specialTowerEnemyForFloor(floor) {
+  const safeFloor = Math.max(1, Math.floor(Number(floor) || 1));
+  if (safeFloor < 7 || (safeFloor % 7 !== 0 && safeFloor % 25 !== 0)) return null;
+  const offset = safeFloor % 25 === 0 ? 3 : 0;
+  return SPECIAL_TOWER_ENEMIES[(Math.floor(safeFloor / 7) + offset) % SPECIAL_TOWER_ENEMIES.length];
+}
+
 export function createTowerState() {
   return {
     active: false,
@@ -37,10 +95,13 @@ export function normalizeTowerState(input) {
 export function generateTowerEncounter(state, floor = state.tower?.currentFloor ?? 1) {
   const safeFloor = Math.max(1, Math.floor(floor));
   const boss = safeFloor % 5 === 0;
+  const specialEnemy = specialTowerEnemyForFloor(safeFloor);
   const cycle = Math.floor((safeFloor - 1) / TOWER_ENEMY_NAMES.length);
-  const baseName = TOWER_ENEMY_NAMES[(safeFloor - 1) % TOWER_ENEMY_NAMES.length];
+  const baseName = specialEnemy?.name ?? TOWER_ENEMY_NAMES[(safeFloor - 1) % TOWER_ENEMY_NAMES.length];
   const suffix = cycle ? ` Ascended ${cycle + 1}` : '';
   const deepFloorPower = Math.pow(Math.max(0, safeFloor - 10), 1.6) * 4;
+  const baseEnemyPower = 36 + safeFloor * 15 + Math.pow(safeFloor, 1.22) * 3 + deepFloorPower;
+  const specialEnemyPower = specialEnemy ? 12 : 0;
   return {
     id: `tower-floor-${safeFloor}`,
     source: 'tower',
@@ -48,9 +109,14 @@ export function generateTowerEncounter(state, floor = state.tower?.currentFloor 
     age: state.age,
     type: boss ? 'specialFight' : 'fighter',
     name: `${baseName}${suffix}`,
-    difficulty: Math.max(1, Math.ceil(safeFloor / 3)),
-    enemyPower: Math.round(36 + safeFloor * 15 + Math.pow(safeFloor, 1.22) * 3 + deepFloorPower),
+    difficulty: Math.max(1, Math.ceil(safeFloor / 3)) + (specialEnemy ? 2 : 0),
+    enemyPower: Math.round(baseEnemyPower + specialEnemyPower),
     reward: 'tower',
+    specialTowerEnemy: Boolean(specialEnemy),
+    specialTowerEnemyId: specialEnemy?.id ?? null,
+    specialTowerEnemyName: specialEnemy?.name ?? '',
+    specialTowerEnemyImage: specialEnemy?.image ?? '',
+    specialTowerEnemyColor: specialEnemy?.color ?? '',
   };
 }
 
