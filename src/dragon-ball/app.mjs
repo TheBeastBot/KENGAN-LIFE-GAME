@@ -69,6 +69,14 @@ const LEGENDARY_SAIYAN_CARD_ART = {
   'legendary-limitless-fury': 'card-legendary-limitless-fury.jpg',
   'legendary-eruption-counter': 'card-legendary-eruption-counter.jpg',
   'legendary-cataclysm': 'card-legendary-cataclysm.jpg',
+  'legendary-emerald-typhoon': 'card-legendary-emerald-typhoon.jpg',
+  'legendary-crushing-grasp': 'card-legendary-crushing-grasp.jpg',
+  'legendary-roaring-uppercut': 'card-legendary-roaring-uppercut.jpg',
+  'legendary-savage-comet': 'card-legendary-savage-comet.jpg',
+  'legendary-emerald-aftershock': 'card-legendary-emerald-aftershock.jpg',
+  'legendary-zenkai-avalanche': 'card-legendary-zenkai-avalanche.jpg',
+  'legendary-primal-execution': 'card-legendary-primal-execution.jpg',
+  'legendary-giant-breakstorm': 'card-legendary-giant-breakstorm.jpg',
 };
 const TOWER_CARD_ART = {
   'tower-card-1': 'card-tower-infinite-breaker.jpg',

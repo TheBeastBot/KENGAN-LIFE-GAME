@@ -103,10 +103,23 @@ test('legacy Saiyan saves normalize to standard lineage without rerolling', () =
 
 test('Legendary Saiyan cards and forms are a complete lineage-exclusive package', () => {
   assert.equal(LEGENDARY_SAIYAN_FORM_IDS.length, 5);
-  assert.equal(LEGENDARY_SAIYAN_CARD_IDS.length, 10);
+  assert.ok(LEGENDARY_SAIYAN_CARD_IDS.length >= 18);
   assert.deepEqual(LEGENDARY_SAIYAN_FORM_IDS.map((id) => CARDS[id].minAge), [8, 11, 14, 17, 20]);
   assert.ok([...LEGENDARY_SAIYAN_CARD_IDS, ...LEGENDARY_SAIYAN_FORM_IDS]
     .every((id) => CARDS[id].lineages?.includes('legendary-super-saiyan')));
+});
+
+test('Legendary Saiyans have a varied exclusive move arsenal', () => {
+  const legendaryMoves = LEGENDARY_SAIYAN_CARD_IDS.map((id) => CARDS[id])
+    .filter((item) => item.type === 'move');
+  assert.ok(legendaryMoves.length >= 12);
+  assert.ok(legendaryMoves.some((item) => item.effect.hits >= 5));
+  assert.ok(legendaryMoves.some((item) => item.effect.ignoreBlock));
+  assert.ok(legendaryMoves.some((item) => item.effect.damagePerFocus));
+  assert.ok(legendaryMoves.some((item) => item.effect.missingHealthDamage));
+  assert.ok(legendaryMoves.some((item) => item.effect.draw));
+  assert.ok(legendaryMoves.some((item) => item.effect.ki));
+  assert.ok(legendaryMoves.some((item) => item.effect.exhaust && item.cooldownAges));
 });
 
 test('Legendary Saiyan portraits and exclusive card illustrations are stored locally', async () => {
@@ -121,6 +134,15 @@ test('Legendary Saiyan portraits and exclusive card illustrations are stored loc
   ];
   await Promise.all(files.map((file) =>
     access(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+});
+
+test('Legendary Saiyan exclusive card illustrations are unique', async () => {
+  const files = LEGENDARY_SAIYAN_CARD_IDS.map((id) => `card-${id}.jpg`);
+  const images = await Promise.all(files.map((file) =>
+    readFile(new URL(`../assets/dragon-ball/generated/${file}`, import.meta.url))));
+  const hashes = images.map((image) => createHash('sha256').update(image).digest('hex'));
+  assert.equal(new Set(files).size, LEGENDARY_SAIYAN_CARD_IDS.length);
+  assert.equal(new Set(hashes).size, LEGENDARY_SAIYAN_CARD_IDS.length);
 });
 
 test('every Infinite Tower card has unique locally stored artwork', async () => {
@@ -1437,6 +1459,8 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /const SAIYAN_FORM_ART/);
   assert.match(appSource, /const LEGENDARY_SAIYAN_FORM_ART/);
   assert.match(appSource, /const LEGENDARY_SAIYAN_CARD_ART/);
+  assert.match(appSource, /card-legendary-emerald-typhoon\.jpg/);
+  assert.match(appSource, /card-legendary-primal-execution\.jpg/);
   assert.match(appSource, /const TOWER_CARD_ART/);
   assert.match(appSource, /towerEnemyArt/);
   assert.match(appSource, /specialTowerEnemyImage/);

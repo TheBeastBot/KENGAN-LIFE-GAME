@@ -135,6 +135,14 @@ const legendarySaiyanCards = [
   card('legendary-limitless-fury', 'Limitless Fury', 'support', 1, 'Gain 2 maximum Ki, refill 3 Ki, and draw 2 cards. Exhaust.', { maxKi: 2, ki: 3, draw: 2, exhaust: true }, { rarity: 'legendary', minAge: 17, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
   card('legendary-eruption-counter', 'Emerald Eruption Counter', 'counter', 2, 'Gain 20 Block and deal 22 damage through Block.', { block: 20, damage: 22, ignoreBlock: true }, { rarity: 'legendary', minAge: 17, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
   card('legendary-cataclysm', 'Legendary Cataclysm', 'move', 3, 'Deal 48 damage plus 60% of missing Health. Exhaust. Cooldown 2 Age Ups.', { damage: 48, missingHealthDamage: 0.6, exhaust: true }, { rarity: 'legendary', minAge: 20, cooldownAges: 2, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-emerald-typhoon', 'Emerald Typhoon', 'move', 2, 'Strike 6 times for 7 damage and draw 1.', { damage: 7, hits: 6, draw: 1 }, { rarity: 'epic', minAge: 8, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-crushing-grasp', 'Crushing Grasp', 'move', 1, 'Deal 18 damage through Block and gain 2 Focus.', { damage: 18, ignoreBlock: true, focus: 2 }, { rarity: 'epic', minAge: 11, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-roaring-uppercut', 'Roaring Uppercut', 'move', 1, 'Deal 14 damage, gain 2 Focus, and draw 1.', { damage: 14, focus: 2, draw: 1 }, { rarity: 'rare', minAge: 8, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-savage-comet', 'Savage Comet', 'move', 2, 'Deal 26 damage and refill 2 Ki.', { damage: 26, ki: 2 }, { rarity: 'epic', minAge: 14, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-emerald-aftershock', 'Emerald Aftershock', 'move', 2, 'Deal 24 damage, apply 3 Weak, and draw 1.', { damage: 24, weak: 3, draw: 1 }, { rarity: 'epic', minAge: 14, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-zenkai-avalanche', 'Zenkai Avalanche', 'move', 2, 'Deal 20 damage plus 45% of missing Health.', { damage: 20, missingHealthDamage: 0.45 }, { rarity: 'legendary', minAge: 17, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-primal-execution', 'Primal Execution', 'move', 3, 'Deal 42 damage plus 3 per Focus. Consume all Focus. Cooldown 1 Age Up.', { damage: 42, damagePerFocus: 3, consumeFocus: true }, { rarity: 'legendary', minAge: 17, cooldownAges: 1, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
+  card('legendary-giant-breakstorm', 'Giant Breakstorm', 'move', 3, 'Strike 3 times for 18 damage. Exhaust. Cooldown 1 Age Up.', { damage: 18, hits: 3, exhaust: true }, { rarity: 'legendary', minAge: 20, cooldownAges: 1, lineages: [LEGENDARY_SAIYAN_LINEAGE] }),
 ];
 
 const towerCards = [
