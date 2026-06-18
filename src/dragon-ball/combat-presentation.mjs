@@ -1,4 +1,18 @@
 export const COMBAT_PREFS_KEY = 'dragon-ball-combat-prefs-v1';
+export const COMBAT_SOUND_SOURCES = {
+  impact: './assets/dragon-ball/audio/impact.ogg',
+  ki: './assets/dragon-ball/audio/ki.ogg',
+  heal: './assets/dragon-ball/audio/heal.ogg',
+  guard: './assets/dragon-ball/audio/guard.ogg',
+  charge: './assets/dragon-ball/audio/charge.ogg',
+  transform: './assets/dragon-ball/audio/transform.ogg',
+  dodge: './assets/dragon-ball/audio/dodge.ogg',
+  warning: './assets/dragon-ball/audio/warning.ogg',
+  victory: './assets/dragon-ball/audio/victory.ogg',
+  defeat: './assets/dragon-ball/audio/defeat.ogg',
+  ui: './assets/dragon-ball/audio/ui.ogg',
+  toggle: './assets/dragon-ball/audio/toggle.ogg',
+};
 
 const MOTION_MODES = new Set(['full', 'reduced', 'off']);
 const KI_WORDS = /\b(beam|wave|blast|cannon|sphere|ray|flash|bomb|grenade|shot|bullet|photon|galick|masenko|kame|spirit|ki)\b/i;
@@ -218,11 +232,15 @@ export function createSequenceController({
   };
 }
 
-export function createCombatAudio({ contextFactory } = {}) {
+export function createCombatAudio({ contextFactory, audioFactory, soundSources = COMBAT_SOUND_SOURCES } = {}) {
   let context = null;
   const createContext = contextFactory ?? (() => {
     const AudioContext = globalThis.AudioContext ?? globalThis.webkitAudioContext;
     return AudioContext ? new AudioContext() : null;
+  });
+  const createAudio = audioFactory ?? ((src) => {
+    const Audio = globalThis.Audio;
+    return Audio ? new Audio(src) : null;
   });
 
   const tones = {
@@ -241,6 +259,20 @@ export function createCombatAudio({ contextFactory } = {}) {
   return {
     play(name, enabled) {
       if (!enabled) return;
+      const source = soundSources[name];
+      if (source) {
+        try {
+          const sample = createAudio(source);
+          if (sample) {
+            sample.volume = name === 'ui' || name === 'toggle' ? 0.35 : 0.58;
+            sample.currentTime = 0;
+            sample.play?.();
+            return;
+          }
+        } catch {
+          // Fall through to synthesized backup audio.
+        }
+      }
       context ??= createContext();
       if (!context) return;
       context.resume?.();

@@ -37,6 +37,17 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
 }[char]));
 const label = (value) => String(value).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (char) => char.toUpperCase());
 const GENERATED_ASSET_ROOT = './assets/dragon-ball/generated';
+const VFX_ASSETS = {
+  impactBurst: './assets/dragon-ball/vfx/impact-burst.png',
+  impactSpark: './assets/dragon-ball/vfx/impact-spark.png',
+  kiFlare: './assets/dragon-ball/vfx/ki-flare.png',
+  kiCore: './assets/dragon-ball/vfx/ki-core.png',
+  auraFlame: './assets/dragon-ball/vfx/aura-flame.png',
+  healSparkle: './assets/dragon-ball/vfx/heal-sparkle.png',
+  smokePuff: './assets/dragon-ball/vfx/smoke-puff.png',
+  speedTrace: './assets/dragon-ball/vfx/speed-trace.png',
+  slashArc: './assets/dragon-ball/vfx/slash-arc.png',
+};
 const KI_MOVE_WORDS = [
   'beam', 'wave', 'blast', 'cannon', 'sphere', 'ray', 'flash', 'bomb', 'grenade',
   'shot', 'bullet', 'photon', 'galick', 'masenko', 'kame', 'spirit', 'big bang', 'destructo',
@@ -151,6 +162,14 @@ function update(next, message = '') {
   toast = message;
   saveDragonBallGame(state);
   render();
+}
+
+function playUiSound(name = 'ui') {
+  if (name === 'ui') {
+    combatAudio.play('ui', combatPreferences.sound);
+    return;
+  }
+  combatAudio.play(name, combatPreferences.sound);
 }
 
 const sequenceController = createSequenceController({
@@ -592,7 +611,19 @@ function renderCombatEffect(stage) {
       <div class="combat-speed-lines"></div>
       <div class="combat-aura"></div>
       <div class="combat-beam"><i></i></div>
-      <div class="combat-impact"><img src="./assets/dragon-ball/energy-orb.svg" alt=""></div>
+      <img class="combat-vfx-sprite combat-vfx-speed" src="${VFX_ASSETS.speedTrace}" alt="">
+      <img class="combat-vfx-sprite combat-vfx-aura" src="${VFX_ASSETS.auraFlame}" alt="">
+      <img class="combat-vfx-sprite combat-vfx-heal" src="${VFX_ASSETS.healSparkle}" alt="">
+      <img class="combat-vfx-sprite combat-vfx-smoke" src="${VFX_ASSETS.smokePuff}" alt="">
+      <div class="combat-impact">
+        <img src="${VFX_ASSETS.impactBurst}" alt="">
+        <img src="${VFX_ASSETS.impactSpark}" alt="">
+        <img src="${VFX_ASSETS.slashArc}" alt="">
+      </div>
+      <div class="combat-ki-sprite">
+        <img src="${VFX_ASSETS.kiFlare}" alt="">
+        <img src="${VFX_ASSETS.kiCore}" alt="">
+      </div>
       <div class="combat-afterimage"></div>
       ${card ? `<div class="combat-card-callout"><img src="${cardArt(card)}" alt=""><b>${escapeHtml(card.name)}</b></div>` : ''}
       <div class="combat-effect-copy">
@@ -717,12 +748,13 @@ function handleAction(action) {
   if (action.startsWith('motion-')) {
     if (sequenceController.locked) sequenceController.flush();
     combatPreferences = saveCombatPreferences({ ...combatPreferences, motion: action.replace('motion-', '') });
+    playUiSound('toggle');
     render();
     return;
   }
   if (action === 'toggle-sound') {
     combatPreferences = saveCombatPreferences({ ...combatPreferences, sound: !combatPreferences.sound });
-    if (combatPreferences.sound) combatAudio.play('charge', true);
+    if (combatPreferences.sound) combatAudio.play('toggle', true);
     render();
     return;
   }
@@ -825,18 +857,21 @@ document.addEventListener('click', (event) => {
   if (tab) {
     activeTab = tab.dataset.tab;
     toast = '';
+    playUiSound('ui');
     render();
     return;
   }
   const filter = event.target.closest('[data-filter]');
   if (filter) {
     collectionFilter = filter.dataset.filter;
+    playUiSound('ui');
     render();
     return;
   }
   const detail = event.target.closest('[data-card-detail]');
   if (detail) {
     selectedCardId = detail.dataset.cardDetail;
+    playUiSound('ui');
     render();
     return;
   }

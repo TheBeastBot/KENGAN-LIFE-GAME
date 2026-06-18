@@ -1424,6 +1424,69 @@ test('combat audio remains lazy and only initializes after enabled playback', ()
   assert.equal(contexts, 1);
 });
 
+test('combat audio can use sourced samples before falling back to synthesized tones', () => {
+  let contexts = 0;
+  const played = [];
+  const audio = createCombatAudio({
+    contextFactory: () => {
+      contexts += 1;
+      return null;
+    },
+    audioFactory(src) {
+      return {
+        src,
+        volume: 0,
+        currentTime: 0,
+        play() { played.push(src); },
+      };
+    },
+  });
+  audio.play('impact', false);
+  assert.deepEqual(played, []);
+  assert.equal(contexts, 0);
+  audio.play('impact', true);
+  audio.play('ui', true);
+  assert.deepEqual(played, [
+    './assets/dragon-ball/audio/impact.ogg',
+    './assets/dragon-ball/audio/ui.ogg',
+  ]);
+  assert.equal(contexts, 0);
+});
+
+test('Dragon Ball sourced VFX and audio assets are local CC0 files', async () => {
+  const sourcedFiles = [
+    'assets/dragon-ball/SOURCED_ASSETS.md',
+    'assets/dragon-ball/vfx/impact-burst.png',
+    'assets/dragon-ball/vfx/impact-spark.png',
+    'assets/dragon-ball/vfx/ki-flare.png',
+    'assets/dragon-ball/vfx/ki-core.png',
+    'assets/dragon-ball/vfx/aura-flame.png',
+    'assets/dragon-ball/vfx/heal-sparkle.png',
+    'assets/dragon-ball/vfx/smoke-puff.png',
+    'assets/dragon-ball/vfx/speed-trace.png',
+    'assets/dragon-ball/vfx/slash-arc.png',
+    'assets/dragon-ball/audio/impact.ogg',
+    'assets/dragon-ball/audio/ki.ogg',
+    'assets/dragon-ball/audio/guard.ogg',
+    'assets/dragon-ball/audio/heal.ogg',
+    'assets/dragon-ball/audio/charge.ogg',
+    'assets/dragon-ball/audio/transform.ogg',
+    'assets/dragon-ball/audio/dodge.ogg',
+    'assets/dragon-ball/audio/warning.ogg',
+    'assets/dragon-ball/audio/victory.ogg',
+    'assets/dragon-ball/audio/defeat.ogg',
+    'assets/dragon-ball/audio/ui.ogg',
+    'assets/dragon-ball/audio/toggle.ogg',
+  ];
+  await Promise.all(sourcedFiles.map((file) => access(new URL(`../${file}`, import.meta.url))));
+  const manifest = await readFile(new URL('../assets/dragon-ball/SOURCED_ASSETS.md', import.meta.url), 'utf8');
+  assert.match(manifest, /Kenney Particle Pack/);
+  assert.match(manifest, /Kenney Impact Sounds/);
+  assert.match(manifest, /Kenney Sci-fi Sounds/);
+  assert.match(manifest, /Kenney Interface Sounds/);
+  assert.match(manifest, /CC0 1\.0/);
+});
+
 test('Dragon Ball page and original game expose separate launcher links and themed UI', async () => {
   const [html, appSource, originalSource, css] = await Promise.all([
     readFile(new URL('../dragon-ball.html', import.meta.url), 'utf8'),
@@ -1488,6 +1551,12 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(css, /ui-arena\.jpg/);
   assert.match(css, /transformed-pulse/);
   assert.match(css, /combat-effect-layer/);
+  assert.match(appSource, /assets\/dragon-ball\/vfx\/impact-burst\.png/);
+  assert.match(appSource, /assets\/dragon-ball\/vfx\/ki-flare\.png/);
+  assert.match(appSource, /assets\/dragon-ball\/vfx\/speed-trace\.png/);
+  assert.match(appSource, /combatAudio\.play\('ui'/);
+  assert.match(css, /combat-vfx-sprite/);
+  assert.match(css, /combat-vfx-aura/);
   assert.match(css, /combat-stage-ki-attack/);
   assert.match(css, /combat-stage-transform/);
   assert.match(css, /combat-stage-dodge/);
