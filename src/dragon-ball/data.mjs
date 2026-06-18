@@ -4,6 +4,13 @@ export const LEGENDARY_SAIYAN_LINEAGE = 'legendary-super-saiyan';
 export const STAT_KEYS = ['health', 'power', 'defense', 'speed', 'ki', 'spirit'];
 export const CARD_TYPES = ['move', 'form', 'heal', 'support', 'counter', 'injury'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const POWER_RATING_BY_RARITY = {
+  common: 1,
+  uncommon: 3,
+  rare: 8,
+  epic: 18,
+  legendary: 40,
+};
 
 function keywordsForEffect(effect = {}, type = '') {
   return [
@@ -77,11 +84,13 @@ function effectText(effect = {}) {
 
 const card = (id, name, type, cost, text, effect = {}, extra = {}) => {
   const rarity = extra.rarity ?? 'common';
+  const powerRating = extra.towerOnly ? 100 : (extra.powerRating ?? POWER_RATING_BY_RARITY[rarity] ?? 1);
   const metadata = {
     role: roleForCard(type, effect),
     archetypes: archetypesForCard(id, type, effect, extra),
     keywords: keywordsForEffect(effect, type),
     upgradeTier: RARITIES.indexOf(rarity) + 1 || 1,
+    powerRating,
   };
   return {
     id, name, type, cost, text, effect, rarity, minAge: 6, origins: [], ...metadata, ...extra,
@@ -89,6 +98,7 @@ const card = (id, name, type, cost, text, effect = {}, extra = {}) => {
     keywords: extra.keywords ?? metadata.keywords,
     role: extra.role ?? metadata.role,
     upgradeTier: extra.upgradeTier ?? metadata.upgradeTier,
+    powerRating: extra.powerRating ?? metadata.powerRating,
   };
 };
 

@@ -34,6 +34,7 @@ import {
 import { ok, fail, unwrap } from '../src/dragon-ball/action-result.mjs';
 import { analyzeDeck, suggestedDeck } from '../src/dragon-ball/deck-analysis.mjs';
 import { previewCardPlay, previewEnemyTurn, statusSummary } from '../src/dragon-ball/combat-preview.mjs';
+import { calculatePowerLevel, cardPowerRating, powerLevelTier } from '../src/dragon-ball/power-level.mjs';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -1560,8 +1561,42 @@ test('all combat cards expose professional metadata and exact utility text', () 
     assert.ok(Array.isArray(item.archetypes) && item.archetypes.length, `${id} missing archetypes`);
     assert.ok(Array.isArray(item.keywords) && item.keywords.length, `${id} missing keywords`);
     assert.equal(typeof item.upgradeTier, 'number', `${id} missing upgradeTier`);
+    assert.equal(typeof item.powerRating, 'number', `${id} missing powerRating`);
+    assert.ok(item.powerRating >= 1, `${id} should contribute to Power Level`);
     assert.doesNotMatch(item.text, /Build momentum with block, Focus, draw, or Ki\./);
   }
+});
+
+test('card power ratings and fighter Power Level reward rare cards and tower upgrades', () => {
+  assert.equal(cardPowerRating(CARDS['tower-card-1']), 100);
+  assert.equal(cardPowerRating(CARDS['tower-card-20']), 100);
+  assert.ok(cardPowerRating(CARDS['unique-senzu-bean']) > cardPowerRating(CARDS['quick-jab']));
+  assert.ok(cardPowerRating(CARDS['unique-final-flashpoint']) > cardPowerRating(CARDS['driving-kick']));
+
+  const state = createDragonBallRun({ origin: 'earthling', seed: 55 });
+  const base = calculatePowerLevel(state);
+  assert.ok(base.total > 0);
+  assert.equal(base.towerCardTotal, 0);
+  assert.equal(base.ownedCardCount, Object.values(state.collection).reduce((sum, count) => sum + count, 0));
+
+  const withRareCards = {
+    ...state,
+    collection: { ...state.collection, 'unique-senzu-bean': 1, 'unique-final-flashpoint': 2 },
+  };
+  const rareTotal = calculatePowerLevel(withRareCards);
+  assert.ok(rareTotal.normalCardTotal > base.normalCardTotal);
+
+  const withTower = {
+    ...withRareCards,
+    tower: {
+      ...withRareCards.tower,
+      cards: { 'tower-card-1': 1, 'tower-card-2': 3 },
+    },
+  };
+  const towerTotal = calculatePowerLevel(withTower);
+  assert.equal(towerTotal.towerCardTotal, 400);
+  assert.equal(towerTotal.total, rareTotal.total + 400);
+  assert.ok(powerLevelTier(towerTotal.total).effectLevel >= powerLevelTier(base.total).effectLevel);
 });
 
 test('Dragon Ball sourced VFX and audio assets are local CC0 files', async () => {

@@ -23,6 +23,7 @@ import {
 } from './combat-presentation.mjs';
 import { previewCardPlay, previewEnemyTurn, statusSummary } from './combat-preview.mjs';
 import { analyzeDeck, suggestedDeck } from './deck-analysis.mjs';
+import { calculatePowerLevel, cardPowerRating } from './power-level.mjs';
 
 const app = document.querySelector('#dragon-ball-app');
 let state = loadDragonBallGame();
@@ -223,6 +224,7 @@ function renderCard(item, { action = '', disabled = false, badge = '', compact =
       <span class="db-card-art"><img src="${cardArt(item)}" alt="" loading="lazy"></span>
       <span class="db-card-type">${escapeHtml(item.type)} / ${escapeHtml(item.rarity ?? 'common')}</span>
       <span class="db-card-text">${escapeHtml(item.text)}</span>
+      <span class="db-card-power">Power Rating +${cardPowerRating(item)}</span>
       ${badge ? `<strong class="db-card-badge">${escapeHtml(badge)}</strong>` : ''}
     </button>
   `;
@@ -264,11 +266,11 @@ function renderSetup() {
   `;
 }
 
-function renderHeader() {
+function renderHeader(powerLevel = calculatePowerLevel(state)) {
   const origin = ORIGINS[state.origin];
   const legendary = hasLegendaryLineage();
   return `
-    <header class="db-header ${legendary ? 'legendary-header' : ''}">
+    <header class="db-header ${legendary ? 'legendary-header' : ''} power-tier-${powerLevel.tier.id}">
       <div class="fighter-title">
         <img src="${originArt()}" alt="">
         <div><p>${legendary ? 'Legendary Super Saiyan' : origin.name} / Age ${state.age}</p><h1>${escapeHtml(state.name)}</h1><span>${legendary ? 'Unbound Growth · +1 Max Ki · +2 Focus when damaged' : origin.passive}</span></div>
@@ -277,6 +279,11 @@ function renderHeader() {
         <span>HP ${state.currentHealth}/${state.stats.health}</span>
         <i><b style="width:${Math.max(0, state.currentHealth / state.stats.health * 100)}%"></b></i>
         <strong>${state.zeni} Zeni</strong>
+      </div>
+      <div class="power-meter" title="${escapeHtml(powerLevel.tier.description)}">
+        <span>Power Level</span>
+        <strong>${powerLevel.total.toLocaleString()}</strong>
+        <small>${escapeHtml(powerLevel.tier.label)} / Cards ${powerLevel.normalCardTotal.toLocaleString()} / Tower ${powerLevel.towerCardTotal.toLocaleString()}</small>
       </div>
       <button class="icon-button" data-action="reset-run">New Run</button>
     </header>
@@ -606,6 +613,7 @@ function previewBadge(preview) {
 
 function renderCombat(combatState = state) {
   const combat = combatState.activeCombat;
+  const powerLevel = calculatePowerLevel(combatState);
   const enemyPreview = previewEnemyTurn(combatState);
   const statuses = statusSummary(combat);
   const activeForm = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
@@ -616,7 +624,7 @@ function renderCombat(combatState = state) {
   const locked = sequenceController.locked;
   const stageClass = combatStage ? `combat-stage-${combatStage.kind}` : '';
   return `
-    <main class="combat-screen motion-${combatPreferences.motion} ${stageClass} ${locked ? 'sequence-active' : ''} ${playerPercent <= 25 ? 'low-health' : ''}">
+    <main class="combat-screen motion-${combatPreferences.motion} power-effect-${powerLevel.tier.effectLevel} power-tier-${powerLevel.tier.id} ${stageClass} ${locked ? 'sequence-active' : ''} ${playerPercent <= 25 ? 'low-health' : ''}">
       <section class="combat-arena">
         <div class="combatant enemy" data-combat-target="enemy">
           <div><p>Enemy Intent</p><h2>${escapeHtml(enemyPreview.intentLabel)}</h2><span>${enemyPreview.intentType === 'attack' ? `Projected ${enemyPreview.projectedDamage} damage${enemyPreview.rawIncomingDamage !== enemyPreview.projectedDamage ? ` / Raw ${enemyPreview.rawIncomingDamage}` : ''}${enemyPreview.blockPiercePercent ? ` / ${enemyPreview.blockPiercePercent}% Block pierce` : ''}` : `Gains ${enemyPreview.guardBlockGain} Block`}</span></div>
@@ -729,11 +737,12 @@ function renderDetail() {
   const base = CARDS[selectedCardId];
   const item = base?.towerOnly ? towerCardAtRank(selectedCardId, state.tower.cards[selectedCardId]) : base;
   if (!item) return '';
+  const rating = cardPowerRating(item);
   return `
     <section class="detail-overlay" data-action="close-detail">
       <article class="detail-panel">
         ${renderCard(item)}
-        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><small>${item.towerOnly ? `Earned only in Infinite Tower / Rank ${item.towerRank} / Usable in every combat` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}${item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) ? ' / Legendary Super Saiyan lineage only' : ''}`}</small><button data-action="close-detail">Close</button></div>
+        <div><p>${label(item.type)} / ${label(item.rarity)}</p><h2>${escapeHtml(item.name)}</h2><span>${escapeHtml(item.text)}</span><strong class="detail-power-rating">Power Rating +${rating}${item.towerRank ? ` / Tower Rank ${item.towerRank}` : ''}</strong><small>${item.towerOnly ? `Earned only in Infinite Tower / Rank ${item.towerRank} / Usable in every combat` : `Minimum age ${item.minAge ?? 6}${item.origins?.length ? ` / ${item.origins.map((id) => ORIGINS[id].name).join(', ')} only` : ''}${item.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) ? ' / Legendary Super Saiyan lineage only' : ''}`}</small><button data-action="close-detail">Close</button></div>
       </article>
     </section>
   `;
@@ -763,6 +772,7 @@ function render() {
     app.innerHTML = renderCombat(visualState);
     return;
   }
+  const powerLevel = calculatePowerLevel(state);
   const content = activeTab === 'deck' ? renderDeck()
     : activeTab === 'collection' ? renderCollection()
       : activeTab === 'recovery' ? renderRecovery()
@@ -770,8 +780,8 @@ function render() {
           : activeTab === 'tower' ? renderTower()
             : renderJourney();
   app.innerHTML = `
-    <main class="db-shell">
-      ${renderHeader()}
+    <main class="db-shell power-effect-${powerLevel.tier.effectLevel} power-tier-${powerLevel.tier.id}">
+      ${renderHeader(powerLevel)}
       <nav class="db-nav">
         ${[['journey', 'Journey'], ['tower', 'Tower'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
         <a href="./index.html">Other Modes</a>
