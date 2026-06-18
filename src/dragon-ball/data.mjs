@@ -5,9 +5,92 @@ export const STAT_KEYS = ['health', 'power', 'defense', 'speed', 'ki', 'spirit']
 export const CARD_TYPES = ['move', 'form', 'heal', 'support', 'counter', 'injury'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
-const card = (id, name, type, cost, text, effect = {}, extra = {}) => ({
-  id, name, type, cost, text, effect, rarity: 'common', minAge: 6, origins: [], ...extra,
-});
+function keywordsForEffect(effect = {}, type = '') {
+  return [
+    effect.damage ? 'Damage' : '',
+    effect.block ? 'Block' : '',
+    effect.draw ? 'Draw' : '',
+    effect.focus ? 'Focus' : '',
+    effect.ki || effect.maxKi ? 'Ki' : '',
+    effect.spirit ? 'Spirit' : '',
+    effect.weak ? 'Weak' : '',
+    effect.burn ? 'Burn' : '',
+    effect.heal || effect.healPercent ? 'Heal' : '',
+    effect.clear || effect.clearAll ? 'Cleanse' : '',
+    effect.retainBlock ? 'Retain' : '',
+    effect.exhaust ? 'Exhaust' : '',
+    type === 'form' ? 'Transform' : '',
+    effect.dodgeChance ? 'Dodge' : '',
+    effect.ignoreBlock ? 'Pierce' : '',
+    effect.hits > 1 ? 'Multi-Hit' : '',
+  ].filter(Boolean);
+}
+
+function roleForCard(type, effect = {}) {
+  if (type === 'form') return 'form';
+  if (type === 'heal' || effect.heal || effect.healPercent) return 'healing';
+  if (type === 'counter' || effect.block || effect.retainBlock) return 'defense';
+  if (effect.draw || effect.ki || effect.maxKi || effect.spirit) return 'economy';
+  if ((effect.hits ?? 1) > 1 || effect.damagePerFocus || effect.consumeFocus) return 'combo';
+  if (effect.damage) return 'attack';
+  return 'utility';
+}
+
+function archetypesForCard(id, type, effect = {}, extra = {}) {
+  return [...new Set([
+    extra.towerOnly ? 'tower-scaling' : '',
+    extra.lineages?.includes(LEGENDARY_SAIYAN_LINEAGE) ? 'legendary-berserker' : '',
+    extra.origins?.includes('saiyan') || id.includes('zenkai') ? 'saiyan-rage' : '',
+    extra.origins?.includes('earthling') || id.includes('turtle') ? 'earthling-combo' : '',
+    extra.origins?.includes('namekian') || id.includes('namekian') ? 'namekian-endurance' : '',
+    extra.origins?.includes('android') || id.includes('reactor') ? 'android-reactor' : '',
+    effect.focus || effect.damagePerFocus ? 'focus-burst' : '',
+    effect.ki || effect.maxKi || effect.spirit ? 'ki-economy' : '',
+    effect.retainBlock ? 'defense-retain' : '',
+    effect.draw ? 'draw-engine' : '',
+    type === 'counter' || effect.block ? 'defense-retain' : '',
+    type === 'heal' || effect.heal || effect.healPercent ? 'namekian-endurance' : '',
+    type === 'form' ? 'focus-burst' : '',
+    !extra.towerOnly && !extra.lineages?.length && !extra.origins?.length && type === 'move' ? 'focus-burst' : '',
+  ].filter(Boolean))];
+}
+
+function effectText(effect = {}) {
+  const parts = [];
+  if (effect.damage) parts.push(`deal ${effect.damage} damage${effect.hits > 1 ? ` x${effect.hits}` : ''}${effect.ignoreBlock ? ' through Block' : ''}`);
+  if (effect.block) parts.push(`gain ${effect.block} Block`);
+  if (effect.heal) parts.push(`heal ${effect.heal}`);
+  if (effect.healPercent) parts.push(`heal ${Math.round(effect.healPercent * 100)}% Health`);
+  if (effect.draw) parts.push(`draw ${effect.draw}`);
+  if (effect.focus) parts.push(`gain ${effect.focus} Focus`);
+  if (effect.ki) parts.push(`gain ${effect.ki} Ki`);
+  if (effect.maxKi) parts.push(`gain ${effect.maxKi} max Ki`);
+  if (effect.spirit) parts.push(`restore ${effect.spirit} Spirit`);
+  if (effect.weak) parts.push(`apply ${effect.weak} Weak`);
+  if (effect.clear) parts.push(`clear ${effect.clear}`);
+  if (effect.clearAll) parts.push('clear Weak and Burn');
+  if (effect.retainBlock) parts.push(`retain ${Math.round(effect.retainBlock * 100)}% unused Block`);
+  if (effect.formSupport) parts.push(`strengthen your active form by ${Math.round(effect.formSupport * 100)}%`);
+  if (effect.exhaust) parts.push('Exhaust');
+  return `${parts.map((part, index) => index ? part : part[0].toUpperCase() + part.slice(1)).join(', ')}.`;
+}
+
+const card = (id, name, type, cost, text, effect = {}, extra = {}) => {
+  const rarity = extra.rarity ?? 'common';
+  const metadata = {
+    role: roleForCard(type, effect),
+    archetypes: archetypesForCard(id, type, effect, extra),
+    keywords: keywordsForEffect(effect, type),
+    upgradeTier: RARITIES.indexOf(rarity) + 1 || 1,
+  };
+  return {
+    id, name, type, cost, text, effect, rarity, minAge: 6, origins: [], ...metadata, ...extra,
+    archetypes: extra.archetypes ?? metadata.archetypes,
+    keywords: extra.keywords ?? metadata.keywords,
+    role: extra.role ?? metadata.role,
+    upgradeTier: extra.upgradeTier ?? metadata.upgradeTier,
+  };
+};
 
 const starterCards = [
   card('quick-jab', 'Quick Jab', 'move', 0, 'Deal 6 damage.', { damage: 6 }),
@@ -99,7 +182,7 @@ const utilityCards = Object.entries(utilityNames).flatMap(([type, names]) => nam
     Math.min(2, index >= 8 ? 2 : 1),
     type === 'counter' ? `Gain ${effects.block} Block${effects.draw ? ' and draw 1' : ''}.`
       : type === 'heal' ? `Heal ${effects.heal} and clear ${effects.clear}.`
-        : 'Build momentum with block, Focus, draw, or Ki.',
+        : effectText(effects),
     effects,
     { rarity: tier >= 3 ? 'epic' : tier >= 2 ? 'rare' : tier >= 1 ? 'uncommon' : 'common', minAge: 6 + tier * 2, origins: origin }
   );

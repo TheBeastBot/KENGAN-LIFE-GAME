@@ -4,17 +4,25 @@ import {
 import {
   RECOVERY_SERVICES, advanceAfterAgeDraft, beginAgeReward, beginEncounter,
   buyRecoveryService, canAgeUp, claimDraftCard, combatRewardFor, createDragonBallRun,
-  recoveryServiceCost, setDeck, validateDeck,
+  recoveryDisabledReason as recoveryDisabledReasonForState, recoveryServiceCost, setDeck,
+  tryAdvanceAfterAgeDraft, tryBeginAgeReward, tryBuyRecoveryService, tryClaimDraftCard,
+  trySetDeck, validateDeck,
 } from './state.mjs';
 import { enemyForEncounter, sagaNameForAge } from './campaign.mjs';
-import { endCombatTurn, playCombatCard, startDragonBallCombat } from './combat.mjs';
+import {
+  endCombatTurn, playCombatCard, startDragonBallCombat, tryEndCombatTurn,
+  tryPlayCombatCard, tryStartDragonBallCombat,
+} from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
 import {
-  claimTowerReward, generateTowerEncounter, setTowerLoadout, startTowerRun, towerCardAtRank,
+  claimTowerReward, generateTowerEncounter, retireTowerRun, setTowerLoadout, startTowerRun,
+  towerCardAtRank, tryClaimTowerReward, trySetTowerLoadout, tryStartTowerRun,
 } from './tower.mjs';
 import {
   createCombatAudio, createSequenceController, loadCombatPreferences, saveCombatPreferences,
 } from './combat-presentation.mjs';
+import { previewCardPlay, previewEnemyTurn, statusSummary } from './combat-preview.mjs';
+import { analyzeDeck, suggestedDeck } from './deck-analysis.mjs';
 
 const app = document.querySelector('#dragon-ball-app');
 let state = loadDragonBallGame();
@@ -164,6 +172,10 @@ function update(next, message = '') {
   render();
 }
 
+function updateResult(result) {
+  update(result.state, result.message || result.reason);
+}
+
 function playUiSound(name = 'ui') {
   if (name === 'ui') {
     combatAudio.play('ui', combatPreferences.sound);
@@ -205,7 +217,7 @@ function cardTone(item) {
 
 function renderCard(item, { action = '', disabled = false, badge = '', compact = false } = {}) {
   if (!item) return '';
-  return `
+  const cardButton = `
     <button class="db-card ${cardTone(item)} ${compact ? 'compact' : ''}" ${action ? `data-action="${action}"` : `data-card-detail="${item.id}"`} ${disabled ? 'disabled' : ''}>
       <span class="db-card-top"><b>${escapeHtml(item.name)}</b><i>${item.cost ?? '-'}</i></span>
       <span class="db-card-art"><img src="${cardArt(item)}" alt="" loading="lazy"></span>
@@ -214,6 +226,9 @@ function renderCard(item, { action = '', disabled = false, badge = '', compact =
       ${badge ? `<strong class="db-card-badge">${escapeHtml(badge)}</strong>` : ''}
     </button>
   `;
+  return action && disabled
+    ? `<div class="card-action-wrap">${cardButton}<button class="card-detail-chip" data-card-detail="${item.id}">Details</button></div>`
+    : cardButton;
 }
 
 function renderSetup() {
@@ -330,6 +345,7 @@ function renderJourney() {
 
 function renderDeck() {
   const deckCounts = state.deck.reduce((map, id) => ({ ...map, [id]: (map[id] ?? 0) + 1 }), {});
+  const diagnostics = analyzeDeck(state);
   const eligible = Object.keys(state.collection).filter((id) => {
     const item = CARDS[id];
     return item && !item.towerOnly && item.type !== 'stat' &&
@@ -337,10 +353,30 @@ function renderDeck() {
       (!item.lineages?.length || item.lineages.includes(state.saiyanLineage));
   });
   const validation = validateDeck(state);
+  const disabledReason = (item) => {
+    const cooldown = state.cooldowns[item.id] ?? 0;
+    const max = item.type === 'form' || item.rarity === 'legendary' ? 1 : Math.min(2, state.collection[item.id]);
+    if (cooldown > 0) return `${item.name} is cooling down for ${cooldown} Age Ups.`;
+    if ((item.minAge ?? 6) > state.age) return `${item.name} requires age ${item.minAge}.`;
+    if ((deckCounts[item.id] ?? 0) >= max) return `${item.name} exceeds its copy limit.`;
+    if (state.deck.length >= 20) return 'Deck cannot exceed 20 cards.';
+    if (item.origins?.length && !item.origins.includes(state.origin)) return `${item.name} is incompatible with this origin.`;
+    if (item.lineages?.length && !item.lineages.includes(state.saiyanLineage)) return `${item.name} requires the Legendary Super Saiyan lineage.`;
+    return '';
+  };
   return `
     <section class="deck-layout">
       <article class="deck-panel">
         <header><div><p>Active Combat Deck</p><h2>${state.deck.length}/20 Cards</h2></div><span class="${validation.valid ? 'valid' : 'invalid'}">${validation.valid ? 'Battle Ready' : validation.reason}</span></header>
+        <div class="deck-diagnostics">
+          <div><b>Average Cost</b><strong>${diagnostics.averageCost}</strong></div>
+          <div><b>Attacks</b><strong>${diagnostics.attackCount}</strong></div>
+          <div><b>Defense</b><strong>${diagnostics.defenseCount}</strong></div>
+          <div><b>Healing</b><strong>${diagnostics.healingCount}</strong></div>
+          <div class="deck-curve">${Object.entries(diagnostics.countsByCost).map(([cost, count]) => `<span><i>${cost}</i><b style="height:${Math.max(8, count * 10)}px"></b><small>${count}</small></span>`).join('')}</div>
+          <div class="deck-actions"><button data-action="deck-auto-build">Auto Build</button><button data-action="deck-clear-minimum">Clear To Minimum</button></div>
+          ${diagnostics.warnings.map((warning) => `<p class="deck-warning">${escapeHtml(warning)}</p>`).join('')}
+        </div>
         <div class="deck-list">
           ${Object.entries(deckCounts).map(([id, count]) => {
             const item = CARDS[id];
@@ -353,11 +389,10 @@ function renderDeck() {
         <div class="mini-card-grid">
           ${eligible.map((id) => {
             const item = CARDS[id];
-            const cooldown = state.cooldowns[id] ?? 0;
             const max = item.type === 'form' || item.rarity === 'legendary' ? 1 : Math.min(2, state.collection[id]);
-            const disabled = cooldown > 0 || (deckCounts[id] ?? 0) >= max || state.deck.length >= 20 || (item.minAge ?? 6) > state.age;
-            const badge = cooldown ? `${cooldown} ages` : `${deckCounts[id] ?? 0}/${max}`;
-            return renderCard(item, { action: `deck-add-${id}`, disabled, badge, compact: true });
+            const reason = disabledReason(item);
+            const badge = reason ? reason : `${deckCounts[id] ?? 0}/${max}`;
+            return `<div>${renderCard(item, { action: `deck-add-${id}`, disabled: Boolean(reason), badge, compact: true })}${reason ? `<p class="disabled-reason">${escapeHtml(reason)}</p>` : ''}</div>`;
           }).join('')}
         </div>
       </article>
@@ -492,9 +527,10 @@ function renderTower() {
           <div class="tower-rewards">
             <span><b>Every Floor</b> Permanent stat draft + Zeni</span>
             <span><b>Floor ${nextBoss}</b> ${boss ? 'Full heal + Tower Card draft' : 'Next Tower Card boss reward'}</span>
+            <span><b>Run Status</b> ${state.tower.active ? `Active climb. Retiring resets the next climb to floor 1, keeps rewards already earned, and adds no Injury.` : 'No active climb. Begin at floor 1 when ready.'}</span>
           </div>
           ${state.tower.active
-            ? `<button class="db-primary wide" data-action="tower-fight">Challenge Floor ${floor}</button>`
+            ? `<div class="tower-action-row"><button class="db-primary wide" data-action="tower-fight">Challenge Floor ${floor}</button><button data-action="tower-retire">Retire Climb</button></div>`
             : `<button class="db-primary wide" data-action="tower-start">Begin Climb</button>`}
         </article>
 
@@ -552,8 +588,26 @@ function renderTower() {
   `;
 }
 
+function renderStatusChips(items) {
+  return `<div class="combat-status-row">${items.map((item) => `<span class="combat-status-chip" title="${escapeHtml(item.description)}"><b>${escapeHtml(item.label)}</b>${escapeHtml(item.value)}</span>`).join('')}</div>`;
+}
+
+function previewBadge(preview) {
+  if (!preview.playable) return preview.reason;
+  const parts = [];
+  if (preview.damage) parts.push(`Deals ${preview.damage}`);
+  if (preview.blockGain) parts.push(`+${preview.blockGain} Block`);
+  if (preview.healGain) parts.push(`+${preview.healGain} HP`);
+  if (preview.drawCount) parts.push(`Draw ${preview.drawCount}`);
+  if (preview.transformsTo) parts.push('Transform');
+  if (preview.kiGain) parts.push(`+${preview.kiGain} Ki`);
+  return parts.join(' / ') || 'Utility';
+}
+
 function renderCombat(combatState = state) {
   const combat = combatState.activeCombat;
+  const enemyPreview = previewEnemyTurn(combatState);
+  const statuses = statusSummary(combat);
   const activeForm = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   const displayFormId = combatStage?.kind === 'transform' ? combatStage.formId : combat.player.activeForm;
   const displayForm = displayFormId ? CARDS[displayFormId] : activeForm;
@@ -565,15 +619,17 @@ function renderCombat(combatState = state) {
     <main class="combat-screen motion-${combatPreferences.motion} ${stageClass} ${locked ? 'sequence-active' : ''} ${playerPercent <= 25 ? 'low-health' : ''}">
       <section class="combat-arena">
         <div class="combatant enemy" data-combat-target="enemy">
-          <div><p>Enemy Intent</p><h2>${escapeHtml(combat.intent.label)}</h2><span>${combat.intent.damage ? `${combat.intent.damage} incoming damage${combat.intent.pierce ? ` / ${Math.round(combat.intent.pierce * 100)}% Block pierce` : ''}` : `${combat.intent.block} Block`}</span></div>
+          <div><p>Enemy Intent</p><h2>${escapeHtml(enemyPreview.intentLabel)}</h2><span>${enemyPreview.intentType === 'attack' ? `Projected ${enemyPreview.projectedDamage} damage${enemyPreview.rawIncomingDamage !== enemyPreview.projectedDamage ? ` / Raw ${enemyPreview.rawIncomingDamage}` : ''}${enemyPreview.blockPiercePercent ? ` / ${enemyPreview.blockPiercePercent}% Block pierce` : ''}` : `Gains ${enemyPreview.guardBlockGain} Block`}</span></div>
           <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
+          ${renderStatusChips(statuses.enemy)}
         </div>
         ${combatStage ? renderCombatEffect(combatStage) : ''}
         <div class="combatant player ${displayFormId ? 'transformed' : ''}" data-combat-target="player">
           <img src="${characterArt(combatState.origin, displayFormId)}" alt="${escapeHtml(displayForm?.name ?? ORIGINS[combatState.origin].name)}">
           <div><p>Turn ${combat.turn}</p><h2>${escapeHtml(combatState.name)}</h2><span>${displayForm?.name ?? ORIGINS[combatState.origin].name} / Block ${combat.player.block ?? 0} / Focus ${combat.player.focus}${displayForm?.effect.dodgeChance ? ` / Dodge ${Math.round(displayForm.effect.dodgeChance * 100)}%` : ''}</span></div>
           <div class="combat-health"><span>Health ${combat.player.health}/${combat.player.maxHealth}</span><i><b style="width:${playerPercent}%"></b></i></div>
+          ${renderStatusChips(statuses.player)}
         </div>
       </section>
       <section class="combat-controls">
@@ -583,15 +639,22 @@ function renderCombat(combatState = state) {
             ${['full', 'reduced', 'off'].map((mode) => `<button class="${combatPreferences.motion === mode ? 'active' : ''}" data-action="motion-${mode}">${label(mode)}</button>`).join('')}
             <button class="${combatPreferences.sound ? 'active' : ''}" data-action="toggle-sound">Sound ${combatPreferences.sound ? 'On' : 'Off'}</button>
           </div>
-          <button data-action="end-turn" ${locked ? 'disabled' : ''}>End Turn</button>
+          <button data-action="end-turn" ${locked ? 'disabled' : ''}>${enemyPreview.projectedDamage ? `End Turn: Take ${enemyPreview.projectedDamage}` : 'End Turn'}</button>
         </header>
+        <div class="combat-pile-strip">
+          <span>Draw <b>${combat.drawPile.length}</b></span>
+          <span>Discard <b>${combat.discardPile.length}</b></span>
+          <span>Exhaust <b>${combat.exhaustPile.length}</b></span>
+          <span>Hand <b>${combat.hand.length}</b></span>
+        </div>
         <div class="combat-hand">
           ${combat.hand.map((id, index) => {
             const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, combatState.tower.cards[id]) : CARDS[id];
+            const preview = previewCardPlay(combatState, index);
             return renderCard(item, {
               action: `play-${index}`,
-              disabled: locked || item.type === 'injury' || item.cost > combat.player.ki,
-              badge: item.towerOnly ? `Tower Rank ${combatState.tower.cards[id]}` : '',
+              disabled: locked || !preview.playable,
+              badge: item.towerOnly ? `Tower Rank ${combatState.tower.cards[id]} / ${previewBadge(preview)}` : previewBadge(preview),
             });
           }).join('')}
         </div>
@@ -759,49 +822,55 @@ function handleAction(action) {
     return;
   }
   if (action === 'tower-start') {
-    const next = startTowerRun(state);
-    update(next, next === state ? 'The Infinite Tower is currently unavailable.' : 'Infinite Tower run started.');
+    updateResult(tryStartTowerRun(state));
+    return;
+  }
+  if (action === 'tower-retire') {
+    if (!window.confirm('Retire this Tower climb? You keep rewards already earned.')) return;
+    update(retireTowerRun(state), 'Retired from the Infinite Tower. Rewards already earned were kept.');
     return;
   }
   if (action === 'tower-fight') {
     const encounter = generateTowerEncounter(state);
-    const next = startDragonBallCombat(state, encounter.id);
-    presentCombatAction(state, next, { type: 'battleStart' }, { showResolvedCombat: true });
+    const result = tryStartDragonBallCombat(state, encounter.id);
+    if (!result.ok) updateResult(result);
+    else presentCombatAction(state, result.state, { type: 'battleStart' }, { showResolvedCombat: true });
     return;
   }
   if (action.startsWith('tower-add-')) {
     const id = action.replace('tower-add-', '');
-    const next = setTowerLoadout(state, [...state.tower.loadout, id]);
-    update(next, next === state ? 'That Tower Card cannot be equipped right now.' : `${CARDS[id].name} equipped.`);
+    const result = trySetTowerLoadout(state, [...state.tower.loadout, id]);
+    update(result.state, result.ok ? `${CARDS[id].name} equipped.` : result.reason);
     return;
   }
   if (action.startsWith('tower-remove-')) {
     const id = action.replace('tower-remove-', '');
-    const next = setTowerLoadout(state, state.tower.loadout.filter((cardId) => cardId !== id));
-    update(next, next === state ? 'That Tower Card cannot be removed right now.' : `${CARDS[id].name} removed.`);
+    const result = trySetTowerLoadout(state, state.tower.loadout.filter((cardId) => cardId !== id));
+    update(result.state, result.ok ? `${CARDS[id].name} removed.` : result.reason);
     return;
   }
   if (action.startsWith('encounter-')) {
     const id = action.replace('encounter-', '');
     const encounter = state.encounters.find((item) => item.id === id);
     if (['fighter', 'specialFight'].includes(encounter?.type)) {
-      const next = startDragonBallCombat(state, id);
-      presentCombatAction(state, next, { type: 'battleStart' }, { showResolvedCombat: true });
+      const result = tryStartDragonBallCombat(state, id);
+      if (!result.ok) updateResult(result);
+      else presentCombatAction(state, result.state, { type: 'battleStart' }, { showResolvedCombat: true });
     } else {
       update(beginEncounter(state, id));
     }
     return;
   }
   if (action === 'age-up') {
-    update(beginAgeReward(state));
+    updateResult(tryBeginAgeReward(state));
     return;
   }
   if (action.startsWith('draft-')) {
     const id = action.replace('draft-', '');
-    const next = ['towerStat', 'towerCard'].includes(state.pendingDraft?.kind)
-      ? claimTowerReward(state, id)
-      : state.pendingDraft?.ageAdvance ? advanceAfterAgeDraft(state, id) : claimDraftCard(state, id);
-    update(next, `Claimed ${CARDS[id]?.name}.`);
+    const result = ['towerStat', 'towerCard'].includes(state.pendingDraft?.kind)
+      ? tryClaimTowerReward(state, id)
+      : state.pendingDraft?.ageAdvance ? tryAdvanceAfterAgeDraft(state, id) : tryClaimDraftCard(state, id);
+    updateResult(result);
     return;
   }
   if (action.startsWith('play-')) {
@@ -809,34 +878,51 @@ function handleAction(action) {
     const handIndex = Number(action.replace('play-', ''));
     const id = state.activeCombat?.hand?.[handIndex];
     const card = CARDS[id]?.towerOnly ? towerCardAtRank(id, state.tower.cards[id]) : CARDS[id];
-    const next = playCombatCard(state, handIndex);
-    presentCombatAction(state, next, { type: 'card', card });
+    const result = tryPlayCombatCard(state, handIndex);
+    if (!result.ok) updateResult(result);
+    else presentCombatAction(state, result.state, { type: 'card', card });
     return;
   }
   if (action === 'end-turn') {
     if (sequenceController.locked) return;
-    presentCombatAction(state, endCombatTurn(state), { type: 'enemyTurn' });
+    const result = tryEndCombatTurn(state);
+    if (!result.ok) updateResult(result);
+    else presentCombatAction(state, result.state, { type: 'enemyTurn' });
     return;
   }
   if (action.startsWith('recover-')) {
     const id = action.replace('recover-', '');
-    const next = buyRecoveryService(state, id);
-    update(next, next === state ? 'That recovery service is currently unavailable.' : `${RECOVERY_SERVICES[id].name} complete.`);
+    updateResult(tryBuyRecoveryService(state, id));
+    return;
+  }
+  if (action === 'deck-auto-build') {
+    updateResult(trySetDeck(state, suggestedDeck(state)));
+    return;
+  }
+  if (action === 'deck-clear-minimum') {
+    const starter = new Set(ORIGINS[state.origin]?.deck ?? []);
+    const nextDeck = [...state.deck];
+    for (let index = nextDeck.length - 1; index >= 0 && nextDeck.length > 10; index -= 1) {
+      const id = nextDeck[index];
+      const item = CARDS[id];
+      const duplicate = nextDeck.filter((cardId) => cardId === id).length > 1;
+      if (!starter.has(id) && item?.type !== 'form' && duplicate) nextDeck.splice(index, 1);
+    }
+    updateResult(trySetDeck(state, nextDeck));
     return;
   }
   if (action.startsWith('deck-add-')) {
     const id = action.replace('deck-add-', '');
-    const nextDeck = [...state.deck, id];
-    const validation = validateDeck(state, nextDeck);
-    update(validation.valid ? setDeck(state, nextDeck) : state, validation.valid ? `${CARDS[id].name} added.` : validation.reason);
+    const result = trySetDeck(state, [...state.deck, id]);
+    update(result.state, result.ok ? `${CARDS[id].name} added.` : result.reason);
     return;
   }
   if (action.startsWith('deck-remove-')) {
     const id = action.replace('deck-remove-', '');
     const index = state.deck.lastIndexOf(id);
     const nextDeck = state.deck.filter((_, cardIndex) => cardIndex !== index);
-    const validation = validateDeck(state, nextDeck);
-    update(validation.valid ? setDeck(state, nextDeck) : state, validation.valid ? `${CARDS[id].name} removed.` : validation.reason);
+    const result = trySetDeck(state, nextDeck);
+    update(result.state, result.ok ? `${CARDS[id].name} removed.` : result.reason);
     return;
   }
   if (action === 'close-detail') {

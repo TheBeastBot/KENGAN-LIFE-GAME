@@ -1,5 +1,6 @@
 import { CARDS, INJURY_CARDS, STAT_CARD_IDS, TOWER_CARD_IDS, TOWER_ENEMY_NAMES } from './data.mjs';
 import { hashSeed, sample } from './random.mjs';
+import { fail, ok } from './action-result.mjs';
 
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -129,6 +130,14 @@ export function startTowerRun(state) {
   };
 }
 
+export function tryStartTowerRun(state) {
+  if (state.age < 8) return fail(state, 'The Infinite Tower opens at age 8.');
+  if (state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (state.activeCombat) return fail(state, 'Finish the current combat first.');
+  if (state.tower?.active) return fail(state, 'The Infinite Tower run is already active.');
+  return ok(startTowerRun(state), 'Infinite Tower run started.');
+}
+
 export function validateTowerLoadout(state, loadout = state.tower?.loadout ?? []) {
   if (!Array.isArray(loadout)) return { valid: false, reason: 'Tower loadout data is invalid.' };
   if (loadout.length > 5) return { valid: false, reason: 'Only five Tower Cards may be equipped.' };
@@ -144,6 +153,12 @@ export function validateTowerLoadout(state, loadout = state.tower?.loadout ?? []
 export function setTowerLoadout(state, loadout) {
   const validation = validateTowerLoadout(state, loadout);
   return validation.valid ? { ...state, tower: { ...state.tower, loadout: [...loadout] } } : state;
+}
+
+export function trySetTowerLoadout(state, loadout) {
+  const validation = validateTowerLoadout(state, loadout);
+  if (!validation.valid) return fail(state, validation.reason);
+  return ok(setTowerLoadout(state, loadout), 'Tower loadout updated.');
 }
 
 export function towerRewardDraft(state, floor, kind) {
@@ -190,6 +205,31 @@ export function claimTowerReward(state, cardId) {
     next.pendingDraft = null;
   }
   return next;
+}
+
+export function tryClaimTowerReward(state, cardId) {
+  if (!state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (!['towerStat', 'towerCard'].includes(state.pendingDraft.kind) || !state.pendingDraft.options?.includes(cardId)) {
+    return fail(state, 'That reward is unavailable.');
+  }
+  return ok(claimTowerReward(state, cardId), `Tower reward: ${CARDS[cardId]?.name}.`);
+}
+
+export function retireTowerRun(state) {
+  if (!state.tower?.active) return state;
+  const floor = Math.max(1, Math.floor(Number(state.tower.currentFloor) || 1));
+  return {
+    ...state,
+    tower: {
+      ...state.tower,
+      active: false,
+      currentFloor: 1,
+      highestFloor: state.tower.highestFloor,
+      cards: { ...state.tower.cards },
+      loadout: [...state.tower.loadout],
+    },
+    history: [{ type: 'tower', text: `Retired from the Infinite Tower on floor ${floor}.` }, ...state.history].slice(0, 100),
+  };
 }
 
 export function towerCardAtRank(cardId, rank = 1) {

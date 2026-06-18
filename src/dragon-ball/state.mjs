@@ -5,6 +5,7 @@ import {
 import { createRewardDraft, encountersForAge, legendarySaiyanEncountersForAge } from './campaign.mjs';
 import { createRng, hashSeed } from './random.mjs';
 import { createTowerState, normalizeTowerState } from './tower.mjs';
+import { fail, ok } from './action-result.mjs';
 
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -61,6 +62,25 @@ export function buyRecoveryService(state, serviceId) {
   }
   next.history.unshift({ type: 'recovery', text: `${service.name} restored Health for ${cost} Zeni.` });
   return next;
+}
+
+export function recoveryDisabledReason(state, serviceId) {
+  const service = RECOVERY_SERVICES[serviceId];
+  if (!service) return 'That recovery service is currently unavailable.';
+  if (state.activeCombat) return 'Finish the current combat first.';
+  if (state.tower?.active) return 'Climb In Progress';
+  const cost = recoveryServiceCost(state, serviceId);
+  if (state.zeni < cost) return `Need ${cost - state.zeni} more Zeni`;
+  if (serviceId === 'injury-treatment' && !state.injuries.length) return 'No Injuries';
+  if (serviceId !== 'injury-treatment' && state.currentHealth >= state.stats.health) return 'Health Full';
+  return '';
+}
+
+export function tryBuyRecoveryService(state, serviceId) {
+  const reason = recoveryDisabledReason(state, serviceId);
+  if (reason) return fail(state, reason);
+  const next = buyRecoveryService(state, serviceId);
+  return ok(next, `${RECOVERY_SERVICES[serviceId].name} complete.`);
 }
 
 export function combatRewardFor(state, encounter) {
@@ -228,6 +248,12 @@ export function setDeck(state, deck) {
   return validation.valid ? { ...state, deck: [...deck] } : state;
 }
 
+export function trySetDeck(state, deck) {
+  const validation = validateDeck(state, deck);
+  if (!validation.valid) return fail(state, validation.reason);
+  return ok(setDeck(state, deck), 'Deck updated.');
+}
+
 export function beginEncounter(state, encounterId) {
   if (state.pendingDraft || state.activeCombat || state.tower?.active) return state;
   const encounter = state.encounters.find((item) => item.id === encounterId);
@@ -262,6 +288,13 @@ export function claimDraftCard(state, cardId) {
   return next;
 }
 
+export function tryClaimDraftCard(state, cardId) {
+  if (!state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (!state.pendingDraft.options?.includes(cardId)) return fail(state, 'That reward is unavailable.');
+  const next = claimDraftCard(state, cardId);
+  return ok(next, `Claimed ${CARDS[cardId]?.name}.`);
+}
+
 export function canAgeUp(state) {
   return !state.pendingDraft && !state.activeCombat && state.encounters.length > 0 &&
     state.encounters.every((item) => state.clearedEncounterIds.includes(item.id));
@@ -279,6 +312,13 @@ export function beginAgeReward(state) {
       options: createRewardDraft(state, state.age >= 18 ? 'legendary' : 'special', `age-${state.age}`),
     },
   };
+}
+
+export function tryBeginAgeReward(state) {
+  if (state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (state.activeCombat) return fail(state, 'Finish the current combat first.');
+  if (!canAgeUp(state)) return fail(state, 'Clear every encounter before Aging Up.');
+  return ok(beginAgeReward(state), 'Choose your age reward.');
 }
 
 export function finishAgeAdvance(state) {
@@ -312,6 +352,12 @@ export function advanceAfterAgeDraft(state, cardId) {
         : `Reached age ${nextAge}. A new chapter begins.`,
     }, ...claimed.history].slice(0, 100),
   };
+}
+
+export function tryAdvanceAfterAgeDraft(state, cardId) {
+  if (!state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (!state.pendingDraft.ageAdvance || !state.pendingDraft.options?.includes(cardId)) return fail(state, 'That reward is unavailable.');
+  return ok(advanceAfterAgeDraft(state, cardId), `Claimed ${CARDS[cardId]?.name}.`);
 }
 
 export function recordCombatVictory(state, encounter, cooldowns = {}) {

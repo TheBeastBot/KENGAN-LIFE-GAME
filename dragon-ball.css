@@ -117,6 +117,20 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .deck-row b, .deck-row span { display: block; }
 .deck-row span { font-size: .75rem; opacity: .7; }
 .deck-row > button:last-child { width: 32px; height: 32px; border: 2px solid var(--line); background: white; font-weight: 1000; }
+.deck-diagnostics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 14px 0 18px; padding: 14px; border: 3px solid var(--line); background: #fff8dd; box-shadow: 4px 4px 0 #0001; }
+.deck-diagnostics > div:not(.deck-curve):not(.deck-actions) { display: grid; gap: 3px; padding: 9px; background: white; border: 2px solid #f0d98b; }
+.deck-diagnostics b { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.deck-diagnostics strong { color: var(--blue-dark); font-size: 1.35rem; }
+.deck-curve { grid-column: span 2; display: flex; align-items: end; gap: 8px; min-height: 68px; padding: 9px; background: #081b35; border: 2px solid var(--line); }
+.deck-curve span { flex: 1; display: grid; justify-items: center; align-items: end; gap: 3px; color: white; font-size: .72rem; }
+.deck-curve b { width: 100%; max-width: 26px; min-height: 8px; background: linear-gradient(#67ddff,#f8d84d); border-radius: 8px 8px 2px 2px; }
+.deck-curve i { font-style: normal; color: #bdefff; }
+.deck-warning { grid-column: 1/-1; margin: 0; padding: 7px 9px; border-left: 5px solid #d33a2c; background: #ffe5dc; color: #5e130c; font-weight: 800; }
+.deck-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.deck-actions button { border: 2px solid var(--line); background: var(--blue); color: white; font-weight: 900; padding: 8px 10px; text-transform: uppercase; }
+.disabled-reason { margin: 6px 0 8px; color: #f5d58b; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
+.card-action-wrap { display: grid; gap: 6px; }
+.card-detail-chip { border: 2px solid #fff; background: #091a36; color: white; font-weight: 900; padding: 7px; text-transform: uppercase; }
 .mini-card-grid, .card-gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 14px; }
 .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 .filter-row button { border: 2px solid var(--line); background: white; padding: 8px 14px; font-weight: 900; }
@@ -218,6 +232,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .tower-rewards { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
 .tower-rewards span { padding: 11px; background: var(--cream); border-left: 5px solid #8e41dc; font-size: .78rem; }
 .tower-rewards b { display: block; color: #7225a7; text-transform: uppercase; }
+.tower-action-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: stretch; }
+.tower-action-row > button:last-child { border: 3px solid white; background: #4c1a16; color: white; font-weight: 1000; padding: 12px 16px; text-transform: uppercase; }
 .tower-loadout-panel { display: flex; flex-direction: column; }
 .tower-loadout-panel > header span, .tower-collection-panel > header span { max-width: 210px; text-align: right; font-size: .75rem; }
 .tower-loadout-slots { display: grid; gap: 8px; margin-top: 16px; }
@@ -256,6 +272,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .combatant h2 { margin: 4px 0; text-transform: uppercase; font-style: italic; }
 .combatant p { color: var(--gold); font-weight: 900; text-transform: uppercase; }
 .combat-health { grid-column: 1/-1; }
+.combat-status-row { grid-column: 1/-1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 7px; }
+.combat-status-chip { display: inline-flex; gap: 5px; align-items: center; max-width: 100%; padding: 5px 8px; border: 2px solid #ffffffb8; border-radius: 999px; background: #071b35d9; color: white; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
+.combat-status-chip b { color: var(--gold); }
 @keyframes transformed-pulse {
   from { filter: drop-shadow(0 0 15px #fff) drop-shadow(0 0 22px #55c7ff); }
   to { filter: drop-shadow(0 0 24px #fff) drop-shadow(0 0 38px #ffd84d); transform: scale(1.025); }
@@ -351,6 +370,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .combat-settings { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px !important; }
 .combat-settings button { padding: 7px 9px !important; border-width: 2px !important; color: #d9eaff !important; background: #0a2348 !important; font-size: .66rem; text-transform: uppercase; }
 .combat-settings button.active { color: #071b3b !important; background: #7bdcff !important; box-shadow: 0 0 12px #54cfff; }
+.combat-pile-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.combat-pile-strip span { padding: 7px 10px; border: 2px solid #8fdfff; background: #09264d; font-weight: 900; text-transform: uppercase; }
+.combat-preview-badge { display: block; margin-top: 5px; color: #ffe68a; font-size: .72rem; font-weight: 1000; text-transform: uppercase; overflow-wrap: anywhere; }
 @keyframes combat-card-callout { to { opacity: 1; transform: translate(-50%,0) rotate(-2deg); } }
 @keyframes combat-title-in { from { opacity:0; transform:scale(.55); } to { opacity:1; transform:scale(1); } }
 @keyframes player-lunge { 45% { transform:translateX(26vw) scale(1.08); filter:brightness(1.7) drop-shadow(0 0 28px #fff); } }
@@ -496,6 +518,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .tower-rewards { grid-template-columns: 1fr; }
   .tower-floor-panel > header, .tower-loadout-panel > header, .tower-collection-panel > header { align-items: flex-start; }
   .tower-card-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .deck-diagnostics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .deck-curve, .deck-actions { grid-column: 1/-1; }
+  .combat-preview-badge, .db-card-badge { max-width: 100%; font-size: .62rem; line-height: 1.15; overflow-wrap: anywhere; }
+  .tower-action-row { grid-template-columns: 1fr; }
   .saga-banner h2 { font-size: 1.65rem; }
   .saga-banner span { font-size: .78rem; }
   .age-up-panel { align-items: stretch; flex-direction: column; }

@@ -5,6 +5,7 @@ import { recordCombatDefeat, recordCombatVictory, validateDeck } from './state.m
 import {
   generateTowerEncounter, recordTowerDefeat, recordTowerVictory, towerCardAtRank,
 } from './tower.mjs';
+import { fail, ok } from './action-result.mjs';
 
 const clone = (value) => structuredClone(value);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -114,6 +115,19 @@ export function startDragonBallCombat(state, encounterId) {
   return { ...state, activeCombat: combat };
 }
 
+export function tryStartDragonBallCombat(state, encounterId) {
+  if (state.pendingDraft) return fail(state, 'Choose your pending reward first.');
+  if (state.activeCombat) return fail(state, 'Finish the current combat first.');
+  const towerEncounter = state.tower?.active ? generateTowerEncounter(state) : null;
+  const encounter = state.encounters.find((item) => item.id === encounterId) ??
+    (towerEncounter?.id === encounterId ? towerEncounter : null);
+  if (!encounter || !['fighter', 'specialFight'].includes(encounter.type)) return fail(state, 'Encounter is unavailable.');
+  if (state.tower?.active && encounter.source !== 'tower') return fail(state, 'Finish or retire the active Tower climb first.');
+  const validation = validateDeck(state);
+  if (!validation.valid) return fail(state, validation.reason);
+  return ok(startDragonBallCombat(state, encounterId), 'Combat started.');
+}
+
 function scaledDamage(state, combat, base) {
   const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   const multiplier = (form?.effect.powerMultiplier ?? 1) * (form ? 1 + (combat.player.formBoost ?? 0) : 1);
@@ -206,6 +220,16 @@ export function playCombatCard(state, handIndex) {
   return next;
 }
 
+export function tryPlayCombatCard(state, handIndex) {
+  if (!state.activeCombat) return fail(state, 'Finish the current combat first.');
+  const id = state.activeCombat.hand?.[handIndex];
+  const item = CARDS[id]?.towerOnly ? towerCardAtRank(id, state.tower?.cards?.[id]) : CARDS[id];
+  if (!item) return fail(state, 'Card is unavailable.');
+  if (item.type === 'injury') return fail(state, 'Injury cards cannot be played.');
+  if (item.cost > state.activeCombat.player.ki) return fail(state, 'Not enough Ki.');
+  return ok(playCombatCard(state, handIndex), `${item.name} played.`);
+}
+
 export function endCombatTurn(state) {
   if (!state.activeCombat) return state;
   const next = clone(state);
@@ -276,4 +300,9 @@ export function endCombatTurn(state) {
   combat.intent = enemyIntent(combat);
   next.currentHealth = clamp(combat.player.health, 0, next.stats.health);
   return next;
+}
+
+export function tryEndCombatTurn(state) {
+  if (!state.activeCombat) return fail(state, 'Finish the current combat first.');
+  return ok(endCombatTurn(state), 'Turn ended.');
 }

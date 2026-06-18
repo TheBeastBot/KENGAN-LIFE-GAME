@@ -13,23 +13,27 @@ import {
 } from '../src/dragon-ball/campaign.mjs';
 import {
   advanceAfterAgeDraft, beginAgeReward, beginEncounter, canAgeUp, claimDraftCard,
-  createDragonBallRun, normalizeDragonBallState, setDeck, validateDeck,
+  createDragonBallRun, normalizeDragonBallState, setDeck, trySetDeck, validateDeck,
 } from '../src/dragon-ball/state.mjs';
 import {
   attackIsDodged, endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
+  tryEndCombatTurn, tryPlayCombatCard, tryStartDragonBallCombat,
 } from '../src/dragon-ball/combat.mjs';
 import {
   clearDragonBallGame, loadDragonBallGame, saveDragonBallGame,
 } from '../src/dragon-ball/persistence.mjs';
 import {
-  claimTowerReward, createTowerState, generateTowerEncounter, setTowerLoadout,
+  claimTowerReward, createTowerState, generateTowerEncounter, retireTowerRun, setTowerLoadout,
   SPECIAL_TOWER_ENEMIES, specialTowerEnemyForFloor, startTowerRun,
-  towerCardAtRank, towerRewardDraft, validateTowerLoadout,
+  towerCardAtRank, towerRewardDraft, trySetTowerLoadout, tryStartTowerRun, validateTowerLoadout,
 } from '../src/dragon-ball/tower.mjs';
 import {
   COMBAT_PREFS_KEY, buildCombatSequence, createCombatAudio, createSequenceController,
   loadCombatPreferences, saveCombatPreferences,
 } from '../src/dragon-ball/combat-presentation.mjs';
+import { ok, fail, unwrap } from '../src/dragon-ball/action-result.mjs';
+import { analyzeDeck, suggestedDeck } from '../src/dragon-ball/deck-analysis.mjs';
+import { previewCardPlay, previewEnemyTurn, statusSummary } from '../src/dragon-ball/combat-preview.mjs';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -1451,6 +1455,113 @@ test('combat audio can use sourced samples before falling back to synthesized to
     './assets/dragon-ball/audio/ui.ogg',
   ]);
   assert.equal(contexts, 0);
+});
+
+test('action result helpers preserve state and explicit failure reasons', () => {
+  const state = createDragonBallRun({ origin: 'earthling', seed: 42 });
+  assert.deepEqual(ok(state, 'Ready'), { ok: true, state, message: 'Ready', reason: '' });
+  assert.deepEqual(fail(state, 'Nope'), { ok: false, state, message: '', reason: 'Nope' });
+  assert.equal(unwrap(ok(state)), state);
+  assert.equal(unwrap(state), state);
+});
+
+test('result wrappers expose exact interactive failure reasons without changing legacy behavior', () => {
+  const state = createDragonBallRun({ origin: 'saiyan', seed: 11, lineageOverride: 'standard' });
+  const pendingDraft = beginEncounter(state, 'age-6-mentor');
+  assert.equal(tryStartDragonBallCombat(pendingDraft, 'age-6-fighter').reason, 'Choose your pending reward first.');
+  assert.equal(tryStartDragonBallCombat(state, 'missing').reason, 'Encounter is unavailable.');
+  assert.equal(trySetDeck(state, state.deck.slice(0, 9)).reason, 'Deck needs at least 10 cards.');
+
+  const combatState = startDragonBallCombat(state, 'age-6-fighter');
+  const injuryState = {
+    ...combatState,
+    activeCombat: { ...combatState.activeCombat, hand: ['injury-bruised-ribs'], player: { ...combatState.activeCombat.player, ki: 3 } },
+  };
+  assert.equal(tryPlayCombatCard(injuryState, 0).reason, 'Injury cards cannot be played.');
+  const noKiState = {
+    ...combatState,
+    activeCombat: { ...combatState.activeCombat, hand: ['rising-uppercut'], player: { ...combatState.activeCombat.player, ki: 0 } },
+  };
+  assert.equal(tryPlayCombatCard(noKiState, 0).reason, 'Not enough Ki.');
+  assert.equal(tryEndCombatTurn(state).reason, 'Finish the current combat first.');
+
+  assert.equal(tryStartTowerRun({ ...state, age: 7 }).reason, 'The Infinite Tower opens at age 8.');
+  assert.equal(trySetTowerLoadout(state, ['tower-card-1']).reason, 'Infinite Breaker is not owned.');
+  const towerRun = startTowerRun({ ...state, age: 8 });
+  const retired = retireTowerRun(towerRun);
+  assert.equal(retired.tower.active, false);
+  assert.equal(retired.tower.currentFloor, 1);
+  assert.match(retired.history[0].text, /Retired from the Infinite Tower on floor 1/);
+});
+
+test('combat previews and status summaries mirror combat outcomes without mutation', () => {
+  const state = startDragonBallCombat(createDragonBallRun({ origin: 'saiyan', seed: 9, lineageOverride: 'standard' }), 'age-6-fighter');
+  const before = structuredClone(state);
+  const index = state.activeCombat.hand.findIndex((id) => CARDS[id].type !== 'injury');
+  const preview = previewCardPlay(state, index);
+  const played = playCombatCard(state, index);
+  assert.equal(preview.cardId, state.activeCombat.hand[index]);
+  assert.equal(preview.currentKi, state.activeCombat.player.ki);
+  if (preview.damage > 0 && played.activeCombat) assert.ok(played.activeCombat.enemy.health <= state.activeCombat.enemy.health);
+  assert.deepEqual(state, before);
+
+  const enemyPreview = previewEnemyTurn(state);
+  const ended = endCombatTurn(state);
+  assert.equal(enemyPreview.intentLabel, state.activeCombat.intent.label);
+  assert.ok(enemyPreview.projectedHealthAfter <= state.activeCombat.player.health);
+  assert.equal(enemyPreview.projectedHealthAfter, ended.activeCombat?.player?.health ?? ended.currentHealth);
+
+  const summary = statusSummary({
+    ...state.activeCombat,
+    player: { ...state.activeCombat.player, block: 5, focus: 2, retainBlock: 0.5, activeForm: 'form-saiyan-9' },
+    enemy: { ...state.activeCombat.enemy, weak: 1, burn: 2, regenPerTurn: 3, blockPierceBonus: 0.2 },
+  });
+  assert.ok(summary.player.some((item) => item.id === 'block' && item.description));
+  assert.ok(summary.player.some((item) => item.id === 'dodge'));
+  assert.ok(summary.enemy.some((item) => item.id === 'regeneration'));
+  assert.ok(summary.enemy.some((item) => item.id === 'block-pierce'));
+});
+
+test('deck analysis diagnoses cost curve and suggested deck returns a valid eligible deck', () => {
+  const state = createDragonBallRun({ origin: 'android', seed: 4 });
+  const analysis = analyzeDeck(state);
+  assert.equal(analysis.valid, true);
+  assert.equal(analysis.size, 10);
+  assert.equal(analysis.minSize, 10);
+  assert.equal(analysis.maxSize, 20);
+  assert.ok(analysis.countsByType.move >= 1);
+  assert.ok(Object.hasOwn(analysis.countsByCost, 0));
+  assert.ok(Number.isFinite(analysis.averageCost));
+
+  const thin = analyzeDeck(state, state.deck.slice(0, 8));
+  assert.equal(thin.valid, false);
+  assert.equal(thin.warnings[0], 'Deck needs at least 10 cards.');
+  assert.ok(thin.warnings.includes('Deck needs at least 10 cards.'));
+
+  const expanded = {
+    ...state,
+    age: 20,
+    collection: Object.fromEntries(Object.values(CARDS)
+      .filter((item) => item.type !== 'stat' && item.type !== 'injury' && !item.towerOnly && (!item.origins?.length || item.origins.includes('android')))
+      .map((item) => [item.id, 2])),
+    cooldowns: { 'unique-reactor-overdrive': 2 },
+  };
+  const suggestion = suggestedDeck(expanded);
+  assert.ok(suggestion.length >= 10 && suggestion.length <= 20);
+  assert.equal(validateDeck(expanded, suggestion).valid, true);
+  assert.ok(!suggestion.includes('unique-reactor-overdrive'));
+});
+
+test('all combat cards expose professional metadata and exact utility text', () => {
+  const allowedRoles = new Set(['attack', 'defense', 'economy', 'healing', 'form', 'combo', 'utility']);
+  for (const id of [...COMBAT_CARD_IDS, ...TOWER_CARD_IDS]) {
+    const item = CARDS[id];
+    assert.ok(allowedRoles.has(item.role), `${id} missing role`);
+    assert.ok(Array.isArray(item.archetypes) && item.archetypes.length, `${id} missing archetypes`);
+    assert.ok(Array.isArray(item.keywords) && item.keywords.length, `${id} missing keywords`);
+    assert.equal(typeof item.upgradeTier, 'number', `${id} missing upgradeTier`);
+    assert.doesNotMatch(item.text, /Build momentum with block, Focus, draw, or Ki\./);
+  }
 });
 
 test('Dragon Ball sourced VFX and audio assets are local CC0 files', async () => {
