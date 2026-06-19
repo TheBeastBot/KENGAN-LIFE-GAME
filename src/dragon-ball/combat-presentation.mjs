@@ -67,7 +67,7 @@ function cardStages(previous, next, card) {
     result.push(stage('transform', {
       label: card.name,
       formId: card.id,
-      sound: 'transform',
+      sound: 'transform-card',
       duration: 900,
     }));
   } else if (card.effect?.damage) {
@@ -250,6 +250,7 @@ export function createCombatAudio({ contextFactory, audioFactory, soundSources =
     guard: [180, 260, 0.16],
     charge: [130, 420, 0.3],
     transform: [90, 680, 0.55],
+    'transform-card': [70, 940, 0.72],
     dodge: [900, 260, 0.12],
     warning: [150, 150, 0.24],
     victory: [330, 880, 0.5],

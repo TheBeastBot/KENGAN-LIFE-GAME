@@ -1334,6 +1334,7 @@ test('combat sequences expose status, victory, defeat, and transformation previe
   let after = playCombatCard(before, 0);
   const transform = buildCombatSequence(before, after, { type: 'card', card: CARDS['form-saiyan-3'] });
   assert.equal(transform.find((stage) => stage.kind === 'transform').formId, 'form-saiyan-3');
+  assert.equal(transform.find((stage) => stage.kind === 'transform').sound, 'transform-card');
 
   before = startDragonBallCombat(base, encounter.id);
   before.activeCombat.hand = ['heavy-palm'];
