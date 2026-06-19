@@ -5,6 +5,9 @@ import { recordCombatDefeat, recordCombatVictory, validateDeck } from './state.m
 import {
   generateTowerEncounter, recordTowerDefeat, recordTowerVictory, towerCardAtRank,
 } from './tower.mjs';
+import {
+  ABILITY_CATALOG, abilityRank, scaledAbilityEffect,
+} from './abilities.mjs';
 import { fail, ok } from './action-result.mjs';
 
 const clone = (value) => structuredClone(value);
@@ -102,6 +105,20 @@ export function startDragonBallCombat(state, encounterId) {
     exhaustPile: [],
     hand: [],
     cooldownsTriggered: {},
+    usedAbilityIds: [],
+    abilityEffects: {
+      nextDamageMultiplier: 1,
+      damageBoostMultiplier: 1,
+      damageBoostTurns: 0,
+      nextExtraHits: 0,
+      reflectNext: 0,
+      reduceNext: 0,
+      nullifyNext: false,
+      preventAndReflectNext: false,
+      skipNextEnemyTurn: false,
+      immortalNext: false,
+      weakOnReflect: 0,
+    },
     log: [
       enemy.transformationName
         ? `${enemy.baseName ?? encounter.name} enters ${enemy.transformationName}.`
@@ -164,6 +181,91 @@ function lateEnemyPressure(state, encounter) {
   };
 }
 
+function ensureAbilityCombatFields(combat) {
+  combat.usedAbilityIds ??= [];
+  combat.abilityEffects ??= {};
+  combat.abilityEffects.nextDamageMultiplier ??= 1;
+  combat.abilityEffects.damageBoostMultiplier ??= 1;
+  combat.abilityEffects.damageBoostTurns ??= 0;
+  combat.abilityEffects.nextExtraHits ??= 0;
+  combat.abilityEffects.reflectNext ??= 0;
+  combat.abilityEffects.reduceNext ??= 0;
+  combat.abilityEffects.nullifyNext ??= false;
+  combat.abilityEffects.preventAndReflectNext ??= false;
+  combat.abilityEffects.skipNextEnemyTurn ??= false;
+  combat.abilityEffects.immortalNext ??= false;
+  combat.abilityEffects.weakOnReflect ??= 0;
+}
+
+function abilityDamageMultiplier(combat) {
+  ensureAbilityCombatFields(combat);
+  return (combat.abilityEffects.nextDamageMultiplier ?? 1) *
+    (combat.abilityEffects.damageBoostTurns > 0 ? combat.abilityEffects.damageBoostMultiplier ?? 1 : 1);
+}
+
+export function activateCombatAbility(state, abilityId) {
+  if (!state.activeCombat) return state;
+  if (!state.abilities?.equipped?.includes(abilityId) || !state.abilities?.owned?.[abilityId]) return state;
+  if (!ABILITY_CATALOG[abilityId]) return state;
+  if (state.activeCombat.usedAbilityIds?.includes(abilityId)) return state;
+  const next = clone(state);
+  const combat = next.activeCombat;
+  ensureAbilityCombatFields(combat);
+  const item = ABILITY_CATALOG[abilityId];
+  const effect = scaledAbilityEffect(item, abilityRank(next, abilityId));
+  combat.usedAbilityIds.push(abilityId);
+  if (effect.kind === 'ki') combat.player.ki = Math.min(combat.player.maxKi + 2, combat.player.ki + effect.ki);
+  else if (effect.kind === 'block') combat.player.block += effect.block;
+  else if (effect.kind === 'focusDraw') {
+    combat.player.focus += effect.focus;
+    drawCards(combat, effect.draw);
+  } else if (effect.kind === 'healPercent') combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + Math.ceil(combat.player.maxHealth * effect.healPercent));
+  else if (effect.kind === 'cleanse') {
+    combat.player.weak = 0;
+    combat.player.burn = 0;
+  } else if (effect.kind === 'drawKi') {
+    drawCards(combat, effect.draw);
+    combat.player.ki = Math.min(combat.player.maxKi + 2, combat.player.ki + effect.ki);
+  } else if (effect.kind === 'pressureBreak') {
+    combat.enemy.weak += effect.weak;
+    combat.enemy.block = Math.max(0, Math.round(combat.enemy.block * (1 - effect.blockBurn)));
+  } else if (effect.kind === 'nextDamage') combat.abilityEffects.nextDamageMultiplier = Math.max(combat.abilityEffects.nextDamageMultiplier, effect.multiplier);
+  else if (effect.kind === 'reflect') combat.abilityEffects.reflectNext = Math.max(combat.abilityEffects.reflectNext, effect.ratio);
+  else if (effect.kind === 'reduceNext') combat.abilityEffects.reduceNext = Math.max(combat.abilityEffects.reduceNext, effect.ratio);
+  else if (effect.kind === 'damageTurns') {
+    combat.abilityEffects.damageBoostMultiplier = Math.max(combat.abilityEffects.damageBoostMultiplier, effect.multiplier);
+    combat.abilityEffects.damageBoostTurns = Math.max(combat.abilityEffects.damageBoostTurns, effect.turns);
+  } else if (effect.kind === 'nullifyNext') combat.abilityEffects.nullifyNext = true;
+  else if (effect.kind === 'skipEnemy') combat.abilityEffects.skipNextEnemyTurn = true;
+  else if (effect.kind === 'overflow') {
+    combat.player.maxKi += effect.maxKi;
+    combat.player.ki = combat.player.maxKi + 2;
+  } else if (effect.kind === 'absoluteReversal') {
+    combat.abilityEffects.reflectNext = Math.max(combat.abilityEffects.reflectNext, effect.ratio);
+    combat.abilityEffects.weakOnReflect = Math.max(combat.abilityEffects.weakOnReflect, effect.weak);
+  } else if (effect.kind === 'extraHit') combat.abilityEffects.nextExtraHits = Math.max(combat.abilityEffects.nextExtraHits, effect.hits);
+  else if (effect.kind === 'immortal') combat.abilityEffects.immortalNext = true;
+  else if (effect.kind === 'damageTurnsFocus') {
+    combat.abilityEffects.damageBoostMultiplier = Math.max(combat.abilityEffects.damageBoostMultiplier, effect.multiplier);
+    combat.abilityEffects.damageBoostTurns = Math.max(combat.abilityEffects.damageBoostTurns, effect.turns);
+    combat.player.focus += effect.focus;
+  } else if (effect.kind === 'eraseFate') {
+    combat.abilityEffects.nullifyNext = true;
+    combat.abilityEffects.preventAndReflectNext = true;
+  }
+  next.currentHealth = clamp(combat.player.health, 0, next.stats.health);
+  combat.log.unshift(`${next.name} activates ${item.name}.`);
+  return next;
+}
+
+export function tryActivateCombatAbility(state, abilityId) {
+  if (!state.activeCombat) return fail(state, 'Finish the current combat first.');
+  if (!state.abilities?.equipped?.includes(abilityId)) return fail(state, 'Equip that ability before combat.');
+  if (!state.abilities?.owned?.[abilityId]) return fail(state, 'Ability is not owned.');
+  if (state.activeCombat.usedAbilityIds?.includes(abilityId)) return fail(state, 'Ability was already used this combat.');
+  return ok(activateCombatAbility(state, abilityId), `${ABILITY_CATALOG[abilityId]?.name ?? 'Ability'} activated.`);
+}
+
 export function playCombatCard(state, handIndex) {
   if (!state.activeCombat) return state;
   const next = clone(state);
@@ -180,9 +282,13 @@ export function playCombatCard(state, handIndex) {
     const focusDamage = combat.player.focus * (item.effect.damagePerFocus ?? 0);
     const baseDamage = item.effect.damage + Math.round(missingHealth * (item.effect.missingHealthDamage ?? 0)) + focusDamage;
     let totalDealt = 0;
-    for (let hit = 0; hit < (item.effect.hits ?? 1); hit += 1) {
-      totalDealt += dealToEnemy(combat, scaledDamage(next, combat, baseDamage), item.effect.ignoreBlock);
+    const abilityMultiplier = abilityDamageMultiplier(combat);
+    const hits = (item.effect.hits ?? 1) + (combat.abilityEffects?.nextExtraHits ?? 0);
+    for (let hit = 0; hit < hits; hit += 1) {
+      totalDealt += dealToEnemy(combat, Math.round(scaledDamage(next, combat, baseDamage) * abilityMultiplier), item.effect.ignoreBlock);
     }
+    combat.abilityEffects.nextDamageMultiplier = 1;
+    combat.abilityEffects.nextExtraHits = 0;
     if (item.effect.consumeFocus) combat.player.focus = 0;
     message += ` dealt ${totalDealt}`;
   }
@@ -234,11 +340,15 @@ export function endCombatTurn(state) {
   if (!state.activeCombat) return state;
   const next = clone(state);
   const combat = next.activeCombat;
+  ensureAbilityCombatFields(combat);
   const intent = combat.intent;
   combat.discardPile.push(...combat.hand);
   combat.hand = [];
   combat.enemy.block = 0;
-  if (intent.type === 'guard') {
+  if (combat.abilityEffects.skipNextEnemyTurn) {
+    combat.abilityEffects.skipNextEnemyTurn = false;
+    combat.log.unshift(`${combat.enemy.name}'s action was skipped by Time Skip.`);
+  } else if (intent.type === 'guard') {
     combat.enemy.block += intent.block;
     combat.enemy.phase += intent.focus ?? 0;
     combat.log.unshift(`${combat.enemy.name} gains ${intent.block} Block.`);
@@ -264,11 +374,36 @@ export function endCombatTurn(state) {
     )));
     const effectiveBlock = Math.round(combat.player.block * (1 - (intent.pierce ?? 0)));
     const blocked = Math.min(effectiveBlock, raw);
-    const damage = raw - blocked;
+    let damage = raw - blocked;
+    let prevented = 0;
+    const reduction = combat.abilityEffects.reduceNext ?? 0;
+    if (reduction > 0) {
+      const reducedDamage = Math.max(0, Math.round(damage * (1 - reduction)));
+      prevented += damage - reducedDamage;
+      damage = reducedDamage;
+      combat.abilityEffects.reduceNext = 0;
+    }
+    if (combat.abilityEffects.nullifyNext) {
+      prevented += damage;
+      damage = 0;
+      combat.abilityEffects.nullifyNext = false;
+    }
     combat.player.block = Math.max(0, combat.player.block - blocked);
     combat.player.health = Math.max(0, combat.player.health - damage);
-    if (intent.weak) combat.player.weak += intent.weak;
-    if (intent.burn) combat.player.burn += intent.burn;
+    const reflected = Math.round((combat.abilityEffects.reflectNext ?? 0) * damage) +
+      (combat.abilityEffects.preventAndReflectNext ? prevented : 0);
+    if (reflected > 0) {
+      combat.enemy.health = Math.max(0, combat.enemy.health - reflected);
+      combat.log.unshift(`${next.name}'s ability reflects ${reflected} damage.`);
+    }
+    if (combat.abilityEffects.weakOnReflect && reflected > 0) combat.enemy.weak += combat.abilityEffects.weakOnReflect;
+    combat.abilityEffects.reflectNext = 0;
+    combat.abilityEffects.preventAndReflectNext = false;
+    combat.abilityEffects.weakOnReflect = 0;
+    if (damage > 0 || prevented === 0) {
+      if (intent.weak) combat.player.weak += intent.weak;
+      if (intent.burn) combat.player.burn += intent.burn;
+    }
     if (state.origin === 'saiyan' && damage > 0) {
       combat.player.focus += state.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE ? 2 : 1;
     }
@@ -283,9 +418,15 @@ export function endCombatTurn(state) {
     combat.player.health = Math.max(0, combat.player.health - combat.player.burn * 2);
     combat.player.burn = Math.max(0, combat.player.burn - 1);
   }
+  if (combat.player.health <= 0 && combat.abilityEffects.immortalNext) {
+    combat.player.health = 1;
+    combat.abilityEffects.immortalNext = false;
+    combat.log.unshift(`${next.name}'s Immortal Moment refuses defeat.`);
+  }
   if (state.origin === 'namekian') combat.player.health = Math.min(combat.player.maxHealth, combat.player.health + 3);
   combat.player.block = Math.round(combat.player.block * (combat.player.retainBlock ?? 0));
   combat.player.retainBlock = 0;
+  if (combat.abilityEffects.damageBoostTurns > 0) combat.abilityEffects.damageBoostTurns -= 1;
   const form = combat.player.activeForm ? CARDS[combat.player.activeForm] : null;
   if (combat.player.health <= 0) {
     return combat.encounter.source === 'tower'

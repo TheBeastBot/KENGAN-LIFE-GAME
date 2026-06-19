@@ -283,6 +283,33 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .tower-locked h2 { margin: 4px; font-size: clamp(2.5rem,7vw,5rem); text-transform: uppercase; font-style: italic; }
 .tower-locked span { max-width: 540px; line-height: 1.6; }
 
+.ability-screen { display: grid; gap: 22px; }
+.ability-hero { min-height: 210px; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 32px; color: white; border: 4px solid var(--line); box-shadow: 8px 8px 0 var(--orange); background: radial-gradient(circle at 82% 16%,#8fdfff55,transparent 24%),linear-gradient(120deg,#061b39,#0c3d7a 58%,#f47b20); }
+.ability-hero p, .ability-equipped-panel header p, .ability-rarity-section header p { margin: 0; color: var(--gold); font-size: .72rem; font-weight: 1000; letter-spacing: .14em; text-transform: uppercase; }
+.ability-hero h2 { margin: 4px 0; font-size: clamp(2.5rem,7vw,5rem); line-height: .9; font-style: italic; text-transform: uppercase; text-shadow: 4px 4px 0 #061225; }
+.ability-reroll-bank { min-width: 190px; display: grid; gap: 8px; padding: 18px; color: var(--blue-dark); background: #fff7d8; border: 3px solid white; text-align: center; }
+.ability-reroll-bank span { font-size: .72rem; font-weight: 1000; text-transform: uppercase; }
+.ability-reroll-bank strong { font-size: 3rem; line-height: 1; color: var(--orange-dark); }
+.ability-reveal { padding: 18px 22px; border: 4px solid var(--line); background: white; box-shadow: 6px 6px 0 #0002; }
+.ability-reveal h3 { margin: 4px 0; font-size: 1.6rem; text-transform: uppercase; }
+.ability-equipped-panel, .ability-rarity-section { padding: 22px; border: 3px solid var(--line); background: #fff8dd; box-shadow: 5px 5px 0 #18223a20; }
+.ability-equipped-panel header, .ability-rarity-section header { display: flex; justify-content: space-between; align-items: end; gap: 14px; margin-bottom: 14px; }
+.ability-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(210px,1fr)); gap: 14px; }
+.ability-card, .ability-empty { min-height: 190px; display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 3px solid var(--line); background: white; box-shadow: 4px 4px 0 #08122622; }
+.ability-card p, .ability-card h3, .ability-card span { margin: 0; }
+.ability-card p { font-size: .62rem; font-weight: 1000; letter-spacing: .12em; text-transform: uppercase; color: var(--orange-dark); }
+.ability-card h3 { font-size: 1.2rem; text-transform: uppercase; }
+.ability-card strong { width: max-content; padding: 4px 8px; background: var(--blue-dark); color: var(--gold); }
+.ability-card span { line-height: 1.35; font-size: .86rem; }
+.ability-card button { margin-top: auto; border: 2px solid var(--line); background: var(--blue); color: white; padding: 9px; font-weight: 1000; text-transform: uppercase; }
+.ability-card.rare { background: linear-gradient(145deg,#e6f1ff,#a8d9ff); }
+.ability-card.epic { color: white; background: linear-gradient(145deg,#25124d,#8f48d7); border-color: #d7b4ff; }
+.ability-card.legendary { background: linear-gradient(145deg,#fff2a8,#ffae25); box-shadow: 0 0 18px #ffb300,5px 5px 0 #512400; }
+.ability-card.mythic { color: white; background: linear-gradient(145deg,#03150d,#0e5934 60%,#06102a); border-color: #9dff59; box-shadow: 0 0 26px #61ff37aa,5px 5px 0 #07180b; }
+.ability-card.equipped { outline: 4px solid #52d7ff; }
+.ability-card.used { filter: grayscale(.55) brightness(.75); }
+.ability-empty { display: grid; place-items: center; color: #5c667a; background: #e8edf7; text-align: center; }
+
 .combat-screen { position: relative; min-height: 100vh; overflow: hidden; background: #071b3b; color: white; }
 .combat-screen::before { content:""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; background:
   radial-gradient(circle at 50% 18%,#67ddff33,transparent 32%),
@@ -409,6 +436,16 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .combat-settings { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px !important; }
 .combat-settings button { padding: 7px 9px !important; border-width: 2px !important; color: #d9eaff !important; background: #0a2348 !important; font-size: .66rem; text-transform: uppercase; }
 .combat-settings button.active { color: #071b3b !important; background: #7bdcff !important; box-shadow: 0 0 12px #54cfff; }
+.combat-ability-wrap { margin: 0 0 14px; }
+.combat-ability-toggle { border: 3px solid #8fdfff; background: #09264d; color: white; padding: 9px 14px; font-weight: 1000; text-transform: uppercase; }
+.combat-ability-panel { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 10px; padding: 12px; border: 2px solid #8fdfff; background: #04142c; }
+.combat-ability-panel p { margin: 0; grid-column: 1/-1; color: #c7dcff; font-weight: 900; }
+.combat-ability-button { min-height: 86px; padding: 10px; border: 2px solid white; background: #10376c; color: white; text-align: left; font-weight: 900; }
+.combat-ability-button b, .combat-ability-button span { display: block; }
+.combat-ability-button b { text-transform: uppercase; }
+.combat-ability-button span { margin-top: 4px; font-size: .72rem; line-height: 1.25; color: #d9eaff; }
+.combat-ability-button.epic, .combat-ability-button.legendary { box-shadow: 0 0 14px #ffcc4d66; }
+.combat-ability-button.mythic { border-color: #9dff59; box-shadow: 0 0 18px #61ff37aa; }
 .combat-pile-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .combat-pile-strip span { padding: 7px 10px; border: 2px solid #8fdfff; background: #09264d; font-weight: 900; text-transform: uppercase; }
 .combat-preview-badge { display: block; margin-top: 5px; color: #ffe68a; font-size: .72rem; font-weight: 1000; text-transform: uppercase; overflow-wrap: anywhere; }
@@ -503,6 +540,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .deck-layout { grid-template-columns: 1fr; }
   .tower-dashboard { grid-template-columns: 1fr; }
   .recovery-grid { grid-template-columns: 1fr; }
+  .ability-hero { align-items: flex-start; flex-direction: column; }
+  .ability-reroll-bank { width: 100%; }
   .stat-board { grid-template-columns: repeat(3,1fr); }
   .combat-arena { grid-template-columns: 1fr; }
   .combatant { min-height: 240px; grid-template-columns: 1fr 110px; padding: 15px; }
@@ -535,6 +574,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .combat-particles i:nth-child(n+7) { display: none; }
   .combat-controls header { align-items: flex-start; flex-wrap: wrap; gap: 9px; }
   .combat-settings { order: 3; width: 100%; margin: 0; justify-content: flex-start; }
+  .combat-ability-panel { grid-template-columns: 1fr; }
   .combat-hand { grid-template-columns: repeat(5,145px); }
   .draft-grid { grid-template-columns: repeat(3,220px); overflow-x: auto; padding: 10px; }
   .detail-panel { grid-template-columns: 1fr; max-width: 350px; }
@@ -561,6 +601,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .tower-rewards { grid-template-columns: 1fr; }
   .tower-floor-panel > header, .tower-loadout-panel > header, .tower-collection-panel > header { align-items: flex-start; }
   .tower-card-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .ability-equipped-panel, .ability-rarity-section { padding: 16px; }
+  .ability-equipped-panel header, .ability-rarity-section header { align-items: flex-start; flex-direction: column; }
+  .ability-grid { grid-template-columns: 1fr; }
   .deck-diagnostics { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .deck-curve, .deck-actions { grid-column: 1/-1; }
   .combat-preview-badge, .db-card-badge { max-width: 100%; font-size: .62rem; line-height: 1.15; overflow-wrap: anywhere; }

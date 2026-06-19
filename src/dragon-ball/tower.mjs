@@ -258,6 +258,7 @@ export function recordTowerVictory(state, encounter, cooldowns = {}) {
     ...state,
     activeCombat: null,
     zeni: state.zeni + zeni,
+    abilityRerolls: (state.abilityRerolls ?? 0) + (boss ? 3 : 1),
     cooldowns: { ...state.cooldowns, ...cooldowns },
     currentHealth: healedHealth,
     tower: {
@@ -272,7 +273,7 @@ export function recordTowerVictory(state, encounter, cooldowns = {}) {
       bossBonus: boss,
       options: towerRewardDraft(state, floor, 'stat'),
     },
-    history: [{ type: 'towerVictory', text: `Cleared Infinite Tower floor ${floor} and earned ${zeni} Zeni.` }, ...state.history].slice(0, 100),
+    history: [{ type: 'towerVictory', text: `Cleared Infinite Tower floor ${floor} and earned ${zeni} Zeni plus Ability Rerolls.` }, ...state.history].slice(0, 100),
   };
 }
 

@@ -16,8 +16,8 @@ import {
   createDragonBallRun, normalizeDragonBallState, setDeck, trySetDeck, validateDeck,
 } from '../src/dragon-ball/state.mjs';
 import {
-  attackIsDodged, endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
-  tryEndCombatTurn, tryPlayCombatCard, tryStartDragonBallCombat,
+  activateCombatAbility, attackIsDodged, endCombatTurn, enemyIntent, playCombatCard, startDragonBallCombat,
+  tryActivateCombatAbility, tryEndCombatTurn, tryPlayCombatCard, tryStartDragonBallCombat,
 } from '../src/dragon-ball/combat.mjs';
 import {
   clearDragonBallGame, loadDragonBallGame, saveDragonBallGame,
@@ -35,6 +35,10 @@ import { ok, fail, unwrap } from '../src/dragon-ball/action-result.mjs';
 import { analyzeDeck, suggestedDeck } from '../src/dragon-ball/deck-analysis.mjs';
 import { previewCardPlay, previewEnemyTurn, statusSummary } from '../src/dragon-ball/combat-preview.mjs';
 import { calculatePowerLevel, cardPowerRating, powerLevelTier } from '../src/dragon-ball/power-level.mjs';
+import {
+  ABILITY_CATALOG, ABILITY_RARITY_ODDS, normalizeAbilityProgress, pullAbility,
+  setAbilityLoadout, validateAbilityLoadout,
+} from '../src/dragon-ball/abilities.mjs';
 
 function memoryStorage(initial = {}) {
   const data = { ...initial };
@@ -568,6 +572,35 @@ test('each origin starts at age 6 with a valid distinct ten-card deck', () => {
   assert.equal(signatures.size, 4);
 });
 
+test('Dragon Ball runs and legacy saves normalize isolated ability progression', () => {
+  const state = createDragonBallRun({ seed: 11 });
+  assert.equal(state.abilityRerolls, 0);
+  assert.deepEqual(state.abilities.owned, {});
+  assert.deepEqual(state.abilities.equipped, []);
+  assert.equal(Object.keys(ABILITY_CATALOG).length, 20);
+  assert.equal(ABILITY_RARITY_ODDS.mythic, 0.01);
+
+  const legacy = normalizeDragonBallState({
+    version: 1,
+    seed: 12,
+    name: 'Legacy',
+    origin: 'earthling',
+    stats: ORIGINS.earthling.stats,
+    currentHealth: 50,
+    collection: {},
+    deck: ORIGINS.earthling.deck,
+    abilityRerolls: 'bad',
+    abilities: {
+      owned: { 'double-impact': 3, 'missing-power': 4, 'erase-fate': 99 },
+      equipped: ['double-impact', 'missing-power', 'erase-fate', 'ki-surge'],
+    },
+  });
+  assert.equal(legacy.abilityRerolls, 0);
+  assert.deepEqual(legacy.abilities.owned, { 'double-impact': 3, 'erase-fate': 5 });
+  assert.deepEqual(legacy.abilities.equipped, ['double-impact', 'erase-fate']);
+  assert.deepEqual(normalizeAbilityProgress(null), { owned: {}, equipped: [], pullCount: 0, lastPull: null });
+});
+
 test('combat victories award Zeni with a larger purse for special fights', async () => {
   const { combatRewardFor, recordCombatVictory } = await import('../src/dragon-ball/state.mjs');
   const base = createDragonBallRun({ seed: 12 });
@@ -577,8 +610,77 @@ test('combat victories award Zeni with a larger purse for special fights', async
   const specialWin = recordCombatVictory(base, special);
   assert.equal(fighterWin.zeni, base.zeni + combatRewardFor(base, fighter));
   assert.equal(specialWin.zeni, base.zeni + combatRewardFor(base, special));
+  assert.equal(fighterWin.abilityRerolls, base.abilityRerolls + 1);
+  assert.equal(specialWin.abilityRerolls, base.abilityRerolls + 2);
   assert.ok(specialWin.zeni > fighterWin.zeni);
   assert.match(fighterWin.history[0].text, /Zeni/);
+});
+
+test('tower victories and Age Ups award Ability Rerolls', async () => {
+  const { recordTowerVictory } = await import('../src/dragon-ball/tower.mjs');
+  let state = createDragonBallRun({ seed: 15 });
+  state = { ...state, age: 8, tower: { ...state.tower, active: true, currentFloor: 1 } };
+  const floor = generateTowerEncounter(state, 1);
+  const boss = generateTowerEncounter(state, 5);
+  const floorWin = recordTowerVictory(state, floor);
+  const bossWin = recordTowerVictory(state, boss);
+  assert.equal(floorWin.abilityRerolls, state.abilityRerolls + 1);
+  assert.equal(bossWin.abilityRerolls, state.abilityRerolls + 3);
+
+  state.clearedEncounterIds = state.encounters.map((item) => item.id);
+  state = beginAgeReward(state);
+  const advanced = advanceAfterAgeDraft(state, state.pendingDraft.options[0]);
+  assert.equal(advanced.abilityRerolls, state.abilityRerolls + 3);
+});
+
+test('Ability Reroll pulls are deterministic, upgrade duplicates, and preserve max-rank value', () => {
+  const base = { ...createDragonBallRun({ seed: 120 }), abilityRerolls: 1 };
+  const one = pullAbility(base);
+  const two = pullAbility(base);
+  assert.deepEqual(one.abilities.lastPull, two.abilities.lastPull);
+  assert.equal(one.abilityRerolls, 0);
+  assert.equal(one.abilities.owned[one.abilities.lastPull.id], 1);
+
+  let duplicate = {
+    ...base,
+    abilityRerolls: 1,
+    abilities: { owned: { 'ki-surge': 1 }, equipped: [], pullCount: 0, lastPull: null },
+  };
+  duplicate = pullAbility(duplicate, { forcedAbilityId: 'ki-surge' });
+  assert.equal(duplicate.abilities.owned['ki-surge'], 2);
+  assert.equal(duplicate.abilityRerolls, 0);
+
+  const maxed = pullAbility({
+    ...base,
+    abilityRerolls: 1,
+    abilities: { owned: { 'ki-surge': 5 }, equipped: [], pullCount: 0, lastPull: null },
+  }, { forcedAbilityId: 'ki-surge' });
+  assert.equal(maxed.abilities.owned['ki-surge'], 5);
+  assert.equal(maxed.abilityRerolls, 1);
+  assert.equal(maxed.abilities.lastPull.maxRankRefund, true);
+});
+
+test('Ability rarity pulls approximate the authored one percent Mythic chase', () => {
+  const counts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
+  for (let seed = 0; seed < 5000; seed += 1) {
+    const result = pullAbility({ ...createDragonBallRun({ seed }), abilityRerolls: 1 });
+    counts[ABILITY_CATALOG[result.abilities.lastPull.id].rarity] += 1;
+  }
+  assert.ok(counts.mythic >= 35 && counts.mythic <= 70, `expected about 1% Mythic pulls, received ${counts.mythic}`);
+  assert.ok(counts.common > counts.rare && counts.rare > counts.epic && counts.epic > counts.legendary);
+});
+
+test('ability equip validation enforces ownership, duplicates, and three equipped slots', () => {
+  const state = {
+    ...createDragonBallRun({ seed: 121 }),
+    abilities: { owned: { 'ki-surge': 1, 'double-impact': 1, 'dragon-counter': 1, 'erase-fate': 1 }, equipped: [], pullCount: 0, lastPull: null },
+  };
+  assert.equal(validateAbilityLoadout(state, ['ki-surge', 'double-impact', 'dragon-counter']).valid, true);
+  assert.equal(validateAbilityLoadout(state, ['ki-surge', 'double-impact', 'dragon-counter', 'erase-fate']).valid, false);
+  assert.equal(validateAbilityLoadout(state, ['ki-surge', 'ki-surge']).valid, false);
+  assert.equal(validateAbilityLoadout(state, ['missing-power']).valid, false);
+  const equipped = setAbilityLoadout(state, ['ki-surge', 'double-impact', 'dragon-counter']);
+  assert.deepEqual(equipped.abilities.equipped, ['ki-surge', 'double-impact', 'dragon-counter']);
 });
 
 test('Recovery Center spends Zeni to heal and treat injuries outside combat', async () => {
@@ -900,6 +1002,106 @@ test('playing cards spends Ki and applies damage block healing and forms', () =>
   state.activeCombat.player.ki = 3;
   state = playCombatCard(state, 0);
   assert.equal(state.activeCombat.player.activeForm, 'form-saiyan-1');
+});
+
+test('manual combat abilities are once-per-combat buttons with no Ki cost or turn advance', () => {
+  let state = {
+    ...createDragonBallRun({ seed: 122 }),
+    abilities: { owned: { 'ki-surge': 1 }, equipped: ['ki-surge'], pullCount: 0, lastPull: null },
+  };
+  const encounter = state.encounters.find((item) => item.type === 'fighter');
+  state = startDragonBallCombat(state, encounter.id);
+  state.activeCombat.player.ki = 1;
+  const activated = activateCombatAbility(state, 'ki-surge');
+  assert.equal(activated.activeCombat.turn, state.activeCombat.turn);
+  assert.ok(activated.activeCombat.player.ki > state.activeCombat.player.ki);
+  assert.ok(activated.activeCombat.usedAbilityIds.includes('ki-surge'));
+  assert.strictEqual(activateCombatAbility(activated, 'ki-surge'), activated);
+  assert.equal(tryActivateCombatAbility(activated, 'ki-surge').ok, false);
+});
+
+test('combat abilities double card damage, reflect attacks, nullify damage, skip turns, and prevent death', () => {
+  const starter = createDragonBallRun({ seed: 123 });
+  const base = {
+    ...starter,
+    stats: { ...starter.stats, power: 0, defense: 0, speed: 0 },
+    abilities: {
+      owned: {
+        'double-impact': 1,
+        'dragon-counter': 1,
+        'perfect-guard': 1,
+        'time-skip': 1,
+        'immortal-moment': 1,
+      },
+      equipped: ['double-impact', 'dragon-counter', 'perfect-guard'],
+      pullCount: 0,
+      lastPull: null,
+    },
+  };
+  const encounter = base.encounters.find((item) => item.type === 'fighter');
+
+  let normal = startDragonBallCombat(base, encounter.id);
+  normal.activeCombat.hand = ['quick-jab'];
+  normal.activeCombat.player.ki = 10;
+  normal.activeCombat.enemy.health = 100;
+  normal.activeCombat.enemy.defense = 0;
+  normal = playCombatCard(normal, 0);
+  const normalDamage = 100 - normal.activeCombat.enemy.health;
+
+  let doubled = startDragonBallCombat(base, encounter.id);
+  doubled.activeCombat.hand = ['quick-jab'];
+  doubled.activeCombat.player.ki = 10;
+  doubled.activeCombat.enemy.health = 100;
+  doubled.activeCombat.enemy.defense = 0;
+  doubled = activateCombatAbility(doubled, 'double-impact');
+  doubled = playCombatCard(doubled, 0);
+  assert.ok(100 - doubled.activeCombat.enemy.health >= normalDamage * 2);
+
+  let reflected = startDragonBallCombat(base, encounter.id);
+  reflected.activeCombat.player.health = 100;
+  reflected.activeCombat.player.block = 0;
+  reflected.activeCombat.enemy.health = 100;
+  reflected.activeCombat.enemy.defense = 0;
+  reflected.activeCombat.intent = { type: 'attack', label: 'Reflect Test', damage: 25 };
+  reflected = activateCombatAbility(reflected, 'dragon-counter');
+  reflected = endCombatTurn(reflected);
+  assert.ok(reflected.activeCombat.enemy.health < 100);
+  assert.ok(reflected.activeCombat.player.health < 100);
+
+  let guarded = startDragonBallCombat({
+    ...base,
+    abilities: { ...base.abilities, equipped: ['perfect-guard', 'time-skip', 'immortal-moment'] },
+  }, encounter.id);
+  guarded.activeCombat.player.health = 40;
+  guarded.activeCombat.player.block = 0;
+  guarded.activeCombat.intent = { type: 'attack', label: 'Null Test', damage: 999, weak: 3, burn: 3 };
+  guarded = activateCombatAbility(guarded, 'perfect-guard');
+  guarded = endCombatTurn(guarded);
+  assert.equal(guarded.activeCombat.player.health, 40);
+  assert.equal(guarded.activeCombat.player.weak, 0);
+  assert.equal(guarded.activeCombat.player.burn, 0);
+
+  let skipped = startDragonBallCombat({
+    ...base,
+    abilities: { ...base.abilities, equipped: ['perfect-guard', 'time-skip', 'immortal-moment'] },
+  }, encounter.id);
+  skipped.activeCombat.player.health = 60;
+  skipped.activeCombat.intent = { type: 'attack', label: 'Skip Test', damage: 40 };
+  skipped = activateCombatAbility(skipped, 'time-skip');
+  skipped = endCombatTurn(skipped);
+  assert.equal(skipped.activeCombat.player.health, 60);
+  assert.match(skipped.activeCombat.log[0], /skipped/);
+
+  let immortal = startDragonBallCombat({
+    ...base,
+    abilities: { ...base.abilities, equipped: ['perfect-guard', 'time-skip', 'immortal-moment'] },
+  }, encounter.id);
+  immortal.activeCombat.player.health = 10;
+  immortal.activeCombat.player.block = 0;
+  immortal.activeCombat.intent = { type: 'attack', label: 'Fatal Test', damage: 999 };
+  immortal = activateCombatAbility(immortal, 'immortal-moment');
+  immortal = endCombatTurn(immortal);
+  assert.equal(immortal.activeCombat.player.health, 1);
 });
 
 test('Legendary Saiyan Unbound Growth grants extra maximum Ki and two Focus after damage', () => {
@@ -1648,6 +1850,14 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /renderCollection/);
   assert.match(appSource, /renderRecovery/);
   assert.match(appSource, /renderTower/);
+  assert.match(appSource, /renderAbilities/);
+  assert.match(appSource, /Ability Rerolls/);
+  assert.match(appSource, /ability-pull/);
+  assert.match(appSource, /ability-use-/);
+  assert.match(appSource, /tryPullAbility/);
+  assert.match(appSource, /tryActivateCombatAbility/);
+  assert.match(css, /\.ability-screen/);
+  assert.match(css, /\.combat-ability-panel/);
   assert.match(appSource, /Infinite Tower/);
   assert.match(appSource, /Next Eternal Saga/);
   assert.doesNotMatch(appSource, /Campaign Complete/);

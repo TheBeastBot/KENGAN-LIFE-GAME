@@ -5,6 +5,7 @@ import {
 import { createRewardDraft, encountersForAge, legendarySaiyanEncountersForAge } from './campaign.mjs';
 import { createRng, hashSeed } from './random.mjs';
 import { createTowerState, normalizeTowerState } from './tower.mjs';
+import { normalizeAbilityProgress } from './abilities.mjs';
 import { fail, ok } from './action-result.mjs';
 
 const clone = (value) => structuredClone(value);
@@ -123,6 +124,8 @@ export function createDragonBallRun({
     age: 6,
     ageCycle: 0,
     zeni: 80,
+    abilityRerolls: 0,
+    abilities: normalizeAbilityProgress(null),
     stats,
     currentHealth: stats.health,
     collection: Object.fromEntries([...new Set(deck)].map((id) => [id, deck.filter((cardId) => cardId === id).length])),
@@ -202,6 +205,8 @@ export function normalizeDragonBallState(input) {
     age,
     ageCycle,
     zeni: input.zeni === undefined ? fallback.zeni : Math.max(0, Math.floor(Number(input.zeni) || 0)),
+    abilityRerolls: Math.max(0, Math.floor(Number(input.abilityRerolls) || 0)),
+    abilities: normalizeAbilityProgress(input.abilities),
     stats,
     currentHealth,
     collection,
@@ -337,6 +342,7 @@ export function advanceAfterAgeDraft(state, cardId) {
     age: nextAge,
     ageCycle: nextCycle,
     currentHealth: claimed.stats.health,
+    abilityRerolls: (claimed.abilityRerolls ?? 0) + 3,
     injuries: [],
     cooldowns,
     encounters: claimed.saiyanLineage === LEGENDARY_SAIYAN_LINEAGE
@@ -366,6 +372,7 @@ export function recordCombatVictory(state, encounter, cooldowns = {}) {
     ...state,
     activeCombat: null,
     zeni: state.zeni + purse,
+    abilityRerolls: (state.abilityRerolls ?? 0) + (encounter.type === 'specialFight' ? 2 : 1),
     cooldowns: { ...state.cooldowns, ...cooldowns },
     currentHealth: Math.max(1, state.currentHealth),
     pendingDraft: {
@@ -374,7 +381,7 @@ export function recordCombatVictory(state, encounter, cooldowns = {}) {
       kind: encounter.reward,
       options: createRewardDraft(state, encounter.reward, `${encounter.id}-victory`),
     },
-    history: [{ type: 'victory', text: `Defeated ${encounter.name} and earned ${purse} Zeni.` }, ...state.history].slice(0, 100),
+    history: [{ type: 'victory', text: `Defeated ${encounter.name} and earned ${purse} Zeni plus Ability Rerolls.` }, ...state.history].slice(0, 100),
   };
 }
 

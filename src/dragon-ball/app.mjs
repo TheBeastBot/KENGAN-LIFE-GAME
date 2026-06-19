@@ -10,7 +10,7 @@ import {
 } from './state.mjs';
 import { enemyForEncounter, sagaNameForAge } from './campaign.mjs';
 import {
-  endCombatTurn, playCombatCard, startDragonBallCombat, tryEndCombatTurn,
+  endCombatTurn, playCombatCard, startDragonBallCombat, tryActivateCombatAbility, tryEndCombatTurn,
   tryPlayCombatCard, tryStartDragonBallCombat,
 } from './combat.mjs';
 import { clearDragonBallGame, loadDragonBallGame, saveDragonBallGame } from './persistence.mjs';
@@ -24,6 +24,10 @@ import {
 import { previewCardPlay, previewEnemyTurn, statusSummary } from './combat-preview.mjs';
 import { analyzeDeck, suggestedDeck } from './deck-analysis.mjs';
 import { calculatePowerLevel, cardPowerRating } from './power-level.mjs';
+import {
+  ABILITY_CATALOG, ABILITY_LIST, ABILITY_RARITIES, abilityRankText, tryPullAbility,
+  trySetAbilityLoadout,
+} from './abilities.mjs';
 
 const app = document.querySelector('#dragon-ball-app');
 let state = loadDragonBallGame();
@@ -37,6 +41,7 @@ let combatStage = null;
 let combatStageIndex = 0;
 let combatStageCount = 0;
 let sequenceViewState = null;
+let combatAbilitiesOpen = false;
 const prefersReducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 let combatPreferences = loadCombatPreferences(globalThis.localStorage, prefersReducedMotion);
 const combatAudio = createCombatAudio();
@@ -595,6 +600,66 @@ function renderTower() {
   `;
 }
 
+function renderAbilityCard(item, { equipped = false, used = false, action = '', disabled = false } = {}) {
+  const rank = state.abilities?.owned?.[item.id] ?? 0;
+  return `
+    <article class="ability-card ${item.rarity} ${equipped ? 'equipped' : ''} ${used ? 'used' : ''}">
+      <p>${label(item.rarity)} Ability</p>
+      <h3>${escapeHtml(item.name)}</h3>
+      <strong>Rank ${rank || '-'}</strong>
+      <span>${escapeHtml(rank ? abilityRankText(item.id, rank) : item.description)}</span>
+      ${action ? `<button data-action="${action}" ${disabled ? 'disabled' : ''}>${equipped ? 'Unequip' : 'Equip'}</button>` : ''}
+    </article>
+  `;
+}
+
+function renderAbilities() {
+  const owned = state.abilities?.owned ?? {};
+  const equipped = new Set(state.abilities?.equipped ?? []);
+  const last = state.abilities?.lastPull?.id ? ABILITY_CATALOG[state.abilities.lastPull.id] : null;
+  return `
+    <section class="ability-screen">
+      <article class="ability-hero">
+        <div>
+          <p>Overpowered Combat Buttons</p>
+          <h2>Abilities</h2>
+          <span>Spend Ability Rerolls from fight wins, tower clears, and Age Ups. Equip up to 3 abilities for manual once-per-combat use.</span>
+        </div>
+        <div class="ability-reroll-bank">
+          <span>Ability Rerolls</span>
+          <strong>${state.abilityRerolls ?? 0}</strong>
+          <button class="db-primary" data-action="ability-pull" ${(state.abilityRerolls ?? 0) > 0 ? '' : 'disabled'}>Pull Ability</button>
+        </div>
+      </article>
+      ${last ? `<article class="ability-reveal ${last.rarity}"><p>Last Pull</p><h3>${escapeHtml(last.name)}</h3><span>${state.abilities.lastPull.duplicate ? `Duplicate upgraded to Rank ${state.abilities.lastPull.rank}` : `Unlocked at Rank ${state.abilities.lastPull.rank}`}${state.abilities.lastPull.maxRankRefund ? ' / Max rank refund' : ''}</span></article>` : ''}
+      <article class="ability-equipped-panel">
+        <header><div><p>Equipped Abilities</p><h3>${equipped.size}/3 Active Buttons</h3></div><span>Manual use in combat. Each ability can fire once per fight.</span></header>
+        <div class="ability-grid equipped-grid">
+          ${Array.from({ length: 3 }, (_, index) => {
+            const id = state.abilities?.equipped?.[index];
+            return id ? renderAbilityCard(ABILITY_CATALOG[id], { equipped: true, action: `ability-unequip-${id}` }) : `<div class="ability-empty"><b>${index + 1}</b><span>Empty Ability Slot</span></div>`;
+          }).join('')}
+        </div>
+      </article>
+      ${ABILITY_RARITIES.map((rarity) => {
+        const items = ABILITY_LIST.filter((item) => item.rarity === rarity && owned[item.id]);
+        return `
+          <article class="ability-rarity-section ${rarity}">
+            <header><p>${label(rarity)}</p><h3>${items.length} Owned</h3></header>
+            <div class="ability-grid">
+              ${items.map((item) => renderAbilityCard(item, {
+                equipped: equipped.has(item.id),
+                action: equipped.has(item.id) ? `ability-unequip-${item.id}` : `ability-equip-${item.id}`,
+                disabled: !equipped.has(item.id) && equipped.size >= 3,
+              })).join('') || '<p class="empty-copy">No abilities owned in this rarity yet.</p>'}
+            </div>
+          </article>
+        `;
+      }).join('')}
+    </section>
+  `;
+}
+
 function renderStatusChips(items) {
   return `<div class="combat-status-row">${items.map((item) => `<span class="combat-status-chip" title="${escapeHtml(item.description)}"><b>${escapeHtml(item.label)}</b>${escapeHtml(item.value)}</span>`).join('')}</div>`;
 }
@@ -609,6 +674,30 @@ function previewBadge(preview) {
   if (preview.transformsTo) parts.push('Transform');
   if (preview.kiGain) parts.push(`+${preview.kiGain} Ki`);
   return parts.join(' / ') || 'Utility';
+}
+
+function renderCombatAbilityPanel(combatState) {
+  const equipped = combatState.abilities?.equipped ?? [];
+  const used = new Set(combatState.activeCombat?.usedAbilityIds ?? []);
+  return `
+    <div class="combat-ability-wrap">
+      <button class="combat-ability-toggle" data-action="toggle-combat-abilities">Abilities ${equipped.length}/3</button>
+      ${combatAbilitiesOpen ? `
+        <div class="combat-ability-panel">
+          ${equipped.map((id) => {
+            const item = ABILITY_CATALOG[id];
+            const rank = combatState.abilities?.owned?.[id] ?? 1;
+            return `
+              <button class="combat-ability-button ${item.rarity}" data-action="ability-use-${id}" ${used.has(id) ? 'disabled' : ''}>
+                <b>${escapeHtml(item.name)}</b>
+                <span>Rank ${rank} / ${used.has(id) ? 'Used' : abilityRankText(id, rank)}</span>
+              </button>
+            `;
+          }).join('') || '<p>No abilities equipped. Equip up to 3 from the Abilities tab.</p>'}
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 function renderCombat(combatState = state) {
@@ -649,6 +738,7 @@ function renderCombat(combatState = state) {
           </div>
           <button data-action="end-turn" ${locked ? 'disabled' : ''}>${enemyPreview.projectedDamage ? `End Turn: Take ${enemyPreview.projectedDamage}` : 'End Turn'}</button>
         </header>
+        ${renderCombatAbilityPanel(combatState)}
         <div class="combat-pile-strip">
           <span>Draw <b>${combat.drawPile.length}</b></span>
           <span>Discard <b>${combat.discardPile.length}</b></span>
@@ -778,12 +868,13 @@ function render() {
       : activeTab === 'recovery' ? renderRecovery()
         : activeTab === 'history' ? renderHistory()
           : activeTab === 'tower' ? renderTower()
-            : renderJourney();
+            : activeTab === 'abilities' ? renderAbilities()
+              : renderJourney();
   app.innerHTML = `
     <main class="db-shell power-effect-${powerLevel.tier.effectLevel} power-tier-${powerLevel.tier.id}">
       ${renderHeader(powerLevel)}
       <nav class="db-nav">
-        ${[['journey', 'Journey'], ['tower', 'Tower'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
+        ${[['journey', 'Journey'], ['tower', 'Tower'], ['abilities', 'Abilities'], ['deck', 'Deck'], ['collection', 'Cards'], ['recovery', 'Recovery'], ['history', 'History']].map(([id, name]) => `<button class="${activeTab === id ? 'active' : ''}" data-tab="${id}">${name}</button>`).join('')}
         <a href="./index.html">Other Modes</a>
       </nav>
       <section class="db-content">${content}</section>
@@ -829,6 +920,32 @@ function handleAction(action) {
     combatPreferences = saveCombatPreferences({ ...combatPreferences, sound: !combatPreferences.sound });
     if (combatPreferences.sound) combatAudio.play('toggle', true);
     render();
+    return;
+  }
+  if (action === 'ability-pull') {
+    updateResult(tryPullAbility(state));
+    return;
+  }
+  if (action.startsWith('ability-equip-')) {
+    const id = action.replace('ability-equip-', '');
+    updateResult(trySetAbilityLoadout(state, [...state.abilities.equipped, id]));
+    return;
+  }
+  if (action.startsWith('ability-unequip-')) {
+    const id = action.replace('ability-unequip-', '');
+    updateResult(trySetAbilityLoadout(state, state.abilities.equipped.filter((abilityId) => abilityId !== id)));
+    return;
+  }
+  if (action === 'toggle-combat-abilities') {
+    combatAbilitiesOpen = !combatAbilitiesOpen;
+    render();
+    return;
+  }
+  if (action.startsWith('ability-use-')) {
+    if (sequenceController.locked) return;
+    const id = action.replace('ability-use-', '');
+    updateResult(tryActivateCombatAbility(state, id));
+    combatAbilitiesOpen = true;
     return;
   }
   if (action === 'tower-start') {
