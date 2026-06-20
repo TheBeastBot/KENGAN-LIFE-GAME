@@ -171,6 +171,12 @@ function towerEnemyArt(encounter) {
     : `${GENERATED_ASSET_ROOT}/card-strike.jpg`;
 }
 
+function enemyCombatArt(enemy) {
+  return enemy?.specialTowerEnemyImage
+    ? `${GENERATED_ASSET_ROOT}/${enemy.specialTowerEnemyImage}`
+    : `${GENERATED_ASSET_ROOT}/card-strike.jpg`;
+}
+
 function update(next, message = '') {
   state = next;
   toast = message;
@@ -715,9 +721,9 @@ function renderCombat(combatState = state) {
   return `
     <main class="combat-screen motion-${combatPreferences.motion} power-effect-${powerLevel.tier.effectLevel} power-tier-${powerLevel.tier.id} ${stageClass} ${locked ? 'sequence-active' : ''} ${playerPercent <= 25 ? 'low-health' : ''}">
       <section class="combat-arena">
-        <div class="combatant enemy" data-combat-target="enemy">
+        <div class="combatant enemy ${combat.enemy.specialTowerEnemy ? 'special-tower-enemy' : ''}" data-combat-target="enemy" style="${combat.enemy.specialTowerEnemyColor ? `--tower-special:${combat.enemy.specialTowerEnemyColor};` : ''}">
           <div><p>Enemy Intent</p><h2>${escapeHtml(enemyPreview.intentLabel)}</h2><span>${enemyPreview.intentType === 'attack' ? `Projected ${enemyPreview.projectedDamage} damage${enemyPreview.rawIncomingDamage !== enemyPreview.projectedDamage ? ` / Raw ${enemyPreview.rawIncomingDamage}` : ''}${enemyPreview.blockPiercePercent ? ` / ${enemyPreview.blockPiercePercent}% Block pierce` : ''}` : `Gains ${enemyPreview.guardBlockGain} Block`}</span></div>
-          <img src="${GENERATED_ASSET_ROOT}/card-strike.jpg" alt="">
+          <img src="${enemyCombatArt(combat.enemy)}" alt="${escapeHtml(combat.enemy.baseName ?? combat.enemy.name)}">
           <div class="combat-health"><span>${combat.enemy.name} / ${combat.enemy.health}</span><i><b style="width:${enemyPercent}%"></b></i></div>
           ${renderStatusChips(statuses.enemy)}
         </div>

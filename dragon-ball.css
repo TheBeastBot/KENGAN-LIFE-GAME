@@ -335,6 +335,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   filter: drop-shadow(0 0 18px #fff) drop-shadow(0 0 34px #69ff35);
 }
 .combatant.enemy img { transform: scaleX(-1); filter: drop-shadow(0 0 18px #ff663f); }
+.combatant.enemy.special-tower-enemy img { border-color: var(--tower-special,#f6b73c); box-shadow: 0 0 0 4px #fff, 0 0 30px color-mix(in srgb,var(--tower-special,#f6b73c) 70%,transparent); filter: saturate(1.18) contrast(1.08) drop-shadow(0 0 22px var(--tower-special,#f6b73c)); }
 .combatant h2 { margin: 4px 0; text-transform: uppercase; font-style: italic; }
 .combatant p { color: var(--gold); font-weight: 900; text-transform: uppercase; }
 .combat-health { grid-column: 1/-1; }

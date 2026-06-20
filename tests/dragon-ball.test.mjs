@@ -829,6 +829,18 @@ test('tower combat includes equipped bonus cards without changing the normal dec
   assert.equal(state.activeCombat.encounter.source, 'tower');
 });
 
+test('special tower enemy portraits carry into the actual combat enemy', () => {
+  let state = { ...createDragonBallRun({ seed: 211 }), age: 8 };
+  state = startTowerRun(state);
+  state = { ...state, tower: { ...state.tower, currentFloor: 7 } };
+  const encounter = generateTowerEncounter(state, 7);
+  assert.equal(encounter.specialTowerEnemy, true);
+  state = startDragonBallCombat(state, encounter.id);
+  assert.equal(state.activeCombat.encounter.specialTowerEnemyImage, encounter.specialTowerEnemyImage);
+  assert.equal(state.activeCombat.enemy.specialTowerEnemyImage, encounter.specialTowerEnemyImage);
+  assert.equal(state.activeCombat.enemy.specialTowerEnemyColor, encounter.specialTowerEnemyColor);
+});
+
 test('equipped tower cards are also shuffled into regular campaign combat', () => {
   let state = { ...createDragonBallRun({ seed: 2101 }), age: 8 };
   state.tower.cards = { 'tower-card-1': 1, 'tower-card-2': 2 };
@@ -1883,6 +1895,7 @@ test('Dragon Ball page and original game expose separate launcher links and them
   assert.match(appSource, /card-legendary-primal-execution\.jpg/);
   assert.match(appSource, /const TOWER_CARD_ART/);
   assert.match(appSource, /towerEnemyArt/);
+  assert.match(appSource, /enemyCombatArt/);
   assert.match(appSource, /specialTowerEnemyImage/);
   assert.match(appSource, /special-tower-enemy/);
   assert.match(appSource, /Special Tower Enemy/);
